@@ -1,6 +1,6 @@
 # Antiprism LaTeX Editor
 
-**Antiprism** is a P2P decentralized LaTeX editor—the client-side counterpart to [Prism](https://prism.com). Where Prism uses cloud services and centralized infrastructure, Antiprism runs entirely in your browser: no servers, no API keys, no data leaving your device.
+**Antiprism** is a P2P decentralized LaTeX editor—the client-side counterpart to [Prism](https://prism.openai.com). Where Prism uses cloud services and centralized infrastructure, Antiprism runs entirely in your browser: no servers, no API keys, no data leaving your device.
 
 ## Architecture: Antiprism vs Prism
 
