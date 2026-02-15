@@ -13,7 +13,7 @@
 
 - **WebRTC + Yjs**: Peers connect directly; a signaling server only helps establish connections and never sees document content.
 - **WebGPU AI**: The [LiquidAI LFM2.5-1.2B](https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-ONNX) model runs in-browser, quantized to 4-bit (Q4) and exported to ONNX. No API keys, no network calls for inference.
-- **Client-side LaTeX**: [texlyre-busytex](https://github.com/texlyre/busytex) compiles and renders PDFs locally via WebAssembly.
+- **Client-side LaTeX**: [texlyre-busytex](https://github.com/TeXlyre/texlyre-busytex) compiles and renders PDFs locally via WebAssembly.
 - **Pandoc WASM**: The Agent mode outputs markdown (the model’s native format); [pandoc-wasm](https://www.npmjs.com/package/pandoc-wasm) converts it to LaTeX in the browser.
 
 ### AI Chat Modes
