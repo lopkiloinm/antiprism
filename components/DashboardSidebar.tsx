@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { IconFolder, IconFileText, IconUsers } from "./Icons";
 
 type NavItem = "all" | "projects" | "rooms";
 
@@ -25,7 +26,7 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
               : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
           }`}
         >
-          <span>📁</span>
+          <IconFolder />
           All Projects
         </button>
         <button
@@ -36,7 +37,7 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
               : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
           }`}
         >
-          <span>📄</span>
+          <IconFileText />
           Your Projects
         </button>
         <button
@@ -47,7 +48,7 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
               : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
           }`}
         >
-          <span>👥</span>
+          <IconUsers />
           Your Rooms
         </button>
       </nav>

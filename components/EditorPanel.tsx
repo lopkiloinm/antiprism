@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { EditorView, basicSetup } from "codemirror";
@@ -22,6 +22,10 @@ E = mc^2
 \\end{document}
 `;
 
+export interface EditorPanelHandle {
+  insertAtCursor: (text: string) => void;
+}
+
 interface EditorPanelProps {
   ydoc: Y.Doc | null;
   ytext: Y.Text | null;
@@ -30,16 +34,23 @@ interface EditorPanelProps {
   onYtextChange: (ytext: Y.Text | null) => void;
 }
 
-export function EditorPanel({
-  ydoc,
-  ytext,
-  provider,
-  currentPath,
-  onYtextChange,
-}: EditorPanelProps) {
+export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(function EditorPanel(
+  { ydoc, ytext, provider, currentPath, onYtextChange },
+  ref
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const ytextRef = useRef<Y.Text | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    insertAtCursor(text: string) {
+      const view = viewRef.current;
+      const y = ytextRef.current;
+      if (!view || !y) return;
+      const pos = view.state.selection.main.head;
+      y.insert(pos, text);
+    },
+  }), []);
 
   const initEditor = useCallback(() => {
     if (!containerRef.current || !ydoc || !ytext || !provider) return;
@@ -95,6 +106,6 @@ export function EditorPanel({
       style={{ minHeight: 0 }}
     />
   );
-}
+});
 
 export { DEFAULT_LATEX };

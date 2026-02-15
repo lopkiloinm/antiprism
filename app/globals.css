@@ -77,17 +77,11 @@ html, body {
   --svar-fm-fg: var(--foreground);
 }
 
-/* Tab bar: horizontal scroll only, no vertical scrollbar */
+/* Tab bar: native scrollbar hidden, custom overlay scrollbar in component */
 .file-tabs-scroll {
   overflow-y: hidden !important;
+  scrollbar-width: none;
 }
 .file-tabs-scroll::-webkit-scrollbar {
-  height: 6px;
-}
-.file-tabs-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.file-tabs-scroll::-webkit-scrollbar-thumb {
-  background: rgb(63 63 70);
-  border-radius: 3px;
+  display: none;
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import JSZip from "jszip";
 import { NameModal } from "./NameModal";
+import { IconFileText, IconFolder, IconFolderOpen, IconImage, IconLoader, IconPencil, IconDownload, IconTrash2 } from "./Icons";
 
 type IdbfsFs = Awaited<ReturnType<typeof import("@wwog/idbfs").mount>>;
 
@@ -66,6 +67,7 @@ interface FileTreeProps {
   refreshTrigger?: number;
   onRefresh: () => void;
   onFileDeleted?: (path: string, isFolder: boolean) => void;
+  searchQuery?: string;
 }
 
 async function loadDir(fs: IdbfsFs, path: string): Promise<TreeNode[]> {
@@ -225,12 +227,15 @@ function TreeNodeComponent({
     return (
       <>
         <div
-          className={`px-3 py-2 cursor-pointer text-sm hover:bg-zinc-800 ${isSelected ? "bg-zinc-700" : ""}`}
+          className={`px-3 py-2 cursor-pointer text-sm hover:bg-zinc-800 flex items-center gap-2 min-w-0 ${isSelected ? "bg-zinc-700" : ""}`}
           style={{ paddingLeft: `${level * 12 + 12}px` }}
           onClick={() => onFileSelect(node.path)}
           onContextMenu={handleContextMenu}
         >
-          📄 {node.name}
+          <span className="shrink-0 flex items-center">
+            {/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(node.path) ? <IconImage /> : <IconFileText />}
+          </span>
+          <span className="truncate min-w-0">{node.name}</span>
         </div>
         {contextMenu && (
           <div
@@ -241,20 +246,23 @@ function TreeNodeComponent({
           >
             <button
               onClick={handleRename}
-              className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+              className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
             >
+              <IconPencil />
               Rename file
             </button>
             <button
               onClick={handleDownload}
-              className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+              className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
             >
+              <IconDownload />
               Download file
             </button>
             <button
               onClick={handleDelete}
-              className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-800"
+              className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-800 flex items-center gap-2"
             >
+              <IconTrash2 />
               Delete file
             </button>
           </div>
@@ -266,13 +274,15 @@ function TreeNodeComponent({
   return (
     <div>
       <div
-        className={`px-3 py-2 cursor-pointer text-sm hover:bg-zinc-800 flex items-center gap-1 ${isSelected ? "bg-zinc-700" : ""}`}
+        className={`px-3 py-2 cursor-pointer text-sm hover:bg-zinc-800 flex items-center gap-1 min-w-0 ${isSelected ? "bg-zinc-700" : ""}`}
         style={{ paddingLeft: `${level * 12 + 12}px` }}
         onClick={handleExpand}
         onContextMenu={handleContextMenu}
       >
-        <span className="w-4">{loading ? "⏳" : expanded ? "📂" : "📁"}</span>
-        {node.name}
+        <span className="w-4 flex items-center justify-center shrink-0">
+          {loading ? <IconLoader /> : expanded ? <IconFolderOpen /> : <IconFolder />}
+        </span>
+        <span className="truncate min-w-0">{node.name}</span>
       </div>
       {contextMenu && (
         <div
@@ -283,20 +293,23 @@ function TreeNodeComponent({
         >
           <button
             onClick={handleRenameFolder}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
           >
+            <IconPencil />
             Rename folder
           </button>
           <button
             onClick={handleDownloadFolder}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
           >
+            <IconDownload />
             Download folder
           </button>
           <button
             onClick={handleDeleteFolder}
-            className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-800"
+            className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-800 flex items-center gap-2"
           >
+            <IconTrash2 />
             Delete folder
           </button>
         </div>
@@ -320,7 +333,13 @@ function TreeNodeComponent({
   );
 }
 
-export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefresh, refreshTrigger, onFileDeleted }: FileTreeProps) {
+function filterNodes(nodes: TreeNode[], q: string): TreeNode[] {
+  if (!q.trim()) return nodes;
+  const lower = q.toLowerCase().trim();
+  return nodes.filter((n) => n.name.toLowerCase().includes(lower));
+}
+
+export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefresh, refreshTrigger, onFileDeleted, searchQuery }: FileTreeProps) {
   const [rootNodes, setRootNodes] = useState<TreeNode[]>([]);
   const [renameModal, setRenameModal] = useState<{
     name: string;
@@ -366,13 +385,17 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
     );
   }
 
+  const filteredNodes = filterNodes(rootNodes, searchQuery ?? "");
+
   return (
     <>
     <div className="overflow-auto flex-1 min-h-0 py-3">
-      {rootNodes.length === 0 ? (
-        <div className="p-3 text-sm text-zinc-500">No files. Create a new file to get started.</div>
+      {filteredNodes.length === 0 ? (
+        <div className="p-3 text-sm text-zinc-500">
+          {searchQuery?.trim() ? "No matching files." : "No files. Create a new file to get started."}
+        </div>
         ) : (
-          rootNodes.map((node) => (
+          filteredNodes.map((node) => (
             <TreeNodeComponent
               key={node.path}
               node={node}

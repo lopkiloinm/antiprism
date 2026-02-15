@@ -117,3 +117,10 @@ export function renameProject(id: string, name: string): void {
   );
   saveJson(STORAGE_KEY_PROJECTS, projects);
 }
+
+export function renameRoom(id: string, name: string): void {
+  const rooms = getRooms().map((r) =>
+    r.id === id ? { ...r, name } : r
+  );
+  saveJson(STORAGE_KEY_ROOMS, rooms);
+}

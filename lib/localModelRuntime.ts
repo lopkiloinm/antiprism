@@ -171,6 +171,24 @@ async function downloadFileWithProgress(
   });
 }
 
+async function ensureTokenizer(): Promise<void> {
+  if (tokenizer) return;
+  const { AutoTokenizer: TokenizerClass } = await loadTransformers();
+  tokenizer = await TokenizerClass.from_pretrained(MODEL_ID);
+}
+
+/**
+ * Truncate text to fit within maxTokens. Uses the model tokenizer (token count, not chars).
+ * Keeps the end of the text (most recent content). Caller must ensure tokenizer is loaded.
+ */
+export async function truncateToTokenLimit(text: string, maxTokens: number): Promise<string> {
+  await ensureTokenizer();
+  const ids = tokenizer.encode(text, { add_special_tokens: false });
+  if (ids.length <= maxTokens) return text;
+  const truncated = ids.slice(-maxTokens);
+  return tokenizer.decode(truncated, { skip_special_tokens: false });
+}
+
 async function loadModel(): Promise<void> {
   if (model && tokenizer) {
     return Promise.resolve();
@@ -192,7 +210,7 @@ async function loadModel(): Promise<void> {
         throw new Error("WebGPU is not available. Please enable WebGPU in your browser settings.");
       }
 
-      tokenizer = await TokenizerClass.from_pretrained(MODEL_ID);
+      await ensureTokenizer();
 
       let needsDownload = true;
       try {
@@ -310,46 +328,126 @@ export async function initializeModel(): Promise<boolean> {
   }
 }
 
-export async function generateChatResponse(
-  userMessage: string,
-  context?: string
-): Promise<string> {
+import type { ChatMessage } from "./agent";
+import { LFM25_12B } from "./modelConfig";
+
+export interface StreamingCallbacks {
+  onChunk: (text: string) => void;
+  onTokensPerSec?: (
+    tokensPerSec: number,
+    totalTokens: number,
+    elapsedSeconds: number,
+    inputTokens: number
+  ) => void;
+  onComplete?: (outputTokens: number, elapsedSeconds: number, inputTokens: number) => void;
+}
+
+/**
+ * Generate a response from a message array. Model-specific: uses this runtime's
+ * tokenizer and model. Returns raw decoded output (may include model-specific
+ * formatting like "assistant:" prefix).
+ */
+export async function generateFromMessages(messages: ChatMessage[]): Promise<string> {
   if (!model || !tokenizer) {
     await loadModel();
   }
-
-  const systemPrompt = `You are a helpful LaTeX assistant for Antiprism, a P2P decentralized LaTeX editor. Help users write and debug LaTeX documents. Be concise.${
-    context ? `\n\nUser's document:\n${context.slice(0, 3000)}` : ""
-  }`;
-
-  const messages = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userMessage },
-  ];
 
   const input = tokenizer.apply_chat_template(messages, {
     add_generation_prompt: true,
     return_dict: true,
   });
 
+  const inputIds = input.input_ids;
+  let inputLen = 0;
+  if (Array.isArray(inputIds) && Array.isArray(inputIds[0])) {
+    inputLen = inputIds[0].length;
+  } else if (Array.isArray(inputIds)) {
+    inputLen = inputIds.length;
+  } else if (inputIds && typeof (inputIds as { dims?: number[] }).dims !== "undefined") {
+    inputLen = (inputIds as { dims: number[] }).dims.reduce((a, b) => a * b, 1);
+  } else if (inputIds && typeof (inputIds as { size?: number }).size === "number") {
+    inputLen = (inputIds as { size: number }).size;
+  }
+
   const outputs = await model.generate({
     ...input,
-    max_new_tokens: 512,
+    max_new_tokens: LFM25_12B.MAX_NEW_TOKENS,
     do_sample: true,
     temperature: 0.7,
     top_p: 0.9,
   });
 
-  const response = tokenizer.decode(outputs[0], {
-    skip_special_tokens: true,
+  const out = outputs[0];
+  let toDecode: unknown = out;
+  if (Array.isArray(out) && out.length > inputLen) {
+    toDecode = out.slice(inputLen);
+  }
+  return tokenizer.decode(toDecode, { skip_special_tokens: true });
+}
+
+/**
+ * Stream a response from a message array. Calls onChunk with text as it's generated.
+ * Optionally reports tokens/sec via onTokensPerSec.
+ */
+export async function generateFromMessagesStreaming(
+  messages: ChatMessage[],
+  callbacks: StreamingCallbacks
+): Promise<string> {
+  if (!model || !tokenizer) {
+    await loadModel();
+  }
+
+  const { TextStreamer } = await import("@huggingface/transformers");
+  let fullText = "";
+  const startTime = performance.now();
+  let tokenCount = 0;
+
+  const input = tokenizer.apply_chat_template(messages, {
+    add_generation_prompt: true,
+    return_dict: true,
   });
 
-  let result = response.trim();
-  const assistantMarker = result.lastIndexOf("assistant");
-  if (assistantMarker !== -1) {
-    result = result.substring(assistantMarker + "assistant".length).trim();
+  const inputIds = input.input_ids;
+  let inputTokens = 0;
+  if (Array.isArray(inputIds) && Array.isArray(inputIds[0])) {
+    inputTokens = inputIds[0].length;
+  } else if (Array.isArray(inputIds)) {
+    inputTokens = inputIds.length;
+  } else if (inputIds && typeof (inputIds as { dims?: number[] }).dims !== "undefined") {
+    inputTokens = (inputIds as { dims: number[] }).dims.reduce((a, b) => a * b, 1);
+  } else if (inputIds && typeof (inputIds as { size?: number }).size === "number") {
+    inputTokens = (inputIds as { size: number }).size;
   }
-  result = result.replace(/^:\s*/, "");
 
-  return result || "I'm sorry, I couldn't generate a response. Please try again.";
+  const streamer = new TextStreamer(tokenizer, {
+    skip_prompt: true,
+    skip_special_tokens: true,
+    callback_function: (text: string) => {
+      fullText += text;
+      callbacks.onChunk(text);
+    },
+    token_callback_function: callbacks.onTokensPerSec
+      ? () => {
+          tokenCount++;
+          const elapsedSec = (performance.now() - startTime) / 1000;
+          callbacks.onTokensPerSec!(tokenCount / elapsedSec, tokenCount, elapsedSec, inputTokens);
+        }
+      : undefined,
+  });
+
+  const outputs = await model.generate({
+    ...input,
+    max_new_tokens: LFM25_12B.MAX_NEW_TOKENS,
+    do_sample: true,
+    temperature: 0.7,
+    top_p: 0.9,
+    streamer,
+  });
+
+  if (callbacks.onComplete) {
+    const elapsedSec = (performance.now() - startTime) / 1000;
+    callbacks.onComplete(tokenCount, elapsedSec, inputTokens);
+  }
+
+  return fullText;
 }

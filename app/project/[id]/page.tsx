@@ -11,21 +11,17 @@ import { FileTree } from "@/components/FileTree";
 import { FileActions } from "@/components/FileActions";
 import { FileTabs } from "@/components/FileTabs";
 import { ImageViewer } from "@/components/ImageViewer";
-import { EditorPanel } from "@/components/EditorPanel";
+import { EditorPanel, type EditorPanelHandle } from "@/components/EditorPanel";
+import { ChatInput } from "@/components/ChatInput";
+import { AIModelDownloadProgress } from "@/components/AIModelDownloadProgress";
+import { ProjectDropdown } from "@/components/ProjectDropdown";
+import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2 } from "@/components/Icons";
 
 const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => ({ default: m.PdfPreview })), {
   ssr: false,
 });
-import {
-  initializeModel,
-  generateChatResponse,
-  setProgressCallback,
-  getDownloadProgress,
-  getDownloadStats,
-  isDownloading,
-  isModelLoading,
-  checkWebGPUSupport,
-} from "@/lib/localModel";
+import ReactMarkdown from "react-markdown";
+import { generateChatResponse } from "@/lib/localModel";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { getProjects, getRooms } from "@/lib/projects";
 
@@ -44,6 +40,7 @@ export default function ProjectPage() {
   const basePath = id ? `/projects/${id}` : "/";
 
   const [projectName, setProjectName] = useState<string>("Project");
+  const [isRoom, setIsRoom] = useState(false);
   const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
   const [ytext, setYtext] = useState<Y.Text | null>(null);
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
@@ -56,23 +53,68 @@ export default function ProjectPage() {
   const textContentCacheRef = useRef<Map<string, string>>(new Map());
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<
+    { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
+  >([]);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [modelReady, setModelReady] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [downloadStats, setDownloadStats] = useState({ downloadedBytes: 0, totalBytes: 0, speedBytesPerSecond: 0 });
   const [latexReady, setLatexReady] = useState(false);
   const [isCompiling, setIsCompiling] = useState(false);
+  const [lastCompileMs, setLastCompileMs] = useState<number | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [sidebarTab, setSidebarTab] = useState<"files" | "chats">("files");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [chatExpanded, setChatExpanded] = useState(false);
+  const [chatMode, setChatMode] = useState<"ask" | "agent">("ask");
+  const [streamingStats, setStreamingStats] = useState<{
+    tokensPerSec: number;
+    totalTokens: number;
+    elapsedSeconds: number;
+    inputTokens: number;
+    contextUsed: number;
+  } | null>(null);
   const initRef = useRef(false);
   const providerRef = useRef<WebrtcProvider | null>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
+  const editorRef = useRef<EditorPanelHandle | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const lastMessageRef = useRef<HTMLPreElement | null>(null);
+  const autoCompileDoneRef = useRef(false);
 
   useEffect(() => {
     const p = getProjects().find((x) => x.id === id);
     const r = getRooms().find((x) => x.id === id);
-    setProjectName(p?.name ?? r?.name ?? "Project");
+    if (p) {
+      setProjectName(p.name);
+      setIsRoom(false);
+    } else if (r) {
+      setProjectName(r.name);
+      setIsRoom(true);
+    } else {
+      setProjectName("Project");
+      setIsRoom(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    if (chatExpanded && chatScrollRef.current) {
+      requestAnimationFrame(() => {
+        const el = chatScrollRef.current;
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      });
+    }
+  }, [chatMessages, chatExpanded]);
+
+  useEffect(() => {
+    if (isGenerating && lastMessageRef.current) {
+      requestAnimationFrame(() => {
+        const el = lastMessageRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [chatMessages, isGenerating]);
 
   useEffect(() => {
     if (!id || initRef.current) return;
@@ -80,6 +122,7 @@ export default function ProjectPage() {
     let cancelled = false;
 
     // Reset state when switching projects so we don't show stale content
+    autoCompileDoneRef.current = false;
     setYdoc(null);
     setYtext(null);
     setProvider(null);
@@ -195,38 +238,14 @@ export default function ProjectPage() {
     };
   }, [id]);
 
-  useEffect(() => {
-    if (!checkWebGPUSupport()) return;
-
-    let lastUpdate = 0;
-    const throttleMs = 200;
-    setProgressCallback((progress, stats) => {
-      const now = Date.now();
-      if (now - lastUpdate < throttleMs && progress < 100) return;
-      lastUpdate = now;
-      setDownloadProgress(progress);
-      if (stats) setDownloadStats(stats);
-    });
-
-    (async () => {
-      try {
-        const ok = await initializeModel();
-        setModelReady(ok);
-      } catch (e) {
-        console.warn("Model init failed:", e);
-      } finally {
-        setProgressCallback(() => {});
-      }
-    })();
-
-    return () => setProgressCallback(() => {});
-  }, []);
 
   useEffect(() => {
     ensureLatexReady()
       .then(() => setLatexReady(true))
       .catch((e) => console.warn("LaTeX WASM init failed:", e));
   }, []);
+
+  const onYtextChangeNoop = useCallback(() => {}, []);
 
   const saveActiveTextToCache = useCallback(() => {
     if (ytext && activeTabPath && !isImagePath(activeTabPath)) {
@@ -483,6 +502,7 @@ export default function ProjectPage() {
     }
 
     setIsCompiling(true);
+    const start = performance.now();
     try {
       let latex = ytext.toString();
       if (!latex.trim()) {
@@ -523,6 +543,7 @@ export default function ProjectPage() {
       await gatherFiles(basePath);
 
       const pdfBlob = await compileLatexToPdf(latex, additionalFiles);
+      setLastCompileMs(Math.round(performance.now() - start));
       const url = URL.createObjectURL(pdfBlob);
       setPdfUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -535,22 +556,130 @@ export default function ProjectPage() {
     }
   };
 
+  useEffect(() => {
+    if (latexReady && ytext && fs && !autoCompileDoneRef.current && !isCompiling) {
+      autoCompileDoneRef.current = true;
+      void handleCompile();
+    }
+  }, [latexReady, ytext, fs, isCompiling, handleCompile]);
+
   const handleSendChat = async () => {
     if (!chatInput.trim()) return;
     const userMessage = chatInput.trim();
-    setChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }]);
+    setChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, { role: "assistant", content: "Thinking..." }]);
     setChatInput("");
+    setChatExpanded(true);
+    setIsGenerating(true);
+
+    const isAsk = chatMode === "ask";
+    let lastUpdate = 0;
 
     try {
       const context = ytext?.toString() ?? "";
-      const reply = await generateChatResponse(userMessage, context);
-      setChatMessages((msgs) => [...msgs, { role: "assistant", content: reply }]);
+      const reply = await generateChatResponse(
+        userMessage,
+        isAsk ? context : undefined,
+        chatMode,
+        {
+              onChunk: (text) => {
+                setChatMessages((msgs) => {
+                  const next = [...msgs];
+                  const lastIdx = next.length - 1;
+                  if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
+                    const prev = next[lastIdx].content === "Thinking..." ? "" : next[lastIdx].content;
+                    next[lastIdx] = { role: "assistant", content: prev + text, responseType: chatMode };
+                  }
+                  return next;
+                });
+              },
+              onTokensPerSec: (tokensPerSec, totalTokens, elapsedSeconds, inputTokens) => {
+                const now = Date.now();
+                if (now - lastUpdate >= 300) {
+                  lastUpdate = now;
+                  setStreamingStats({
+                    tokensPerSec: Math.round(tokensPerSec * 10) / 10,
+                    totalTokens,
+                    elapsedSeconds: Math.round(elapsedSeconds * 10) / 10,
+                    inputTokens,
+                    contextUsed: inputTokens + totalTokens,
+                  });
+                }
+              },
+              onComplete: (outputTokens, elapsedSeconds, inputTokens) => {
+                const contextUsed = inputTokens + outputTokens;
+                setStreamingStats({
+                  tokensPerSec: Math.round((outputTokens / elapsedSeconds) * 10) / 10,
+                  totalTokens: outputTokens,
+                  elapsedSeconds: Math.round(elapsedSeconds * 10) / 10,
+                  inputTokens,
+                  contextUsed,
+                });
+              },
+            },
+        chatMessages.map((m) => ({
+          role: m.role,
+          content: m.role === "assistant" && m.responseType === "agent" && m.markdown ? m.markdown : m.content,
+        }))
+      );
+
+      let createdPath: string | undefined;
+      if (reply.type === "agent" && fs && reply.content) {
+        const titleText = reply.title ?? reply.content.match(/\\title\s*\{([^{}]+)\}/)?.[1]?.trim() ?? "";
+        const slug =
+          titleText
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, "")
+            .trim()
+            .split(/\s+/)
+            .slice(0, 4)
+            .join("_")
+            .replace(/_+/g, "_") || "paper";
+        let filename = `${slug}.tex`;
+        let path = `${basePath}/${filename}`;
+        let n = 1;
+        while (await fs.exists(path).catch(() => false)) {
+          filename = `${slug}_${n}.tex`;
+          path = `${basePath}/${filename}`;
+          n++;
+        }
+        const buf = new TextEncoder().encode(reply.content).buffer as ArrayBuffer;
+        await fs.writeFile(path, buf, { mimeType: "text/x-tex" });
+        createdPath = path;
+        setRefreshTrigger((t) => t + 1);
+        await handleFileSelect(path);
+      }
+
+      setChatMessages((msgs) => {
+        const next = [...msgs];
+        const lastIdx = next.length - 1;
+        const assistantMsg = {
+          role: "assistant" as const,
+          content: reply.content,
+          responseType: reply.type,
+          ...(createdPath && { createdPath }),
+          ...(reply.type === "agent" && reply.markdown && { markdown: reply.markdown }),
+        };
+        if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
+          next[lastIdx] = assistantMsg;
+        } else {
+          next.push(assistantMsg);
+        }
+        return next;
+      });
     } catch (e) {
       console.error(e);
-      setChatMessages((msgs) => [
-        ...msgs,
-        { role: "assistant", content: "Error generating response. WebGPU may be required." },
-      ]);
+      setChatMessages((msgs) => {
+        const next = [...msgs];
+        const lastIdx = next.length - 1;
+        if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
+          next[lastIdx] = { role: "assistant", content: "Error generating response. WebGPU may be required." };
+        } else {
+          next.push({ role: "assistant", content: "Error generating response. WebGPU may be required." });
+        }
+        return next;
+      });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -569,6 +698,11 @@ export default function ProjectPage() {
     );
   }
 
+  const handleShare = () => {
+    if (typeof window === "undefined") return;
+    navigator.clipboard?.writeText(window.location.href);
+  };
+
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <aside className="w-64 border-r border-zinc-800 flex flex-col min-h-0 bg-zinc-950">
@@ -577,22 +711,92 @@ export default function ProjectPage() {
             ← Dashboard
           </Link>
         </div>
-        <div className="h-12 flex items-center justify-between px-3 font-semibold text-xs border-b border-zinc-800 shrink-0">
-          {projectName}
-          <FileActions fs={fs} basePath={addTargetPath} onAction={() => setRefreshTrigger((t) => t + 1)} />
+        <div className="px-3 py-2 border-b border-zinc-800 shrink-0 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <ProjectDropdown
+              projectId={id}
+              projectName={projectName}
+              isRoom={isRoom}
+              fs={fs}
+              onRename={setProjectName}
+            >
+              {projectName}
+            </ProjectDropdown>
+            <button
+              onClick={handleShare}
+              className="shrink-0 text-zinc-400 hover:text-zinc-200 p-1.5 rounded hover:bg-zinc-800 transition-colors"
+              title="Share"
+            >
+              <IconShare2 />
+            </button>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex rounded bg-zinc-900 border border-zinc-700 overflow-hidden shrink-0">
+              <button
+                onClick={() => setSidebarTab("files")}
+                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "files" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+              >
+                Files
+              </button>
+              <button
+                onClick={() => setSidebarTab("chats")}
+                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "chats" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+              >
+                Chats
+              </button>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              {sidebarTab === "files" && (
+                <>
+                  <button
+                    onClick={() => setSearchOpen((o) => !o)}
+                    className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-zinc-700 text-zinc-200" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}
+                    title="Search"
+                  >
+                    <IconSearch />
+                  </button>
+                  <FileActions fs={fs} basePath={addTargetPath} onAction={() => setRefreshTrigger((t) => t + 1)} />
+                </>
+              )}
+            </div>
+          </div>
+          {sidebarTab === "files" && searchOpen && (
+            <input
+              type="text"
+              placeholder="Search files…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-2 py-1.5 text-xs rounded bg-zinc-900 border border-zinc-700 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              autoFocus
+            />
+          )}
         </div>
-        <FileTree
-          fs={fs}
-          basePath={basePath}
-          currentPath={currentPath}
-          onFileSelect={handleFileSelect}
-          onRefresh={() => setRefreshTrigger((t) => t + 1)}
-          refreshTrigger={refreshTrigger}
-          onFileDeleted={handleFileDeleted}
-        />
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          {sidebarTab === "files" ? (
+            <FileTree
+              fs={fs}
+              basePath={basePath}
+              currentPath={currentPath}
+              onFileSelect={handleFileSelect}
+              onRefresh={() => setRefreshTrigger((t) => t + 1)}
+              refreshTrigger={refreshTrigger}
+              onFileDeleted={handleFileDeleted}
+              searchQuery={searchQuery}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col min-h-0 p-3">
+              <p className="text-sm text-zinc-500">Chat sessions</p>
+              <p className="text-xs text-zinc-600 mt-2">Create and switch between chat sessions.</p>
+            </div>
+          )}
+        </div>
       </aside>
 
       <main className="flex-1 flex min-w-0 min-h-0">
+        {(() => {
+          const activeTab = openTabs.find((t) => t.path === activeTabPath);
+          const showAIPanel = activeTab?.type === "text" && ydoc && ytext && provider;
+          return (
         <section className="w-1/2 flex flex-col border-r border-zinc-800 min-w-0 min-h-0 overflow-hidden">
           <FileTabs
             tabs={openTabs}
@@ -602,7 +806,7 @@ export default function ProjectPage() {
           />
           <div className="flex-1 relative min-h-0 overflow-hidden">
             {(() => {
-              const activeTab = openTabs.find((t) => t.path === activeTabPath);
+              const aiOverlayHeight = chatExpanded ? "45%" : "155px";
               if (activeTab?.type === "image") {
                 return (
                   <ImageViewer
@@ -613,13 +817,19 @@ export default function ProjectPage() {
               }
               if (activeTab?.type === "text" && ydoc && ytext && provider) {
                 return (
-                  <EditorPanel
-                    ydoc={ydoc}
-                    ytext={ytext}
-                    provider={provider}
-                    currentPath={activeTabPath}
-                    onYtextChange={() => {}}
-                  />
+                  <div
+                    className="absolute inset-0 overflow-hidden"
+                    style={{ bottom: showAIPanel ? aiOverlayHeight : 0 }}
+                  >
+                    <EditorPanel
+                      ref={editorRef}
+                      ydoc={ydoc}
+                      ytext={ytext}
+                      provider={provider}
+                      currentPath={activeTabPath}
+                      onYtextChange={onYtextChangeNoop}
+                    />
+                  </div>
                 );
               }
               if (!ydoc || !ytext || !provider) {
@@ -635,54 +845,100 @@ export default function ProjectPage() {
                 </div>
               );
             })()}
-          </div>
-          <div className="h-56 border-t border-zinc-800 flex flex-col bg-zinc-950">
-            <div className="px-3 py-2 text-sm font-medium border-b border-zinc-800 bg-zinc-900 text-zinc-400 flex flex-col gap-1.5 min-h-[52px] shrink-0">
-              <div className="flex items-center justify-between gap-3">
-                <span>AI assistant</span>
-                {modelReady ? (
-                  <span className="text-emerald-500 shrink-0">Ready</span>
-                ) : (
-                  <span className="tabular-nums text-zinc-500 shrink-0 w-12 text-right">
-                    {Math.round(downloadProgress)}%
-                  </span>
+            {showAIPanel && (
+              <div
+                className={`absolute bottom-0 left-0 right-0 flex flex-col bg-zinc-950 border-t border-zinc-800/80 transition-[height] duration-200 ease-out overflow-hidden ${
+                  chatExpanded ? "h-[45%]" : "h-[155px]"
+                }`}
+              >
+                <div className="flex items-center justify-end gap-1 shrink-0 px-1 py-1">
+                  <button
+                    onClick={() => {
+                      setChatMessages([]);
+                      setStreamingStats(null);
+                    }}
+                    className="w-7 h-7 rounded flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                    title="Clear chat"
+                  >
+                    <IconTrash2 />
+                  </button>
+                  <button
+                    onClick={() => setChatExpanded((e) => !e)}
+                    className="w-7 h-7 rounded flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                    title={chatExpanded ? "Collapse" : "Expand"}
+                  >
+                    {chatExpanded ? <IconChevronDown /> : <IconChevronUp />}
+                  </button>
+                </div>
+                {chatExpanded && (
+                  <div
+                    ref={chatScrollRef}
+                    className="flex-1 min-h-0 overflow-auto px-3 py-2 text-sm space-y-3 shrink min-h-0 flex flex-col scroll-smooth"
+                    style={{ scrollBehavior: "smooth" }}
+                  >
+                    {chatMessages.map((m, i) => (
+                      <div
+                        key={i}
+                        className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                            m.role === "user"
+                              ? "bg-blue-600 text-white rounded-br-sm"
+                              : "bg-zinc-700/80 text-zinc-200 rounded-bl-sm"
+                          }`}
+                        >
+                          {m.role === "assistant" && m.responseType === "agent" ? (
+                            <pre
+                              ref={i === chatMessages.length - 1 && m.role === "assistant" ? lastMessageRef : undefined}
+                              className="text-sm overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono bg-zinc-800/50 rounded p-3 max-h-64"
+                            >
+                              {m.content}
+                            </pre>
+                          ) : m.content === "Thinking..." ? (
+                            <span className="text-zinc-400 italic">{m.content}</span>
+                          ) : m.role === "assistant" && m.responseType === "ask" ? (
+                            <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
+                              <ReactMarkdown>{m.content}</ReactMarkdown>
+                            </div>
+                          ) : m.role === "assistant" ? (
+                            <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
+                              <ReactMarkdown>{m.content}</ReactMarkdown>
+                            </div>
+                          ) : (
+                            <span>{m.content}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </div>
-              <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 rounded-full transition-[width] duration-300 ease-out"
-                  style={{ width: modelReady ? "100%" : `${downloadProgress}%` }}
+                <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-zinc-500 shrink-0 border-t border-zinc-800/60">
+                  <span className={isGenerating ? "text-zinc-400" : streamingStats ? "text-emerald-500/80" : "text-zinc-500"}>
+                    {isGenerating ? "Streaming…" : streamingStats ? "Done!" : "—"}
+                  </span>
+                  <span className="tabular-nums">
+                    {streamingStats
+                      ? `${streamingStats.totalTokens} tokens · ${streamingStats.elapsedSeconds}s · ${streamingStats.tokensPerSec} tok/s · ${streamingStats.contextUsed.toLocaleString()} / 32K context`
+                      : "— tokens · — s · — tok/s · — context"}
+                  </span>
+                </div>
+                <ChatInput
+                  chatInput={chatInput}
+                  setChatInput={setChatInput}
+                  chatMode={chatMode}
+                  setChatMode={setChatMode}
+                  modelReady={modelReady}
+                  isGenerating={isGenerating}
+                  onModelReady={setModelReady}
+                  onSend={handleSendChat}
                 />
               </div>
-            </div>
-            <div className="flex-1 min-h-0 overflow-auto px-3 py-2 text-sm space-y-2 text-zinc-300">
-              {chatMessages.map((m, i) => (
-                <div key={i}>
-                  <span className="font-semibold text-zinc-400">
-                    {m.role === "user" ? "You: " : "AI: "}
-                  </span>
-                  <span>{m.content}</span>
-                </div>
-              ))}
-            </div>
-            <div className="border-t border-zinc-800 flex items-center gap-2 px-3 py-2">
-              <input
-                className="flex-1 border border-zinc-700 rounded px-3 py-2 text-sm bg-zinc-900 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-                placeholder="Ask about your LaTeX…"
-              />
-              <button
-                className="text-sm px-3 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
-                onClick={handleSendChat}
-                disabled={!modelReady}
-              >
-                Send
-              </button>
-            </div>
+            )}
           </div>
         </section>
+          );
+        })()}
 
         <section className="w-1/2 flex flex-col min-w-0">
           <div className="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -691,6 +947,7 @@ export default function ProjectPage() {
               onCompile={handleCompile}
               isCompiling={isCompiling}
               latexReady={latexReady}
+              lastCompileMs={lastCompileMs}
             />
           </div>
         </section>

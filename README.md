@@ -14,6 +14,17 @@
 - **WebRTC + Yjs**: Peers connect directly; a signaling server only helps establish connections and never sees document content.
 - **WebGPU AI**: The [LiquidAI LFM2.5-1.2B](https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-ONNX) model runs in-browser, quantized to 4-bit (Q4) and exported to ONNX. No API keys, no network calls for inference.
 - **Client-side LaTeX**: [texlyre-busytex](https://github.com/texlyre/busytex) compiles and renders PDFs locally via WebAssembly.
+- **Pandoc WASM**: The Agent mode outputs markdown (the model’s native format); [pandoc-wasm](https://www.npmjs.com/package/pandoc-wasm) converts it to LaTeX in the browser.
+
+### AI Chat Modes
+
+| Mode | Purpose | Context |
+|------|---------|---------|
+| **Ask** | Q&A about the current document | Reference document + conversation history |
+| **Agent** | Generate new LaTeX papers | Conversation history only (no reference doc) |
+
+- **Ask**: Uses the open document as context. Good for editing, debugging, and explaining LaTeX.
+- **Agent**: Model outputs markdown; pandoc-wasm converts to LaTeX. New files are named from the first `#` heading. Conversation history uses markdown (not LaTeX) so the model stays in its trained format.
 
 ---
 
@@ -39,7 +50,7 @@
 - **CodeMirror 6**: LaTeX syntax highlighting, One Dark theme.
 - **Yjs + y-webrtc**: Real-time collaborative editing; edits sync peer-to-peer.
 - **PDF preview**: Scrollable multi-page view, zoom, download.
-- **AI assistant**: In-browser chat with document context; helps draft, edit, and debug LaTeX.
+- **AI assistant**: In-browser chat with two modes—**Ask** (Q&A about the current document) and **Agent** (generates new papers from markdown, converted to LaTeX via pandoc-wasm).
 
 ### LaTeX Compilation
 
@@ -103,6 +114,11 @@ Open [http://localhost:3000](http://localhost:3000).
 │   ├── ImageViewer.tsx      # Image preview
 │   └── NameModal.tsx        # Rename/create dialogs
 ├── lib/
+│   ├── agent/               # AI chat modes
+│   │   ├── ask.ts           # Ask: Q&A with document context
+│   │   ├── create.ts        # Agent: markdown → pandoc-wasm → LaTeX
+│   │   ├── index.ts         # buildMessages, parseCreateResponse
+│   │   └── types.ts
 │   ├── projects.ts          # Project/room CRUD, IDBFS cleanup
 │   ├── localModelRuntime.ts # AI model (transformers.js, Cache API)
 │   ├── localModel.ts        # Model API exports
@@ -126,7 +142,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | **Collaboration** | Yjs, y-webrtc, y-codemirror.next |
 | **Editor** | CodeMirror 6, codemirror-lang-latex |
 | **Storage** | @wwog/idbfs (IndexedDB filesystem) |
-| **LaTeX** | texlyre-busytex (WASM) |
+| **LaTeX** | texlyre-busytex (WASM), pandoc-wasm (md→tex) |
 | **AI** | @huggingface/transformers (LFM2.5-1.2B Q4 ONNX) |
 | **PDF** | react-pdf |
 | **Styling** | Tailwind CSS |

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
+import { IconZoomIn, IconZoomOut, IconDownload } from "./Icons";
 
 // Configure worker - use CDN for Next.js compatibility
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -11,9 +12,10 @@ interface PdfPreviewProps {
   onCompile: () => void;
   isCompiling: boolean;
   latexReady?: boolean;
+  lastCompileMs?: number | null;
 }
 
-export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false }: PdfPreviewProps) {
+export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false, lastCompileMs }: PdfPreviewProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [scale, setScale] = useState<number>(1);
   const [containerWidth, setContainerWidth] = useState<number>(400);
@@ -54,13 +56,18 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false 
     <div className="h-full flex flex-col bg-zinc-900">
       {/* Toolbar: Compile left | Page center | Zoom + Download right */}
       <div className="h-12 flex items-center justify-between px-3 border-b border-zinc-800 bg-zinc-950 shrink-0">
-        <button
-          className="rounded bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-xs text-white disabled:opacity-50 transition-colors"
-          onClick={onCompile}
-          disabled={!latexReady || isCompiling}
-        >
-          {!latexReady ? "Loading LaTeX…" : isCompiling ? "Compiling…" : "Compile PDF"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-xs text-white disabled:opacity-50 transition-colors"
+            onClick={onCompile}
+            disabled={!latexReady || isCompiling}
+          >
+            {!latexReady ? "Loading LaTeX…" : isCompiling ? "Compiling…" : "Compile PDF"}
+          </button>
+          {lastCompileMs != null && !isCompiling && (
+            <span className="text-xs text-zinc-500">{lastCompileMs} ms</span>
+          )}
+        </div>
 
         <div className="flex items-center gap-2">
           {pdfUrl && numPages > 0 && (
@@ -71,10 +78,10 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false 
               <div className="flex items-center gap-2">
                 <button
                   onClick={zoomOut}
-                  className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium"
+                  className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"
                   title="Zoom out"
                 >
-                  −
+                  <IconZoomOut />
                 </button>
                 <button
                   onClick={zoomFit}
@@ -85,18 +92,19 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false 
                 </button>
                 <button
                   onClick={zoomIn}
-                  className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium"
+                  className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"
                   title="Zoom in"
                 >
-                  +
+                  <IconZoomIn />
                 </button>
               </div>
               <button
                 onClick={handleDownload}
-                className="rounded bg-zinc-800 hover:bg-zinc-700 px-2 py-1.5 text-xs text-zinc-300 transition-colors"
+                className="rounded bg-zinc-800 hover:bg-zinc-700 px-2 py-1.5 text-zinc-300 transition-colors flex items-center gap-1.5"
                 title="Download PDF"
               >
-                Download
+                <IconDownload />
+                <span className="text-xs">Download</span>
               </button>
             </>
           )}

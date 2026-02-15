@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { NameModal } from "./NameModal";
+import { IconPlus, IconFilePlus, IconFolderPlus, IconUpload } from "./Icons";
 
 type IdbfsFs = Awaited<ReturnType<typeof import("@wwog/idbfs").mount>>;
 
@@ -112,10 +113,10 @@ export function FileActions({ fs, basePath = "/", onAction }: FileActionsProps) 
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center text-xs font-medium"
+        className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"
         title="Add"
       >
-        +
+        <IconPlus />
       </button>
       {open && (
         <div className="absolute left-0 top-full mt-2 z-50 min-w-[180px] rounded border border-zinc-700 bg-zinc-900 shadow-xl py-2">
@@ -124,8 +125,9 @@ export function FileActions({ fs, basePath = "/", onAction }: FileActionsProps) 
               setAddModalType("file");
               setOpen(false);
             }}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
           >
+            <IconFilePlus />
             Add File
           </button>
           <button
@@ -133,20 +135,23 @@ export function FileActions({ fs, basePath = "/", onAction }: FileActionsProps) 
               setAddModalType("folder");
               setOpen(false);
             }}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
           >
+            <IconFolderPlus />
             Add Folder
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
           >
+            <IconUpload />
             Upload File
           </button>
           <button
             onClick={() => dirInputRef.current?.click()}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
           >
+            <IconUpload />
             Upload Directory
           </button>
         </div>
