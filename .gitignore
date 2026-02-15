@@ -1,0 +1,6 @@
+node_modules
+.next/*
+instructions.md
+PACKAGES.md
+public/core/*
+.DS_Store

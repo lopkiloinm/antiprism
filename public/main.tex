@@ -1,0 +1,121 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{tikz-cd}
+\usepackage{multicol}
+\usepackage{booktabs}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1\baselineskip}
+
+\begin{document}
+
+\section*{What is Prism?}
+
+\textbf{Prism} is an AI-powered \LaTeX{} editor for writing scientific documents. It supports real-time collaboration with coauthors and includes OpenAI-powered intelligence to help you draft and edit text, reason through ideas, and handle formatting.
+
+\section*{What is Antiprism?}
+
+\textbf{Antiprism} is a P2P decentralized version of Prism. Where Prism relies on cloud services and centralized infrastructure, Antiprism runs entirely in your browser---no servers, no API keys, no data leaving your device. Everything that makes Antiprism ``anti'' to Prism is summarized below.
+
+\section*{Antiprism vs.\ Prism: Architecture Comparison}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Component} & \textbf{Prism (cloud)} & \textbf{Antiprism (client-side)} \\
+\midrule
+Realtime collaboration & WebSockets via central server & WebRTC + Yjs (peer-to-peer) \\
+AI assistant & OpenAI API (datacenter) & LFM2.5-1.2B Q4 ONNX (WebGPU) \\
+\LaTeX{} rendering & Cloud compilation & Client-side WASM (texlyre-busytex) \\
+Data storage & Server-side & IndexedDB, local-first \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Realtime: WebRTC Yjs vs.\ WebSockets}
+
+Prism uses WebSockets to sync edits through a central server. Antiprism uses \textbf{WebRTC} with \textbf{Yjs} for CRDT-based collaboration: peers connect directly to each other, and a signaling server (or public mesh) only helps establish connections---it never sees document content. Your edits sync peer-to-peer without a middleman.
+
+\subsection*{AI: WebGPU in-Browser vs.\ OpenAI Datacenter}
+
+Prism sends your text to OpenAI's servers. Antiprism runs \textbf{LFM2.5-1.2B Q4 ONNX} (LiquidAI) entirely in your browser via \textbf{WebGPU}. The model is quantized to 4-bit (Q4) and exported to ONNX for efficient in-browser inference. No API keys, no network calls for inference---the model loads once, caches locally, and runs on your GPU. Privacy and offline use come by design.
+
+\subsection*{LaTeX: Client-Side WASM vs.\ Cloud}
+
+Prism compiles \LaTeX{} in the cloud. Antiprism uses \textbf{texlyre-busytex}, a WebAssembly port of a \TeX{} engine, to compile and render PDFs locally. Your documents never leave your machine for compilation.
+
+\section*{Features}
+
+\begin{multicols}{2}
+Antiprism includes an in-browser AI assistant and can access your project, so you can ask it to do things like:
+
+``Add the equation for the Laplace transform of $t\cos(at)$ to the introduction.''
+\[
+  \mathcal{L}\left\{ t \cos(a t) \right\} = \frac{ s^2 - a^2 }{ (s^2 + a^2)^2 }
+\]
+
+``Add a 4-by-4 table'' to the summary section.
+\begin{center}
+\resizebox{0.5\linewidth}{!}{%
+\begin{tabular}{|c|c|c|c|}
+  \hline
+  1 & 2 & 3 & 4 \\
+  \hline
+  5 & 6 & 7 & 8 \\
+  \hline
+  9 & 10 & 11 & 12 \\
+  \hline
+  13 & 14 & 15 & 16 \\
+  \hline
+\end{tabular}%
+}
+\end{center}
+
+``Proofread this and highlight any errors or gaps in logic, and make suggestions for how I can improve the clarity of the section.''
+
+``Are there any corollaries or follow-on implications of Theorem 3.1 that I've missed? Are all the bounds tight, or can some be relaxed?''
+
+\columnbreak
+
+``Write an abstract based on the rest of the paper''
+
+``Add a bibliography to my paper, and suggest related work I may have missed.''
+
+``Generate this hand-drawn diagram in \LaTeX{}.''
+\par\noindent
+\begin{minipage}[t]{0.49\linewidth}
+  \vspace{0pt}
+  \centering
+  \includegraphics[width=\linewidth]{diagram.jpg}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}
+  \vspace{0pt}
+  \centering
+  \resizebox{\linewidth}{!}{$
+    \begin{tikzcd}[row sep=2em, column sep=1.5em, ampersand replacement=\&]
+      E
+        \arrow[dr, "e"']
+        \arrow[drr, "p_2"]
+        \arrow[ddr, "p_1"']
+      \& \& \\
+      \& A \times B \arrow[r, "\pi_2"'] \arrow[d, "\pi_1"] \& B \arrow[d, "g"] \\
+      \& A \arrow[r, "f"'] \& C
+    \end{tikzcd}
+  $}
+\end{minipage}
+\par
+
+``Add any missing dependencies across my project.''
+
+``Generate a 200-word summary for a popular audience, in German.''
+
+``Generate a Beamer presentation with each slide in its own file.''
+\end{multicols}
+
+\section*{Collaboration}
+
+Invite collaborators by clicking the ``Share'' menu. As you edit, they will see your updates in real time over WebRTC---no central server stores your document. You can also leave comments by highlighting text and selecting ``Leave a comment.''
+
+\end{document}
