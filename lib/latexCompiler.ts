@@ -10,9 +10,11 @@ async function getEngine(): Promise<XeLatex> {
   if (xelatex) return xelatex;
   if (initPromise) return initPromise;
   initPromise = (async () => {
+    // basePath for GitHub Pages (e.g. /antiprism); ensure leading slash for absolute URL
     const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+    const baseNorm = base && !base.startsWith("/") ? `/${base}` : base;
     runner = new BusyTexRunner({
-      busytexBasePath: `${base}/core/busytex`,
+      busytexBasePath: `${baseNorm}/core/busytex`,
       verbose: false,
     });
     await runner.initialize(true); // true = Web Worker (avoids ScriptLoaderDocument issue in main thread)
