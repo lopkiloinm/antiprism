@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
     config.module = config.module || {};
     config.module.rules = config.module.rules || [];
-    config.module.rules.push({ test: /\.wasm$/, type: "asset/resource" });
+    // Must come first so .wasm files are handled before other rules; asyncWebAssembly enables webpack to process them
+    config.module.rules.unshift({ test: /\.wasm$/, type: "asset/resource" });
     // Fix pdfjs-dist "Object.defineProperty called on non-object" in dev mode.
     // eval-source-map causes variable shadowing that breaks pdfjs-dist; use source-map instead.
     if (dev && !isServer) {
