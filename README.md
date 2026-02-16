@@ -94,6 +94,18 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
+## Deployment (GitHub Pages)
+
+The workflow in `.github/workflows/nextjs.yml` builds and deploys to GitHub Pages on push to `main`. **You must enable Pages first:**
+
+1. Go to your repo on GitHub: **Settings** → **Pages**
+2. Under **Build and deployment** → **Source**, select **GitHub Actions**
+3. Save (no branch selection needed—the workflow deploys the artifact)
+
+After enabling, push to `main` or run the workflow manually from the **Actions** tab. The site will be at `https://<username>.github.io/antiprism/`.
+
+---
+
 ## Project Structure
 
 ```

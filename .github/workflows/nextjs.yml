@@ -1,6 +1,7 @@
-# Sample workflow for building and deploying a Next.js site to GitHub Pages
+# Deploy Next.js site to GitHub Pages
 #
-# To get started with Next.js see: https://nextjs.org/docs/getting-started
+# REQUIRED: Enable Pages first: Repo Settings → Pages → Source: GitHub Actions
+# See README.md "Deployment (GitHub Pages)" for details.
 #
 name: Deploy Next.js site to Pages
 
