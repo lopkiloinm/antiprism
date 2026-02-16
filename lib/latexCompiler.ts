@@ -4,17 +4,30 @@ import { BusyTexRunner, XeLatex } from "texlyre-busytex";
 
 let runner: BusyTexRunner | null = null;
 let xelatex: XeLatex | null = null;
+let initPromise: Promise<XeLatex> | null = null;
 
 async function getEngine(): Promise<XeLatex> {
-  if (!runner) {
+  if (xelatex) return xelatex;
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
     runner = new BusyTexRunner({
       busytexBasePath: "/core/busytex",
       verbose: false,
     });
     await runner.initialize(true); // true = Web Worker (avoids ScriptLoaderDocument issue in main thread)
     xelatex = new XeLatex(runner);
+    return xelatex;
+  })();
+  try {
+    return await initPromise;
+  } catch (e) {
+    initPromise = null;
+    runner = null;
+    xelatex = null;
+    throw new Error(
+      `LaTeX engine failed to initialize: ${e}. Run npm run download-latex-assets and ensure /core/busytex is served.`
+    );
   }
-  return xelatex!;
 }
 
 /** Preload the LaTeX WASM engine. Call on app init; compile should wait until this resolves. */
