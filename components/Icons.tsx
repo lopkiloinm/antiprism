@@ -29,6 +29,7 @@ import {
   Copy,
   Send,
   Image,
+  RefreshCw,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -59,3 +60,4 @@ export const IconFileArchive = () => <FileArchive {...iconProps} />;
 export const IconCopy = () => <Copy {...iconProps} />;
 export const IconSend = () => <Send {...iconProps} />;
 export const IconImage = () => <Image {...iconProps} />;
+export const IconRefreshCw = () => <RefreshCw {...iconProps} />;

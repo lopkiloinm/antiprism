@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { IconZoomIn, IconZoomOut, IconDownload } from "./Icons";
+import { IconZoomIn, IconZoomOut, IconDownload, IconRefreshCw } from "./Icons";
 
 // Configure worker - use CDN for Next.js compatibility
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -58,11 +58,18 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
       <div className="h-12 flex items-center justify-between px-3 border-b border-zinc-800 bg-zinc-950 shrink-0">
         <div className="flex items-center gap-2">
           <button
-            className="rounded bg-blue-600 hover:bg-blue-700 px-3 py-1.5 text-xs text-white disabled:opacity-50 transition-colors"
+            className="w-7 h-7 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors flex items-center justify-center"
             onClick={onCompile}
             disabled={!latexReady || isCompiling}
+            title={!latexReady ? "Loading LaTeX…" : isCompiling ? "Compiling…" : "Compile PDF"}
           >
-            {!latexReady ? "Loading LaTeX…" : isCompiling ? "Compiling…" : "Compile PDF"}
+            {isCompiling ? (
+              <span className="animate-spin inline-flex">
+                <IconRefreshCw />
+              </span>
+            ) : (
+              <IconRefreshCw />
+            )}
           </button>
           {lastCompileMs != null && !isCompiling && (
             <span className="text-xs text-zinc-500">{lastCompileMs} ms</span>
@@ -100,11 +107,10 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
               </div>
               <button
                 onClick={handleDownload}
-                className="rounded bg-zinc-800 hover:bg-zinc-700 px-2 py-1.5 text-zinc-300 transition-colors flex items-center gap-1.5"
+                className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors flex items-center justify-center"
                 title="Download PDF"
               >
                 <IconDownload />
-                <span className="text-xs">Download</span>
               </button>
             </>
           )}
