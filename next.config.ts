@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     if (isServer) {
       config.externals = [...(config.externals || []), "@huggingface/transformers"];
     }
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
     config.module = config.module || {};
     config.module.rules = config.module.rules || [];
     config.module.rules.push({ test: /\.wasm$/, type: "asset/resource" });
