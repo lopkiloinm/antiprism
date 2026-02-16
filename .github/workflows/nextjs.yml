@@ -76,7 +76,7 @@ jobs:
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       - name: Lint
-        run: ${{ steps.detect-package-manager.outputs.runner }} next lint
+        run: ${{ steps.detect-package-manager.outputs.manager }} run lint
       - name: Download LaTeX assets
         run: ${{ steps.detect-package-manager.outputs.manager }} run download-latex-assets
       - name: Build with Next.js
