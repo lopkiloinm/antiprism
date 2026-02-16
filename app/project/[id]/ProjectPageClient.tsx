@@ -492,6 +492,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
     if (activeTab?.type === "text" && activeTabPath) {
       try {
+        // idbfs writeFile is create-only; remove first so we can overwrite
+        await fsInstance.rm(activeTabPath).catch(() => {});
         await fsInstance.writeFile(
           activeTabPath,
           new TextEncoder().encode(ytext.toString()).buffer as ArrayBuffer,
