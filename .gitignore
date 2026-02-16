@@ -4,3 +4,4 @@ instructions.md
 PACKAGES.md
 public/core/*
 .DS_Store
+out/*

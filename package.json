@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
-    "start": "next start",
+    "start": "npx serve@latest out",
     "lint": "next lint",
     "download-latex-assets": "npx texlyre-busytex download-assets ./public/core"
   },

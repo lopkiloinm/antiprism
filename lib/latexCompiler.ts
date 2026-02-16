@@ -10,8 +10,9 @@ async function getEngine(): Promise<XeLatex> {
   if (xelatex) return xelatex;
   if (initPromise) return initPromise;
   initPromise = (async () => {
+    const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
     runner = new BusyTexRunner({
-      busytexBasePath: "/core/busytex",
+      busytexBasePath: `${base}/core/busytex`,
       verbose: false,
     });
     await runner.initialize(true); // true = Web Worker (avoids ScriptLoaderDocument issue in main thread)

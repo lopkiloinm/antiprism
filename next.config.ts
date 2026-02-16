@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Only use static export for production build (GitHub Pages). In dev, skip it so
+  // middleware runs and dynamic project routes work without generateStaticParams errors.
+  ...(process.env.NODE_ENV === "production" && { output: "export" as const }),
   turbopack: {},
   webpack: (config, { isServer, dev }) => {
     if (isServer) {
