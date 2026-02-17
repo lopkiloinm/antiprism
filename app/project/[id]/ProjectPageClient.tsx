@@ -289,12 +289,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       const existingIdx = openTabs.findIndex((t) => t.path === path);
 
       if (existingIdx >= 0) {
+        // Save current editor content BEFORE switching the active path
+        saveActiveTextToCache();
         setActiveTabPath(path);
         setCurrentPath(path);
-        if (isImage) {
-          saveActiveTextToCache();
-        } else {
-          saveActiveTextToCache();
+        if (!isImage) {
           const cached = textContentCacheRef.current.get(path);
           if (cached !== undefined) {
             loadTextIntoEditor(path, cached);
