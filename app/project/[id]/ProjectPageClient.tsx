@@ -211,11 +211,14 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         }
 
         if (cancelled) return;
+        const importedMarkerPath = `${basePath}/.antiprism_imported`;
+        const isImported = await idbfs.exists(importedMarkerPath).catch(() => false);
+
         const { dirs, files } = await idbfs.readdir(basePath).catch(() => ({ dirs: [] as { name: string }[], files: [] as { name: string }[] }));
         const isEmpty = dirs.length === 0 && files.length === 0;
         const hasMainTex = files.some((f: { name: string }) => f.name === "main.tex");
         const hasMainTyp = files.some((f: { name: string }) => f.name === "main.typ");
-        const isNewProject = isEmpty || (hasMainTex && !hasMainTyp);
+        const isNewProject = !isImported && isEmpty;
 
         if (isNewProject) {
           // + New only: seed from public (fetch all in parallel to avoid partial state on Strict Mode double-mount)

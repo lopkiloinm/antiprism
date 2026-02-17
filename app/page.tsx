@@ -92,6 +92,15 @@ export default function DashboardPage() {
             }
           }
         }
+
+        // Mark this project as imported so ProjectPageClient won't seed templates.
+        // Write *after* extraction to avoid collisions if the zip contains the same filename.
+        try {
+          const marker = new TextEncoder().encode("imported").buffer as ArrayBuffer;
+          await fs.writeFile(`${basePath}/.antiprism_imported`, marker, { mimeType: "text/plain" });
+        } catch {
+          // ignore (create-only + strict-mode races)
+        }
         setRefresh((r) => r + 1);
         router.push(`/project/${project.id}`);
       } catch (err) {
@@ -143,6 +152,15 @@ export default function DashboardPage() {
           await fs.writeFile(fullPath, buf, {
             mimeType: file.type || "application/octet-stream",
           });
+        }
+
+        // Mark this project as imported so ProjectPageClient won't seed templates.
+        // Write *after* copying to avoid collisions if the folder contains the same filename.
+        try {
+          const marker = new TextEncoder().encode("imported").buffer as ArrayBuffer;
+          await fs.writeFile(`${basePath}/.antiprism_imported`, marker, { mimeType: "text/plain" });
+        } catch {
+          // ignore (create-only + strict-mode races)
         }
         setRefresh((r) => r + 1);
         router.push(`/project/${project.id}`);
