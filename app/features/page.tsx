@@ -9,9 +9,6 @@ import {
   IconShield,
   IconWifiOff,
   IconZap,
-  IconLayoutDashboard,
-  IconEye,
-  IconServer,
   IconArrowRight,
   IconSend,
 } from "@/components/Icons";
@@ -205,15 +202,10 @@ export default function FeaturesPage() {
       {/* Tools / What you get */}
       <section className="border-b border-zinc-800 bg-zinc-900/20 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/50 text-zinc-300">
-              <IconLayoutDashboard />
-            </span>
-            <h2 className="text-2xl font-semibold tracking-tight text-zinc-100">
-              What you get
-            </h2>
-          </div>
-          <p className="mt-2 max-w-2xl text-zinc-400">
+          <h2 className="text-4xl font-semibold leading-tight tracking-tight text-zinc-100 sm:text-5xl">
+            What you get
+          </h2>
+          <p className="mt-5 text-lg leading-relaxed text-zinc-300">
             One workspace with the same goal: write better, together, with
             privacy and control over your documents.
           </p>
@@ -433,15 +425,10 @@ effects.`}</pre>
       {/* At a glance */}
       <section className="border-b border-zinc-800 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/50 text-zinc-300">
-              <IconEye />
-            </span>
-            <h2 className="text-2xl font-semibold tracking-tight text-zinc-100">
-              Antiprism at a glance
-            </h2>
-          </div>
-          <p className="mt-2 max-w-2xl text-zinc-400">
+          <h2 className="text-4xl font-semibold leading-tight tracking-tight text-zinc-100 sm:text-5xl">
+            Antiprism at a glance
+          </h2>
+          <p className="mt-5 text-lg leading-relaxed text-zinc-300">
             Antiprism is built on a simple idea: scientific writing deserves
             tools that are private, fast, and work where you do—without locking
             you into a cloud or a single device.
@@ -465,15 +452,10 @@ effects.`}</pre>
       {/* How it works / Single workspace */}
       <section className="border-b border-zinc-800 bg-zinc-900/20 py-16">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-800/50 text-zinc-300">
-              <IconServer />
-            </span>
-            <h2 className="text-2xl font-semibold tracking-tight text-zinc-100">
-              One workspace, no backend
-            </h2>
-          </div>
-          <p className="mt-2 max-w-2xl text-zinc-400">
+          <h2 className="text-4xl font-semibold leading-tight tracking-tight text-zinc-100 sm:text-5xl">
+            One workspace, no backend
+          </h2>
+          <p className="mt-5 text-lg leading-relaxed text-zinc-300">
             No server to run, no API keys to manage. Compile in the browser,
             collaborate over WebRTC, and keep your data on your device.
           </p>
@@ -498,10 +480,10 @@ effects.`}</pre>
       <section className="py-16">
         <div className="mx-auto max-w-6xl px-6">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-8 sm:p-10">
-            <h2 className="text-xl font-semibold tracking-tight text-zinc-100">
+            <h2 className="text-4xl font-semibold leading-tight tracking-tight text-zinc-100 sm:text-5xl">
               Ready to try it?
             </h2>
-            <p className="mt-2 text-zinc-400">
+            <p className="mt-5 text-lg leading-relaxed text-zinc-300">
               Create a project and start writing. No account required.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
