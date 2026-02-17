@@ -26,7 +26,8 @@ function extractMarkdown(raw: string): string {
   let s = raw.trim();
   s = s.replace(/^(?:user|assistant)\s*\n?/gim, "");
   s = s.replace(/^[^\S\n]*(?:user|assistant):\s*/gim, "");
-  const codeBlock = s.match(/```(?:markdown|md)?\s*([\s\S]*?)```/i);
+  // Only extract from fences explicitly labeled markdown/md — NOT arbitrary code fences
+  const codeBlock = s.match(/```(?:markdown|md)\s*\n([\s\S]*?)```/i);
   if (codeBlock) return codeBlock[1].trim();
   return s;
 }
