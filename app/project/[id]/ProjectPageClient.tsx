@@ -39,7 +39,7 @@ import {
   getPromptAsk,
   getPromptCreate,
 } from "@/lib/settings";
-import { getProjects, getRooms } from "@/lib/projects";
+import { getAllProjects, getRooms } from "@/lib/projects";
 import { EditorBufferManager } from "@/lib/editorBufferManager";
 
 const DEFAULT_FILE = "/main.tex";
@@ -134,7 +134,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const isCompilingRef = useRef(false);
 
   useEffect(() => {
-    const p = getProjects().find((x) => x.id === id);
+    const p = getAllProjects().find((x) => x.id === id);
     const r = getRooms().find((x) => x.id === id);
     if (p) {
       setProjectName(p.name);

@@ -2,15 +2,27 @@
 
 import Link from "next/link";
 import type { Project } from "@/lib/projects";
-import { IconFileText, IconUsers, IconTrash2 } from "./Icons";
+import { IconDownload, IconFileText, IconRestore, IconUsers, IconTrash2 } from "./Icons";
 
 interface ProjectListProps {
   items: Project[];
   viewMode: "list" | "icons";
   onDelete?: (item: Project) => void;
+  onDownload?: (item: Project) => void;
+  onRestore?: (item: Project) => void;
+  deleteTitle?: string;
+  downloadTitle?: string;
 }
 
-export function ProjectList({ items, viewMode, onDelete }: ProjectListProps) {
+export function ProjectList({
+  items,
+  viewMode,
+  onDelete,
+  onDownload,
+  onRestore,
+  deleteTitle = "Move to trash",
+  downloadTitle = "Download ZIP",
+}: ProjectListProps) {
   if (items.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-zinc-500 text-sm">
@@ -38,18 +50,44 @@ export function ProjectList({ items, viewMode, onDelete }: ProjectListProps) {
                   </div>
                 </div>
               </div>
-              {onDelete && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onDelete(item);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-zinc-700 rounded transition-opacity"
-                  title="Delete"
-                >
-                  <IconTrash2 />
-                </button>
-              )}
+              <div className="flex items-center gap-1">
+                {!item.isRoom && onRestore && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onRestore(item);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-300 hover:bg-zinc-700 rounded transition-opacity"
+                    title="Restore"
+                  >
+                    <IconRestore />
+                  </button>
+                )}
+                {!item.isRoom && !onRestore && onDownload && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onDownload(item);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-300 hover:bg-zinc-700 rounded transition-opacity"
+                    title={downloadTitle}
+                  >
+                    <IconDownload />
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onDelete(item);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-zinc-700 rounded transition-opacity"
+                    title={deleteTitle}
+                  >
+                    <IconTrash2 />
+                  </button>
+                )}
+              </div>
             </Link>
           ))}
         </div>
@@ -66,18 +104,44 @@ export function ProjectList({ items, viewMode, onDelete }: ProjectListProps) {
             href={`/project/${item.id}`}
             className="flex flex-col items-center p-4 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/50 hover:border-zinc-700 transition-colors group relative"
           >
-            {onDelete && (
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  onDelete(item);
-                }}
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 rounded text-red-400 hover:bg-zinc-700 transition-opacity"
-                title="Delete"
-              >
-                <IconTrash2 />
-              </button>
-            )}
+            <div className="absolute top-2 right-2 flex items-center gap-1">
+              {!item.isRoom && onRestore && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onRestore(item);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-zinc-300 hover:bg-zinc-700 transition-opacity"
+                  title="Restore"
+                >
+                  <IconRestore />
+                </button>
+              )}
+              {!item.isRoom && !onRestore && onDownload && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onDownload(item);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-zinc-300 hover:bg-zinc-700 transition-opacity"
+                  title={downloadTitle}
+                >
+                  <IconDownload />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onDelete(item);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-red-400 hover:bg-zinc-700 transition-opacity"
+                  title={deleteTitle}
+                >
+                  <IconTrash2 />
+                </button>
+              )}
+            </div>
             <span className="text-zinc-400 mb-2">{item.isRoom ? <IconUsers /> : <IconFileText />}</span>
             <span className="text-sm font-medium text-zinc-200 text-center truncate w-full">
               {item.name}

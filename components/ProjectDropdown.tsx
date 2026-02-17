@@ -6,7 +6,7 @@ import JSZip from "jszip";
 import { mount } from "@wwog/idbfs";
 import {
   createProject,
-  deleteProject,
+  trashProject,
   deleteRoom,
   deleteProjectDataFromStorage,
   renameProject,
@@ -100,11 +100,15 @@ export function ProjectDropdown({
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${projectName}"? This cannot be undone.`)) return;
+    if (!confirm(`Move "${projectName}" to trash?`)) return;
     setOpen(false);
-    if (isRoom) deleteRoom(projectId);
-    else deleteProject(projectId);
-    await deleteProjectDataFromStorage(projectId);
+    if (isRoom) {
+      // Rooms are not trashable (for now): delete immediately.
+      deleteRoom(projectId);
+      await deleteProjectDataFromStorage(projectId);
+    } else {
+      trashProject(projectId);
+    }
     router.push("/");
   };
 
@@ -176,7 +180,7 @@ export function ProjectDropdown({
             className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 text-red-400 hover:text-red-300 flex items-center gap-2"
           >
             <IconTrash2 />
-            Delete
+            Move to trash
           </button>
           <button
             onClick={handleDuplicate}

@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { IconFolder, IconFileText, IconUsers } from "./Icons";
+import { IconFolder, IconFileText, IconSparkles, IconUsers, IconTrash2 } from "./Icons";
 
-type NavItem = "all" | "projects" | "rooms";
+type NavItem = "all" | "projects" | "rooms" | "trash";
 
 interface DashboardSidebarProps {
   activeNav: NavItem;
@@ -18,6 +17,13 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
         Dashboard
       </div>
       <nav className="p-2 space-y-0.5">
+        <Link
+          href="/features"
+          className="w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+        >
+          <IconSparkles />
+          Features
+        </Link>
         <button
           onClick={() => onNavChange("all")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
@@ -50,6 +56,17 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
         >
           <IconUsers />
           Your Rooms
+        </button>
+        <button
+          onClick={() => onNavChange("trash")}
+          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+            activeNav === "trash"
+              ? "bg-zinc-800 text-zinc-100"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+          }`}
+        >
+          <IconTrash2 />
+          Trashed Projects
         </button>
       </nav>
     </aside>

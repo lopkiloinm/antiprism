@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  Sparkles,
   FileText,
   Folder,
   FolderOpen,
@@ -15,6 +16,7 @@ import {
   Plus,
   Upload,
   Download,
+  RotateCcw,
   Pencil,
   Trash2,
   Share2,
@@ -41,6 +43,7 @@ export const IconSearch = () => <Search {...iconProps} />;
 export const IconChevronDown = () => <ChevronDown {...iconProps} />;
 export const IconChevronUp = () => <ChevronUp {...iconProps} />;
 export const IconChevronRight = () => <ChevronRight {...iconProps} />;
+export const IconSparkles = () => <Sparkles {...iconProps} />;
 export const IconFileText = () => <FileText {...iconProps} />;
 export const IconFolder = () => <Folder {...iconProps} />;
 export const IconFolderOpen = () => <FolderOpen {...iconProps} />;
@@ -49,6 +52,7 @@ export const IconUsers = () => <Users {...iconProps} />;
 export const IconPlus = () => <Plus {...iconProps} />;
 export const IconUpload = () => <Upload {...iconProps} />;
 export const IconDownload = () => <Download {...iconProps} />;
+export const IconRestore = () => <RotateCcw {...iconProps} />;
 export const IconPencil = () => <Pencil {...iconProps} />;
 export const IconTrash2 = () => <Trash2 {...iconProps} />;
 export const IconShare2 = () => <Share2 {...iconProps} />;

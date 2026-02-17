@@ -3,6 +3,8 @@ export interface Project {
   name: string;
   createdAt: number;
   isRoom?: boolean;
+  /** When set, project is in Trash (soft-deleted). */
+  trashedAt?: number;
 }
 
 const STORAGE_KEY_PROJECTS = "antiprism-projects";
@@ -24,7 +26,16 @@ function saveJson(key: string, value: unknown): void {
 }
 
 export function getProjects(): Project[] {
+  return loadJson<Project[]>(STORAGE_KEY_PROJECTS, []).filter((p) => !p.trashedAt);
+}
+
+/** All projects, including trashed (rooms not included). */
+export function getAllProjects(): Project[] {
   return loadJson<Project[]>(STORAGE_KEY_PROJECTS, []);
+}
+
+export function getTrashedProjects(): Project[] {
+  return loadJson<Project[]>(STORAGE_KEY_PROJECTS, []).filter((p) => !!p.trashedAt);
 }
 
 export function getRooms(): Project[] {
@@ -81,11 +92,26 @@ export function addRoom(room: Project): void {
   }
 }
 
+/** Permanently delete project metadata (not storage). */
 export function deleteProject(id: string): void {
   saveJson(
     STORAGE_KEY_PROJECTS,
-    getProjects().filter((p) => p.id !== id)
+    loadJson<Project[]>(STORAGE_KEY_PROJECTS, []).filter((p) => p.id !== id)
   );
+}
+
+/** Move a project to Trash (soft delete). */
+export function trashProject(id: string): void {
+  const all = loadJson<Project[]>(STORAGE_KEY_PROJECTS, []);
+  const next = all.map((p) => (p.id === id ? { ...p, trashedAt: Date.now() } : p));
+  saveJson(STORAGE_KEY_PROJECTS, next);
+}
+
+/** Restore a trashed project. */
+export function restoreProject(id: string): void {
+  const all = loadJson<Project[]>(STORAGE_KEY_PROJECTS, []);
+  const next = all.map((p) => (p.id === id ? { ...p, trashedAt: undefined } : p));
+  saveJson(STORAGE_KEY_PROJECTS, next);
 }
 
 export function deleteRoom(id: string): void {

@@ -8,8 +8,11 @@ import {
   getProjects,
   getRooms,
   getAllItems,
+  getTrashedProjects,
   createProject,
   deleteProject,
+  trashProject,
+  restoreProject,
   deleteRoom,
   deleteProjectDataFromStorage,
 } from "@/lib/projects";
@@ -18,7 +21,7 @@ import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { ProjectList } from "@/components/ProjectList";
 
-type NavItem = "all" | "projects" | "rooms";
+type NavItem = "all" | "projects" | "rooms" | "trash";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -27,12 +30,14 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [items, setItems] = useState<Project[]>([]);
   const [refresh, setRefresh] = useState(0);
+  const [isDownloading, setIsDownloading] = useState<string | null>(null);
 
   const loadItems = useCallback(() => {
     let list: Project[];
     if (activeNav === "all") list = getAllItems();
     else if (activeNav === "projects") list = getProjects();
-    else list = getRooms();
+    else if (activeNav === "rooms") list = getRooms();
+    else list = getTrashedProjects().map((p) => ({ ...p, isRoom: false }));
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -175,9 +180,61 @@ export default function DashboardPage() {
     if (item.isRoom) {
       deleteRoom(item.id);
     } else {
-      deleteProject(item.id);
+      if (activeNav === "trash") {
+        // Permanent delete from Trash
+        deleteProject(item.id);
+        await deleteProjectDataFromStorage(item.id);
+      } else {
+        // Soft delete: move to Trash
+        trashProject(item.id);
+      }
     }
-    await deleteProjectDataFromStorage(item.id);
+    setRefresh((r) => r + 1);
+  };
+
+  const handleDownloadProject = async (item: Project) => {
+    if (item.isRoom) return;
+    setIsDownloading(item.id);
+    try {
+      const fs = await mount();
+      const zip = new JSZip();
+      const basePath = `/projects/${item.id}`;
+
+      async function addDir(absDir: string, relDir: string) {
+        const { dirs, files } = await fs.readdir(absDir);
+        for (const f of files) {
+          const absPath = absDir === "/" ? `/${f.name}` : `${absDir}/${f.name}`;
+          const relPath = relDir ? `${relDir}/${f.name}` : f.name;
+          const data = await fs.readFile(absPath);
+          zip.file(relPath, data as ArrayBuffer);
+        }
+        for (const d of dirs) {
+          const subAbs = absDir === "/" ? `/${d.name}` : `${absDir}/${d.name}`;
+          const subRel = relDir ? `${relDir}/${d.name}` : d.name;
+          await addDir(subAbs, subRel);
+        }
+      }
+
+      await addDir(basePath, "");
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeName = (item.name || "project").replace(/[\\/:*?\"<>|]+/g, "-").trim() || "project";
+      a.href = url;
+      a.download = `${safeName}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (err) {
+      console.error("Download zip failed:", err);
+    } finally {
+      setIsDownloading(null);
+    }
+  };
+
+  const handleRestoreProject = (item: Project) => {
+    if (item.isRoom) return;
+    restoreProject(item.id);
     setRefresh((r) => r + 1);
   };
 
@@ -199,6 +256,9 @@ export default function DashboardPage() {
           items={items}
           viewMode={viewMode}
           onDelete={handleDelete}
+          onDownload={activeNav === "trash" ? undefined : handleDownloadProject}
+          onRestore={activeNav === "trash" ? handleRestoreProject : undefined}
+          deleteTitle={activeNav === "trash" ? "Delete permanently" : "Move to trash"}
         />
       </div>
     </div>

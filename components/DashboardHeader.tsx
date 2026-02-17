@@ -3,12 +3,13 @@
 import { useState, useRef, useEffect } from "react";
 import { IconSearch, IconList, IconLayoutGrid, IconChevronDown, IconPlus } from "./Icons";
 
-type NavItem = "all" | "projects" | "rooms";
+type NavItem = "all" | "projects" | "rooms" | "trash";
 
 const TITLES: Record<NavItem, string> = {
   all: "All Projects",
   projects: "Your Projects",
   rooms: "Your Rooms",
+  trash: "Trashed Projects",
 };
 
 interface DashboardHeaderProps {

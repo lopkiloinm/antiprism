@@ -32,7 +32,13 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
   const scaleRef = useRef(1);
   const pinchRafId = useRef<number | null>(null);
   const zoomContentRef = useRef<HTMLDivElement>(null);
-  const zoomAnchorRef = useRef<{ x: number; y: number; scaleBefore: number } | null>(null);
+  const zoomAnchorRef = useRef<{
+    x: number;
+    y: number;
+    scrollLeft: number;
+    scrollTop: number;
+    scaleBefore: number;
+  } | null>(null);
   const [contentHeight, setContentHeight] = useState(0);
 
   // Keep ref in sync with state so wheel handler can read current scale
@@ -40,17 +46,22 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
     scaleRef.current = scale;
   }, [scale]);
 
-  // When zoom > 100%, keep the point under cursor (or viewport center) fixed by adjusting scroll
+  // Keep the point under cursor (or viewport center) fixed by adjusting scroll after zoom.
   useEffect(() => {
-    if (scale <= 1) return;
     const anchor = zoomAnchorRef.current;
     zoomAnchorRef.current = null;
     const scrollEl = scrollContainerRef.current;
     if (!anchor || !scrollEl) return;
-    const { x: cursorX, y: cursorY, scaleBefore } = anchor;
+    const { x: cursorX, y: cursorY, scrollLeft, scrollTop, scaleBefore } = anchor;
+    if (!scaleBefore || scaleBefore === scale) return;
     const ratio = scale / scaleBefore;
-    scrollEl.scrollLeft = (scrollEl.scrollLeft + cursorX) * ratio - cursorX;
-    scrollEl.scrollTop = (scrollEl.scrollTop + cursorY) * ratio - cursorY;
+    const nextLeft = (scrollLeft + cursorX) * ratio - cursorX;
+    const nextTop = (scrollTop + cursorY) * ratio - cursorY;
+    // Clamp to valid scroll ranges to avoid jumps when content becomes smaller than viewport.
+    const maxLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+    const maxTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    scrollEl.scrollLeft = Math.max(0, Math.min(maxLeft, nextLeft));
+    scrollEl.scrollTop = Math.max(0, Math.min(maxTop, nextTop));
   }, [scale]);
 
   // Zoom to fit: measure container and use as page width
@@ -89,10 +100,9 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
-  // Touchpad/pinch zoom: 1% per step, batched with RAF; when scale > 100% anchor to cursor
+  // Touchpad/pinch zoom: 1% per step, batched with RAF; anchor to cursor to prevent scroll jumps
   useEffect(() => {
     const el = containerRef.current;
-    const scrollEl = scrollContainerRef.current;
     if (!el) return;
     const flushScale = () => {
       pinchRafId.current = null;
@@ -104,11 +114,13 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
         const delta = -e.deltaY > 0 ? PINCH_ZOOM_STEP : -PINCH_ZOOM_STEP;
         const nextScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.round((scaleRef.current + delta) * 100) / 100));
         const scrollEl = scrollContainerRef.current;
-        if (scrollEl && nextScale > 1) {
+        if (scrollEl) {
           const rect = scrollEl.getBoundingClientRect();
           zoomAnchorRef.current = {
             x: e.clientX - rect.left,
             y: e.clientY - rect.top,
+            scrollLeft: scrollEl.scrollLeft,
+            scrollTop: scrollEl.scrollTop,
             scaleBefore: scaleRef.current,
           };
         }
@@ -131,11 +143,13 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
 
   const zoomIn = useCallback(() => {
     const next = Math.min(Math.round((scaleRef.current + BUTTON_ZOOM_STEP) * 100) / 100, MAX_SCALE);
-    if (next > 1 && scrollContainerRef.current) {
-      const el = scrollContainerRef.current;
+    const el = scrollContainerRef.current;
+    if (el) {
       zoomAnchorRef.current = {
         x: el.clientWidth / 2,
         y: el.clientHeight / 2,
+        scrollLeft: el.scrollLeft,
+        scrollTop: el.scrollTop,
         scaleBefore: scaleRef.current,
       };
     }
@@ -143,11 +157,13 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
   }, []);
   const zoomOut = useCallback(() => {
     const next = Math.max(Math.round((scaleRef.current - BUTTON_ZOOM_STEP) * 100) / 100, MIN_SCALE);
-    if (scaleRef.current > 1 && next > 1 && scrollContainerRef.current) {
-      const el = scrollContainerRef.current;
+    const el = scrollContainerRef.current;
+    if (el) {
       zoomAnchorRef.current = {
         x: el.clientWidth / 2,
         y: el.clientHeight / 2,
+        scrollLeft: el.scrollLeft,
+        scrollTop: el.scrollTop,
         scaleBefore: scaleRef.current,
       };
     }
