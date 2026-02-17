@@ -35,6 +35,14 @@ import {
   Settings,
   Maximize2,
   Minimize2,
+  Shield,
+  WifiOff,
+  Zap,
+  LayoutDashboard,
+  Eye,
+  Server,
+  FileCode,
+  ArrowRight,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -71,3 +79,11 @@ export const IconRefreshCw = () => <RefreshCw {...iconProps} />;
 export const IconSettings = () => <Settings {...iconProps} />;
 export const IconMaximize2 = () => <Maximize2 {...iconProps} />;
 export const IconMinimize2 = () => <Minimize2 {...iconProps} />;
+export const IconShield = () => <Shield {...iconProps} />;
+export const IconWifiOff = () => <WifiOff {...iconProps} />;
+export const IconZap = () => <Zap {...iconProps} />;
+export const IconLayoutDashboard = () => <LayoutDashboard {...iconProps} />;
+export const IconEye = () => <Eye {...iconProps} />;
+export const IconServer = () => <Server {...iconProps} />;
+export const IconFileCode = () => <FileCode {...iconProps} />;
+export const IconArrowRight = () => <ArrowRight {...iconProps} />;

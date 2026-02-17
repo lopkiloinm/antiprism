@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { IconFolder, IconFileText, IconSparkles, IconUsers, IconTrash2 } from "./Icons";
+import { IconFolder, IconFileText, IconUsers, IconTrash2 } from "./Icons";
 
 type NavItem = "all" | "projects" | "rooms" | "trash";
 
@@ -13,17 +13,13 @@ interface DashboardSidebarProps {
 export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarProps) {
   return (
     <aside className="w-56 border-r border-zinc-800 flex flex-col bg-zinc-950 shrink-0">
-      <div className="h-14 flex items-center px-4 font-semibold text-lg border-b border-zinc-800 text-zinc-200 shrink-0">
-        Dashboard
-      </div>
+      <Link
+        href="/features"
+        className="h-14 flex items-center px-4 font-semibold text-lg border-b border-zinc-800 text-zinc-200 shrink-0 hover:text-zinc-100 transition-colors"
+      >
+        Antiprism
+      </Link>
       <nav className="p-2 space-y-0.5">
-        <Link
-          href="/features"
-          className="w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
-        >
-          <IconSparkles />
-          Features
-        </Link>
         <button
           onClick={() => onNavChange("all")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
