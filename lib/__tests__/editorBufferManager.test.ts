@@ -153,6 +153,37 @@ describe("EditorBufferManager", () => {
     expect(mgr.getCachedContent("/projects/1/photo.png")).toBeUndefined();
   });
 
+  // ─── PDF / binary files ───────────────────────────────────────────
+
+  it("does not cache PDF paths (treated as binary)", () => {
+    mgr.switchToImage("/projects/1/output.pdf");
+    mgr.saveActiveToCache();
+
+    expect(mgr.getCachedContent("/projects/1/output.pdf")).toBeUndefined();
+  });
+
+  it("preserves text content when switching to a PDF then back", () => {
+    buffer.set("my latex source");
+    mgr.switchToImage("/projects/1/output.pdf");
+
+    expect(mgr.getCachedContent("/projects/1/a.tex")).toBe("my latex source");
+
+    const cachedA = mgr.getCachedContent("/projects/1/a.tex")!;
+    mgr.switchTo("/projects/1/a.tex", cachedA);
+
+    expect(mgr.getBufferContent()).toBe("my latex source");
+  });
+
+  it("does not cache font or archive files", () => {
+    mgr.switchToImage("/projects/1/font.woff2");
+    mgr.saveActiveToCache();
+    expect(mgr.getCachedContent("/projects/1/font.woff2")).toBeUndefined();
+
+    mgr.switchToImage("/projects/1/archive.zip");
+    mgr.saveActiveToCache();
+    expect(mgr.getCachedContent("/projects/1/archive.zip")).toBeUndefined();
+  });
+
   it("preserves text content after image→text switch", () => {
     buffer.set("my tex");
     mgr.switchToImage("/projects/1/photo.png");

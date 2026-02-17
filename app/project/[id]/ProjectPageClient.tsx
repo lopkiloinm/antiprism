@@ -29,10 +29,16 @@ import { EditorBufferManager } from "@/lib/editorBufferManager";
 const DEFAULT_FILE = "/main.tex";
 const DEFAULT_DIAGRAM = "/diagram.jpg";
 const IMAGE_EXT = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i;
+const BINARY_EXT = /\.(jpg|jpeg|png|gif|webp|bmp|svg|pdf|woff|woff2|ttf|otf|zip|gz|tar)$/i;
 const BASE = typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH ? process.env.NEXT_PUBLIC_BASE_PATH : "";
 
 function isImagePath(path: string): boolean {
   return IMAGE_EXT.test(path);
+}
+
+/** Returns true for any binary file that should NOT be loaded into the text editor. */
+function isBinaryPath(path: string): boolean {
+  return BINARY_EXT.test(path);
 }
 
 export default function ProjectPageClient({ idOverride }: { idOverride?: string }) {
@@ -323,11 +329,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       setCurrentPath(path);
       const parentDir = path.substring(0, path.lastIndexOf("/")) || "/";
       setAddTargetPath(parentDir.startsWith(basePath) ? parentDir : basePath);
-      const isImage = isImagePath(path);
+      const isBinary = isBinaryPath(path);
       const existingIdx = openTabs.findIndex((t) => t.path === path);
 
       if (existingIdx >= 0) {
-        if (isImage) {
+        if (isBinary) {
           if (mgr) mgr.switchToImage(path);
           else saveActiveTextToCache();
         } else {
@@ -340,7 +346,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       }
 
       // New tab
-      if (isImage) {
+      if (isBinary) {
         if (mgr) mgr.switchToImage(path);
         else saveActiveTextToCache();
         try {
@@ -352,7 +358,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           setActiveTabPath(path);
           setCurrentPath(path);
         } catch (e) {
-          console.error("Failed to load image:", e);
+          console.error("Failed to load binary file:", e);
         }
       } else {
         const content = await resolveFileContent(path);
@@ -422,7 +428,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         setOpenTabs((t) => t.filter((x) => x.path !== path));
       }
 
-      if (isImagePath(path)) {
+      if (isBinaryPath(path)) {
         const url = imageUrlCache.get(path);
         if (url) {
           URL.revokeObjectURL(url);
@@ -473,7 +479,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         setAddTargetPath(newPath);
       }
       pathsToClose.forEach((p) => {
-        if (isImagePath(p)) {
+        if (isBinaryPath(p)) {
           const url = imageUrlCache.get(p);
           if (url) {
             URL.revokeObjectURL(url);
@@ -815,6 +821,16 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                 {(() => {
                   const aiOverlayHeight = chatExpanded ? "45%" : "155px";
                   if (activeTab?.type === "image") {
+                    if (activeTabPath.endsWith(".pdf")) {
+                      const pdfBlobUrl = imageUrlCache.get(activeTabPath) ?? null;
+                      return pdfBlobUrl ? (
+                        <PdfPreview pdfUrl={pdfBlobUrl} />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-zinc-950">
+                          Loading PDF…
+                        </div>
+                      );
+                    }
                     return (
                       <ImageViewer
                         imageUrl={imageUrlCache.get(activeTabPath) ?? null}

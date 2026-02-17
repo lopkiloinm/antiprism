@@ -9,7 +9,7 @@
  * without React.
  */
 
-const IMAGE_EXT = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i;
+const BINARY_EXT = /\.(jpg|jpeg|png|gif|webp|bmp|svg|pdf|woff|woff2|ttf|otf|zip|gz|tar)$/i;
 
 export interface TextBuffer {
   get(): string;
@@ -41,7 +41,7 @@ export class EditorBufferManager {
 
   /** Save the current buffer content to the cache under the active path. */
   saveActiveToCache(): void {
-    if (this.activePath && !IMAGE_EXT.test(this.activePath)) {
+    if (this.activePath && !BINARY_EXT.test(this.activePath)) {
       this.cache.set(this.activePath, this.buffer.get());
     }
   }
