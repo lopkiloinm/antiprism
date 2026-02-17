@@ -7,7 +7,9 @@
     "build": "next build --webpack",
     "start": "npx serve@latest out",
     "lint": "next lint",
-    "download-latex-assets": "npx texlyre-busytex download-assets ./public/core"
+    "download-latex-assets": "npx texlyre-busytex download-assets ./public/core",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@codemirror/lang-xml": "^6.0.2",
@@ -41,7 +43,8 @@
     "eslint-config-next": "^16.1.6",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "pdfjs-dist": "5.3.93"

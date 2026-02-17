@@ -24,6 +24,7 @@ import ReactMarkdown from "react-markdown";
 import { generateChatResponse } from "@/lib/localModel";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { getProjects, getRooms } from "@/lib/projects";
+import { EditorBufferManager } from "@/lib/editorBufferManager";
 
 const DEFAULT_FILE = "/main.tex";
 const DEFAULT_DIAGRAM = "/diagram.jpg";
@@ -60,6 +61,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [addTargetPath, setAddTargetPath] = useState<string>(basePath);
   const [imageUrlCache, setImageUrlCache] = useState<Map<string, string>>(new Map());
   const textContentCacheRef = useRef<Map<string, string>>(new Map());
+  const bufferMgrRef = useRef<EditorBufferManager | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<
@@ -132,6 +134,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
     // Reset state when switching projects so we don't show stale content
     autoCompileDoneRef.current = false;
+    bufferMgrRef.current = null;
     setYdoc(null);
     setYtext(null);
     setProvider(null);
@@ -255,12 +258,29 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
   const onYtextChangeNoop = useCallback(() => {}, []);
 
-  const saveActiveTextToCache = useCallback(() => {
-    const path = activeTabPathRef.current;
-    if (ytext && path && !isImagePath(path)) {
-      textContentCacheRef.current.set(path, ytext.toString());
+  // Lazily create / recreate the buffer manager when ytext changes
+  const getBufferMgr = useCallback((): EditorBufferManager | null => {
+    if (!ytext) return null;
+    if (!bufferMgrRef.current) {
+      bufferMgrRef.current = new EditorBufferManager(
+        {
+          get: () => ytext.toString(),
+          set: (c: string) => { ytext.delete(0, ytext.length); ytext.insert(0, c || ""); },
+        },
+        activeTabPathRef.current
+      );
     }
+    return bufferMgrRef.current;
   }, [ytext]);
+
+  const saveActiveTextToCache = useCallback(() => {
+    const mgr = getBufferMgr();
+    if (mgr) {
+      mgr.saveActiveToCache();
+      // Sync cache ref so legacy readers still work
+      textContentCacheRef.current = mgr.getCache();
+    }
+  }, [getBufferMgr]);
 
   const loadTextIntoEditor = useCallback(
     (path: string, content: string) => {
@@ -271,9 +291,27 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     [ytext]
   );
 
+  /** Resolve the text content for a file from cache or filesystem. */
+  const resolveFileContent = useCallback(
+    async (path: string): Promise<string> => {
+      const mgr = getBufferMgr();
+      const cached = mgr?.getCachedContent(path) ?? textContentCacheRef.current.get(path);
+      if (cached !== undefined) return cached;
+      if (!fs) return "";
+      try {
+        const data = await fs.readFile(path);
+        return typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
+      } catch {
+        return "";
+      }
+    },
+    [fs, getBufferMgr]
+  );
+
   const handleFileSelect = useCallback(
     async (path: string) => {
       if (!fs || !ytext) return;
+      const mgr = getBufferMgr();
 
       const stat = await fs.stat(path).catch(() => null);
       if (stat?.isDirectory) {
@@ -289,39 +327,27 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       const existingIdx = openTabs.findIndex((t) => t.path === path);
 
       if (existingIdx >= 0) {
-        // Save current editor content BEFORE switching the active path
-        saveActiveTextToCache();
+        if (isImage) {
+          if (mgr) mgr.switchToImage(path);
+          else saveActiveTextToCache();
+        } else {
+          const content = await resolveFileContent(path);
+          if (mgr) { mgr.switchTo(path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(path, content); }
+        }
         setActiveTabPath(path);
         setCurrentPath(path);
-        if (!isImage) {
-          const cached = textContentCacheRef.current.get(path);
-          if (cached !== undefined) {
-            loadTextIntoEditor(path, cached);
-          } else {
-            try {
-              const data = await fs.readFile(path);
-              const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-              loadTextIntoEditor(path, content || "");
-            } catch {
-              loadTextIntoEditor(path, "");
-            }
-          }
-        }
         return;
       }
 
-      saveActiveTextToCache();
-
+      // New tab
       if (isImage) {
+        if (mgr) mgr.switchToImage(path);
+        else saveActiveTextToCache();
         try {
           const data = await fs.readFile(path);
           const blob = data instanceof ArrayBuffer ? new Blob([data]) : new Blob([data]);
           const url = URL.createObjectURL(blob);
-          setImageUrlCache((prev) => {
-            const next = new Map(prev);
-            next.set(path, url);
-            return next;
-          });
+          setImageUrlCache((prev) => { const next = new Map(prev); next.set(path, url); return next; });
           setOpenTabs((t) => [...t, { path, type: "image" }]);
           setActiveTabPath(path);
           setCurrentPath(path);
@@ -329,87 +355,65 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           console.error("Failed to load image:", e);
         }
       } else {
-        try {
-          const data = await fs.readFile(path);
-          const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-          loadTextIntoEditor(path, content || "");
-          setOpenTabs((t) => [...t, { path, type: "text" }]);
-          setActiveTabPath(path);
-          setCurrentPath(path);
-        } catch {
-          loadTextIntoEditor(path, "");
-          setOpenTabs((t) => [...t, { path, type: "text" }]);
-          setActiveTabPath(path);
-          setCurrentPath(path);
-        }
+        const content = await resolveFileContent(path);
+        if (mgr) { mgr.switchTo(path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(path, content); }
+        setOpenTabs((t) => [...t, { path, type: "text" }]);
+        setActiveTabPath(path);
+        setCurrentPath(path);
       }
     },
-    [fs, ytext, openTabs, basePath, saveActiveTextToCache, loadTextIntoEditor]
+    [fs, ytext, openTabs, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   const handleTabSelect = useCallback(
     async (path: string) => {
       if (!fs || !ytext) return;
       if (path === activeTabPath) return;
+      const mgr = getBufferMgr();
 
       const tab = openTabs.find((t) => t.path === path);
       if (!tab) return;
 
-      saveActiveTextToCache();
       setCurrentPath(path);
       const parentDir = path.substring(0, path.lastIndexOf("/")) || "/";
       setAddTargetPath(parentDir.startsWith(basePath) ? parentDir : basePath);
       if (tab.type === "image") {
+        if (mgr) mgr.switchToImage(path);
+        else saveActiveTextToCache();
         setActiveTabPath(path);
       } else {
-        const cached = textContentCacheRef.current.get(path);
-        if (cached !== undefined) {
-          loadTextIntoEditor(path, cached);
-        } else {
-          try {
-            const data = await fs.readFile(path);
-            const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-            loadTextIntoEditor(path, content || "");
-          } catch {
-            loadTextIntoEditor(path, "");
-          }
-        }
+        const content = await resolveFileContent(path);
+        if (mgr) { mgr.switchTo(path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(path, content); }
         setActiveTabPath(path);
       }
     },
-    [fs, ytext, openTabs, activeTabPath, basePath, saveActiveTextToCache, loadTextIntoEditor]
+    [fs, ytext, openTabs, activeTabPath, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   const handleTabClose = useCallback(
     async (path: string) => {
       if (!ytext) return;
+      const mgr = getBufferMgr();
 
       const idx = openTabs.findIndex((t) => t.path === path);
       if (idx < 0) return;
 
       if (path === activeTabPath) {
-        saveActiveTextToCache();
         const remaining = openTabs.filter((t) => t.path !== path);
         const nextActive = remaining[idx] ?? remaining[idx - 1] ?? null;
         if (nextActive) {
+          if (nextActive.type === "text") {
+            const content = await resolveFileContent(nextActive.path);
+            if (mgr) { mgr.switchTo(nextActive.path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(nextActive.path, content); }
+          } else {
+            if (mgr) mgr.switchToImage(nextActive.path);
+            else saveActiveTextToCache();
+          }
           setActiveTabPath(nextActive.path);
           setCurrentPath(nextActive.path);
           setOpenTabs(remaining);
-          if (nextActive.type === "text" && fs) {
-            const cached = textContentCacheRef.current.get(nextActive.path);
-            if (cached !== undefined) {
-              loadTextIntoEditor(nextActive.path, cached);
-            } else {
-              try {
-                const data = await fs.readFile(nextActive.path);
-                const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-                loadTextIntoEditor(nextActive.path, content || "");
-              } catch {
-                loadTextIntoEditor(nextActive.path, "");
-              }
-            }
-          }
         } else {
+          saveActiveTextToCache();
           setActiveTabPath("");
           setCurrentPath("");
           setOpenTabs(remaining);
@@ -430,11 +434,12 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         }
       }
     },
-    [openTabs, activeTabPath, ytext, fs, imageUrlCache, saveActiveTextToCache, loadTextIntoEditor]
+    [openTabs, activeTabPath, ytext, fs, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   const handleFileDeleted = useCallback(
-    (path: string, isFolder: boolean) => {
+    async (path: string, isFolder: boolean) => {
+      const mgr = getBufferMgr();
       const pathsToClose = isFolder
         ? openTabs.filter(
             (t) => t.path === path || t.path.startsWith(path + "/")
@@ -443,27 +448,21 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       if (pathsToClose.length === 0) return;
       const remaining = openTabs.filter((t) => !pathsToClose.includes(t.path));
       const activeWasClosed = pathsToClose.includes(activeTabPath);
-      saveActiveTextToCache();
       setOpenTabs(remaining);
       if (activeWasClosed) {
         const nextActive = remaining[0] ?? null;
         if (nextActive) {
+          if (nextActive.type === "text") {
+            const content = await resolveFileContent(nextActive.path);
+            if (mgr) { mgr.switchTo(nextActive.path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(nextActive.path, content); }
+          } else {
+            if (mgr) mgr.switchToImage(nextActive.path);
+            else saveActiveTextToCache();
+          }
           setActiveTabPath(nextActive.path);
           setCurrentPath(nextActive.path);
-          if (nextActive.type === "text" && fs && ytext) {
-            const cached = textContentCacheRef.current.get(nextActive.path);
-            if (cached !== undefined) {
-              loadTextIntoEditor(nextActive.path, cached);
-            } else {
-              fs.readFile(nextActive.path)
-                .then((data) => {
-                  const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-                  loadTextIntoEditor(nextActive.path, content || "");
-                })
-                .catch(() => loadTextIntoEditor(nextActive.path, ""));
-            }
-          }
         } else {
+          saveActiveTextToCache();
           setActiveTabPath("");
           setCurrentPath("");
         }
@@ -487,7 +486,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         }
       });
     },
-    [openTabs, activeTabPath, currentPath, basePath, fs, ytext, imageUrlCache, saveActiveTextToCache, loadTextIntoEditor]
+    [openTabs, activeTabPath, currentPath, basePath, fs, ytext, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   const handleCompile = async () => {
