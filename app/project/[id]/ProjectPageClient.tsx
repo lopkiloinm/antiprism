@@ -50,7 +50,12 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
   const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" }[]>([{ path: `${basePath}/main.tex`, type: "text" }]);
-  const [activeTabPath, setActiveTabPath] = useState<string>(`${basePath}/main.tex`);
+  const [activeTabPath, _setActiveTabPath] = useState<string>(`${basePath}/main.tex`);
+  const activeTabPathRef = useRef<string>(`${basePath}/main.tex`);
+  const setActiveTabPath = useCallback((p: string) => {
+    activeTabPathRef.current = p;
+    _setActiveTabPath(p);
+  }, []);
   const [currentPath, setCurrentPath] = useState<string>(`${basePath}/main.tex`);
   const [addTargetPath, setAddTargetPath] = useState<string>(basePath);
   const [imageUrlCache, setImageUrlCache] = useState<Map<string, string>>(new Map());
@@ -251,10 +256,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const onYtextChangeNoop = useCallback(() => {}, []);
 
   const saveActiveTextToCache = useCallback(() => {
-    if (ytext && activeTabPath && !isImagePath(activeTabPath)) {
-      textContentCacheRef.current.set(activeTabPath, ytext.toString());
+    const path = activeTabPathRef.current;
+    if (ytext && path && !isImagePath(path)) {
+      textContentCacheRef.current.set(path, ytext.toString());
     }
-  }, [ytext, activeTabPath]);
+  }, [ytext]);
 
   const loadTextIntoEditor = useCallback(
     (path: string, content: string) => {
