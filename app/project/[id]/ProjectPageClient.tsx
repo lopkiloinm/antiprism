@@ -72,16 +72,14 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [ytext, setYtext] = useState<Y.Text | null>(null);
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
-  const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" | "settings" }[]>([
-    { path: `${basePath}/main.tex`, type: "text" },
-  ]);
-  const [activeTabPath, _setActiveTabPath] = useState<string>(`${basePath}/main.tex`);
-  const activeTabPathRef = useRef<string>(`${basePath}/main.tex`);
+  const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" | "settings" }[]>([]);
+  const [activeTabPath, _setActiveTabPath] = useState<string>("");
+  const activeTabPathRef = useRef<string>("");
   const setActiveTabPath = useCallback((p: string) => {
     activeTabPathRef.current = p;
     _setActiveTabPath(p);
   }, []);
-  const [currentPath, setCurrentPath] = useState<string>(`${basePath}/main.tex`);
+  const [currentPath, setCurrentPath] = useState<string>("");
   const [addTargetPath, setAddTargetPath] = useState<string>(basePath);
   const [imageUrlCache, setImageUrlCache] = useState<Map<string, string>>(new Map());
   const textContentCacheRef = useRef<Map<string, string>>(new Map());
@@ -180,9 +178,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     setYtext(null);
     setProvider(null);
     setFs(null);
-    setOpenTabs([{ path: `${basePath}/main.tex`, type: "text" }]);
-    setActiveTabPath(`${basePath}/main.tex`);
-    setCurrentPath(`${basePath}/main.tex`);
+    setOpenTabs([]);
+    setActiveTabPath("");
+    setCurrentPath("");
     setAddTargetPath(basePath);
 
     const init = async () => {
@@ -239,15 +237,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             } catch (e) {
               if (!String(e).includes("already exists")) throw e;
             }
-            if (text.length === 0) text.insert(0, mainContent);
-          } else if (text.length === 0) {
-            try {
-              const data = await idbfs.readFile(mainPath);
-              const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-              if (content?.length > 0) text.insert(0, content);
-            } catch {
-              text.insert(0, mainContent);
-            }
           }
           if (typContent?.trim() && !hasMainTyp) {
             try {
@@ -263,18 +252,47 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
               if (!String(e).includes("already exists")) throw e;
             }
           }
-        } else {
-          // Import or existing project: do not add main.tex, main.typ, or diagram.jpg; only load main.tex into editor if present
-          const exists = await idbfs.exists(mainPath).catch(() => false);
-          if (exists) {
-            try {
-              const data = await idbfs.readFile(mainPath);
-              const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-              if (content?.length > 0 && text.length === 0) text.insert(0, content);
-            } catch {
-              // ignore
-            }
+        }
+
+        if (cancelled) return;
+        // Choose an initial file to open without assuming main.tex exists.
+        async function findFirstTextFile(dir: string): Promise<string | null> {
+          const { dirs, files } = await idbfs.readdir(dir);
+          for (const f of files) {
+            const full = dir === "/" ? `/${f.name}` : `${dir}/${f.name}`;
+            if (!isBinaryPath(full) && f.name !== ".antiprism_imported") return full;
           }
+          for (const d of dirs) {
+            const sub = dir === "/" ? `/${d.name}` : `${dir}/${d.name}`;
+            const found = await findFirstTextFile(sub);
+            if (found) return found;
+          }
+          return null;
+        }
+
+        let initialPath: string | null = null;
+        if (await idbfs.exists(mainPath).catch(() => false)) initialPath = mainPath;
+        else if (await idbfs.exists(mainTypPath).catch(() => false)) initialPath = mainTypPath;
+        else initialPath = await findFirstTextFile(basePath).catch(() => null);
+
+        if (initialPath) {
+          // Load initial file into the shared editor buffer
+          try {
+            const data = await idbfs.readFile(initialPath);
+            const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
+            if (text.length === 0 && content?.length > 0) text.insert(0, content);
+            textContentCacheRef.current.set(initialPath, content ?? "");
+          } catch {
+            // ignore
+          }
+
+          setOpenTabs([{ path: initialPath, type: "text" }]);
+          setActiveTabPath(initialPath);
+          setCurrentPath(initialPath);
+        } else {
+          setOpenTabs([]);
+          setActiveTabPath("");
+          setCurrentPath("");
         }
 
         if (cancelled) return;
@@ -564,6 +582,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     const fsInstance = fs;
     const currentActivePath = activeTabPathRef.current;
 
+    // Only compile when the active tab is an actual LaTeX or Typst source file.
+    // Avoid falling back to LaTeX when there is no active file (or a non-document tab is active).
+    const activeLower = currentActivePath.toLowerCase();
+    const activeIsTypst = activeLower.endsWith(".typ");
+    const activeIsTex = activeLower.endsWith(".tex");
+    if (!currentActivePath || (!activeIsTypst && !activeIsTex)) return;
+
     const activeTab = openTabs.find((t) => t.path === currentActivePath);
     if (activeTab?.type === "text" && currentActivePath) {
       try {
@@ -582,13 +607,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     setIsCompiling(true);
     const start = performance.now();
     try {
-      let latex = ytext.toString();
-      if (!latex.trim()) {
-        const mainTab = openTabs.find((t) => t.type === "text" && t.path.endsWith("main.tex"));
-        if (mainTab) {
-          latex = textContentCacheRef.current.get(mainTab.path) ?? "";
-        }
-      }
+      // Compile the active source buffer (no implicit "main.tex" fallback).
+      const latex = activeIsTex ? ytext.toString() : "";
+      const typSourceActive = activeIsTypst ? ytext.toString() : "";
+      if (activeIsTex && !latex.trim()) return;
+      if (activeIsTypst && !typSourceActive.trim()) return;
 
       const additionalFiles: { path: string; content: string | Uint8Array }[] = [];
       let mainTypContent: string | null = null;
@@ -641,10 +664,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
               : textContentCacheRef.current.get(mainTypTab.path) ?? "";
       }
 
-      // Choose compiler by active tab: .typ → Typst, .tex (or other) → LaTeX (use ref so debounced/async compile sees current tab)
-      const activeIsTypst = currentActivePath.toLowerCase().endsWith(".typ");
-      const typSource =
-        activeIsTypst ? ytext.toString() : mainTypContent;
+      // Choose compiler by active tab: .typ → Typst, .tex → LaTeX
+      const typSource = activeIsTypst ? typSourceActive : mainTypContent;
       const useTypst = activeIsTypst && (typSource != null && typSource.trim() !== "");
 
       const pdfBlob = useTypst
