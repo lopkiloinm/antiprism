@@ -243,7 +243,7 @@ export default function FeaturesPage() {
                 <div className="shrink-0 self-end -mb-5 -mr-5 md:self-end md:-mb-5 md:-mr-5">
                   <div className="h-[260px] w-[340px] overflow-hidden rounded-tl-lg border border-zinc-700/80 border-b-0 border-r-0 bg-zinc-900/60">
                   {mockup === "peers" && (
-                    <div className="flex min-h-[260px] w-[440px] flex-col rounded-lg border border-zinc-700/80 bg-zinc-800/50 p-3">
+                    <div className="flex min-h-[260px] w-[440px] flex-col bg-zinc-800/50 p-3">
                       <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">Sync</div>
                       <div className="mt-1.5 font-mono text-[11px] text-zinc-400">main.tex · 2 peers connected</div>
                       <div className="mt-3 flex items-center gap-2 text-[11px]">
