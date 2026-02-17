@@ -824,7 +824,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                     if (activeTabPath.endsWith(".pdf")) {
                       const pdfBlobUrl = imageUrlCache.get(activeTabPath) ?? null;
                       return pdfBlobUrl ? (
-                        <PdfPreview pdfUrl={pdfBlobUrl} />
+                        <PdfPreview pdfUrl={pdfBlobUrl} onCompile={() => {}} isCompiling={false} />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-zinc-950">
                           Loading PDF…
