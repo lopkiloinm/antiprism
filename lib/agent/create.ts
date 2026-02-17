@@ -11,7 +11,9 @@ export function buildCreateMessages(
 ): ChatMessage[] {
   const systemContent = `You write markdown. Output only the document. No code fences, no extra text.
 
-Write a short paper on the user's topic. Start with a # heading.`;
+Write a short paper on the user's topic. Start with a # heading.
+
+If the topic involves LaTeX or code examples, put them in fenced code blocks (triple backticks). Do not write raw LaTeX commands like \\documentclass or \\begin{document} in the document body—they will break the output.`;
 
   const prior: ChatMessage[] = (priorMessages ?? []).map((m) => ({ role: m.role, content: m.content }));
 
@@ -32,6 +34,17 @@ function extractMarkdown(raw: string): string {
   return s;
 }
 
+/**
+ * Sanitize markdown before pandoc so LaTeX code examples become verbatim, not raw passthrough.
+ * - Rewrite ```latex and ```tex to ```text so pandoc outputs verbatim blocks instead of
+ *   potentially inlining raw LaTeX (which would produce invalid nested \documentclass etc.).
+ * - Pandoc is called with markdown-raw_tex to prevent raw LaTeX in the body from being
+ *   passed through (e.g. if the model writes \documentclass{article} in the prose).
+ */
+function sanitizeMarkdownForPandoc(md: string): string {
+  return md.replace(/^```\s*(latex|tex)\s*$/gim, "```text");
+}
+
 function parseTitleFromMarkdown(md: string): string {
   const m = md.match(/^#\s+(.+)$/m);
   return m ? m[1].trim() : "";
@@ -48,10 +61,12 @@ export async function parseCreateResponse(rawOutput: string): Promise<CreatePars
   const title = parseTitleFromMarkdown(md);
   if (!md.trim()) return { latex: "", title: "", markdown: "" };
 
+  const sanitized = sanitizeMarkdownForPandoc(md);
+
   try {
     const result = await convert(
-      { from: "markdown", to: "latex", standalone: true },
-      md,
+      { from: "markdown-raw_tex", to: "latex", standalone: true },
+      sanitized,
       {}
     );
     return { latex: (result.stdout || "").trim(), title, markdown: md };

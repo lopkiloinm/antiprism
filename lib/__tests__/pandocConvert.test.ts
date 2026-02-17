@@ -224,6 +224,63 @@ Another paragraph with **bold** and *italic*.
     expect(result.latex).toContain("Name");
     expect(result.latex).toContain("Value");
   });
+
+  it("does not inline raw LaTeX from prose (guide-to-latex scenario)", async () => {
+    // Simulates model output that mixed raw LaTeX in the body (bad) or in a code block (ok)
+    const raw = `# LaTeX Guide
+
+Here is a basic template:
+
+\`\`\`latex
+\\documentclass{article}
+\\title{Using LaTeX}
+\\author{Your Name}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+Hello world.
+\\end{document}
+\`\`\``;
+
+    const result = await parseCreateResponse(raw);
+
+    expect(result.latex).toContain("\\documentclass");
+    expect(result.latex).toContain("\\begin{document}");
+    expect(result.latex).toContain("\\end{document}");
+
+    // There must be exactly ONE \\documentclass (from pandoc's standalone), not nested
+    const docclassMatches = result.latex.match(/\\documentclass/g);
+    expect(docclassMatches).toHaveLength(1);
+
+    // The LaTeX template should appear as verbatim (escaped), not as raw LaTeX
+    expect(result.latex).toMatch(/\\begin\{verbatim\}|\\begin\{Shaded\}|\\begin\{lstlisting\}/);
+    expect(result.latex).toContain("LaTeX Guide");
+  });
+
+  it("escapes raw LaTeX in document body when raw_tex is disabled", async () => {
+    // Model mistakenly wrote raw LaTeX in the prose (no code fence)
+    const raw = `# Bad Output
+
+latex
+
+\\documentclass{article}
+\\title{Using LaTeX}
+\\author{Your Name}
+\\date{\\today}
+
+\\end{document}`;
+
+    const result = await parseCreateResponse(raw);
+
+    // Should have exactly one \\documentclass (from pandoc), not the model's raw one inlined
+    const docclassMatches = result.latex.match(/\\documentclass/g);
+    expect(docclassMatches).toHaveLength(1);
+
+    // Raw \\documentclass from the body should be escaped (e.g. \\textbackslash documentclass)
+    // or not appear as a second documentclass
+    expect(result.latex).toContain("Bad Output");
+  });
 });
 
 describe("buildCreateMessages", () => {
