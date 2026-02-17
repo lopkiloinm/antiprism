@@ -668,9 +668,26 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       const typSource = activeIsTypst ? typSourceActive : mainTypContent;
       const useTypst = activeIsTypst && (typSource != null && typSource.trim() !== "");
 
+      async function compileLatexWithFallback() {
+        // Try the user's selected engine first, then fall back to the others on ANY failure.
+        const preferred = latexEngine;
+        const engines: LaTeXEngine[] = ["xetex", "luatex", "pdftex"];
+        const order: LaTeXEngine[] = [preferred, ...engines.filter((e) => e !== preferred)];
+        let lastErr: unknown = null;
+        for (const eng of order) {
+          try {
+            if (eng !== preferred) console.warn(`LaTeX compile failed. Retrying with ${eng}…`);
+            return await compileLatexToPdf(latex, additionalFiles, eng);
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        throw lastErr ?? new Error("LaTeX compile failed");
+      }
+
       const pdfBlob = useTypst
         ? await compileTypstToPdf(typSource!, additionalFiles)
-        : await compileLatexToPdf(latex, additionalFiles);
+        : await compileLatexWithFallback();
       setLastCompileMs(Math.round(performance.now() - start));
       const url = URL.createObjectURL(pdfBlob);
       setPdfUrl((prev) => {
