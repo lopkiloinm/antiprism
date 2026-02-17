@@ -10,10 +10,11 @@ export { buildCreateMessages, parseCreateResponse, type CreateParseResult } from
 import type { ChatMessage, PriorMessage, AgentMode } from "./types";
 import { buildAskMessages } from "./ask";
 import { buildCreateMessages } from "./create";
+import { getPromptAsk, getPromptCreate } from "../settings";
 
 /**
  * Build messages for a chat turn. Delegates to ask or create based on mode.
- * Both modes receive prior conversation history.
+ * Uses custom system prompts from settings when set; otherwise built-in defaults.
  */
 export function buildMessages(
   userMessage: string,
@@ -22,7 +23,7 @@ export function buildMessages(
   priorMessages?: PriorMessage[]
 ): ChatMessage[] {
   if (mode === "agent") {
-    return buildCreateMessages(userMessage, priorMessages);
+    return buildCreateMessages(userMessage, priorMessages, getPromptCreate() || undefined);
   }
-  return buildAskMessages(userMessage, context, priorMessages);
+  return buildAskMessages(userMessage, context, priorMessages, getPromptAsk() || undefined);
 }

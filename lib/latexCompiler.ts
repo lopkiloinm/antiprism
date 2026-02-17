@@ -1,41 +1,57 @@
 "use client";
 
-import { BusyTexRunner, XeLatex } from "texlyre-busytex";
+import { BusyTexRunner, XeLatex, LuaLatex, PdfLatex } from "texlyre-busytex";
+import { getLatexEngine, type LaTeXEngine } from "./settings";
+
+export type { LaTeXEngine } from "./settings";
 
 let runner: BusyTexRunner | null = null;
-let xelatex: XeLatex | null = null;
-let initPromise: Promise<XeLatex> | null = null;
+let initPromise: Promise<BusyTexRunner> | null = null;
 
-async function getEngine(): Promise<XeLatex> {
-  if (xelatex) return xelatex;
+type EngineInstance = XeLatex | LuaLatex | PdfLatex;
+const engineCache: Partial<Record<LaTeXEngine, EngineInstance>> = {};
+
+async function getRunner(): Promise<BusyTexRunner> {
+  if (runner) return runner;
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    // basePath for GitHub Pages (e.g. /antiprism); ensure leading slash for absolute URL
     const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
     const baseNorm = base && !base.startsWith("/") ? `/${base}` : base;
-    runner = new BusyTexRunner({
+    const r = new BusyTexRunner({
       busytexBasePath: `${baseNorm}/core/busytex`,
       verbose: false,
     });
-    await runner.initialize(true); // true = Web Worker (avoids ScriptLoaderDocument issue in main thread)
-    xelatex = new XeLatex(runner);
-    return xelatex;
+    await r.initialize(true);
+    runner = r;
+    return r;
   })();
   try {
     return await initPromise;
   } catch (e) {
     initPromise = null;
     runner = null;
-    xelatex = null;
     throw new Error(
       `LaTeX engine failed to initialize: ${e}. Run npm run download-latex-assets and ensure /core/busytex is served.`
     );
   }
 }
 
+async function getEngine(engine?: LaTeXEngine): Promise<EngineInstance> {
+  const kind = engine ?? getLatexEngine();
+  const cached = engineCache[kind];
+  if (cached) return cached;
+  const r = await getRunner();
+  let instance: EngineInstance;
+  if (kind === "luatex") instance = new LuaLatex(r);
+  else if (kind === "pdftex") instance = new PdfLatex(r);
+  else instance = new XeLatex(r);
+  engineCache[kind] = instance;
+  return instance;
+}
+
 /** Preload the LaTeX WASM engine. Call on app init; compile should wait until this resolves. */
 export async function ensureLatexReady(): Promise<void> {
-  await getEngine();
+  await getEngine(getLatexEngine());
 }
 
 export interface AdditionalFile {
@@ -45,9 +61,10 @@ export interface AdditionalFile {
 
 export async function compileLatexToPdf(
   source: string,
-  additionalFiles?: AdditionalFile[]
+  additionalFiles?: AdditionalFile[],
+  engine?: LaTeXEngine
 ): Promise<Blob> {
-  const eng = await getEngine();
+  const eng = await getEngine(engine);
   const files: { path: string; content: string | Uint8Array }[] = additionalFiles || [];
   const result = await eng.compile({
     input: source,

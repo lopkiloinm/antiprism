@@ -5,15 +5,19 @@
 import { convert } from "pandoc-wasm";
 import type { ChatMessage } from "./types";
 
-export function buildCreateMessages(
-  userMessage: string,
-  priorMessages?: { role: "user" | "assistant"; content: string }[]
-): ChatMessage[] {
-  const systemContent = `You write markdown. Output only the document. No code fences, no extra text.
+/** Default system prompt for Create mode. Used when user has not set a custom prompt. */
+export const DEFAULT_PROMPT_CREATE = `You write markdown. Output only the document. No code fences, no extra text.
 
 Write a short paper on the user's topic. Start with a # heading.
 
 If the topic involves LaTeX or code examples, put them in fenced code blocks (triple backticks). Do not write raw LaTeX commands like \\documentclass or \\begin{document} in the document body—they will break the output.`;
+
+export function buildCreateMessages(
+  userMessage: string,
+  priorMessages?: { role: "user" | "assistant"; content: string }[],
+  systemPromptOverride?: string
+): ChatMessage[] {
+  const systemContent = systemPromptOverride?.trim() || DEFAULT_PROMPT_CREATE;
 
   const prior: ChatMessage[] = (priorMessages ?? []).map((m) => ({ role: m.role, content: m.content }));
 

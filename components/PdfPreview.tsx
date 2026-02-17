@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { IconZoomIn, IconZoomOut, IconDownload, IconRefreshCw } from "./Icons";
+import { IconZoomIn, IconZoomOut, IconDownload, IconRefreshCw, IconMaximize2, IconMinimize2 } from "./Icons";
 
 // Configure worker - use CDN for Next.js compatibility
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 3;
+/** Pinch/wheel zoom: 1% per step for fine control */
+const PINCH_ZOOM_STEP = 0.01;
+/** Button zoom: 10% per click */
+const BUTTON_ZOOM_STEP = 0.1;
 
 interface PdfPreviewProps {
   pdfUrl: string | null;
@@ -19,7 +26,17 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
   const [numPages, setNumPages] = useState<number>(0);
   const [scale, setScale] = useState<number>(1);
   const [containerWidth, setContainerWidth] = useState<number>(400);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(1);
+  const pinchRafId = useRef<number | null>(null);
+  const zoomContentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  // Keep ref in sync with state so wheel handler can read current scale
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
 
   // Zoom to fit: measure container and use as page width
   useEffect(() => {
@@ -34,15 +51,83 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
     return () => ro.disconnect();
   }, []);
 
+  // Measure zoom wrapper height so scroll area can reserve scaled height (transform doesn't affect layout)
+  useEffect(() => {
+    const el = zoomContentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        const h = e.contentRect.height;
+        if (h > 0) setContentHeight(h);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [numPages, pdfUrl]);
+
+  // Fullscreen change listener
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  // Touchpad/pinch zoom: 1% per step, batched with RAF to avoid flicker from many re-renders
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const flushScale = () => {
+      pinchRafId.current = null;
+      setScale(scaleRef.current);
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = -e.deltaY > 0 ? PINCH_ZOOM_STEP : -PINCH_ZOOM_STEP;
+        scaleRef.current = Math.max(
+          MIN_SCALE,
+          Math.min(MAX_SCALE, Math.round((scaleRef.current + delta) * 100) / 100)
+        );
+        if (pinchRafId.current === null) {
+          pinchRafId.current = requestAnimationFrame(flushScale);
+        }
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      if (pinchRafId.current !== null) cancelAnimationFrame(pinchRafId.current);
+    };
+  }, []);
+
   function onDocumentLoadSuccess({ numPages: n }: { numPages: number }) {
     setNumPages(n);
   }
 
-  const zoomIn = () => setScale((s) => Math.min(s + 0.25, 3));
-  const zoomOut = () => setScale((s) => Math.max(s - 0.25, 0.5));
-  const zoomFit = () => setScale(1);
+  const zoomIn = useCallback(
+    () =>
+      setScale((s) => {
+        const next = Math.round((s + BUTTON_ZOOM_STEP) * 100) / 100;
+        return Math.min(next, MAX_SCALE);
+      }),
+    []
+  );
+  const zoomOut = useCallback(
+    () =>
+      setScale((s) => {
+        const next = Math.round((s - BUTTON_ZOOM_STEP) * 100) / 100;
+        return Math.max(next, MIN_SCALE);
+      }),
+    []
+  );
+  const zoomFit = useCallback(() => setScale(1), []);
 
-  const pageWidth = Math.round(containerWidth * scale);
+  // PDF is always rendered at fit-to-width; zoom is applied via CSS transform so the
+  // canvas never re-renders during pinch (eliminates flicker).
+  const basePageWidth = containerWidth;
+  const zoomPercent = Math.round(scale * 100);
 
   const handleDownload = () => {
     if (!pdfUrl) return;
@@ -52,9 +137,21 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
     a.click();
   };
 
+  const toggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // Ignore if not supported or denied
+    }
+  };
+
   return (
-    <div className="h-full flex flex-col bg-zinc-900">
-      {/* Toolbar: Compile left | Page center | Zoom + Download right */}
+    <div ref={containerRef} className="h-full flex flex-col bg-zinc-900">
+      {/* Toolbar: Compile left | Page center | Zoom % + controls + Download + Fullscreen right */}
       <div className="h-12 flex items-center justify-between px-3 border-b border-zinc-800 bg-zinc-950 shrink-0">
         <div className="flex items-center gap-2">
           <button
@@ -92,10 +189,10 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
                 </button>
                 <button
                   onClick={zoomFit}
-                  className="px-2 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs"
+                  className="min-w-[2.5rem] px-2 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs tabular-nums"
                   title="Fit to width"
                 >
-                  Fit
+                  {zoomPercent}%
                 </button>
                 <button
                   onClick={zoomIn}
@@ -112,45 +209,77 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
               >
                 <IconDownload />
               </button>
+              <button
+                onClick={toggleFullscreen}
+                className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors flex items-center justify-center"
+                title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {isFullscreen ? <IconMinimize2 /> : <IconMaximize2 />}
+              </button>
             </>
           )}
         </div>
       </div>
 
-      {/* PDF viewer - zoom to fit */}
-      <div ref={containerRef} className="flex-1 overflow-auto flex justify-center min-h-0">
+      {/* PDF viewer: scrollable area with inner content at fixed width so scroll works both ways */}
+      <div className="flex-1 min-h-0 flex flex-col">
         {!pdfUrl ? (
-          <div className="h-full flex items-center justify-center text-sm text-zinc-500">
+          <div className="flex-1 flex items-center justify-center text-sm text-zinc-500">
             Compile to see PDF
           </div>
         ) : (
-          <Document
-            file={pdfUrl}
-            onLoadSuccess={onDocumentLoadSuccess}
-            loading={
-              <div className="flex items-center justify-center h-32 text-zinc-500">
-                Loading PDF…
+          <div className="flex-1 overflow-auto min-h-0">
+            <div
+              className="py-4"
+              style={{
+                width: Math.round(containerWidth * scale),
+                height: contentHeight > 0 ? Math.ceil(contentHeight * scale) : undefined,
+                marginLeft: "auto",
+                marginRight: "auto",
+                position: "relative",
+              }}
+            >
+              <div
+                ref={zoomContentRef}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: basePageWidth,
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top left",
+                }}
+              >
+                <Document
+                file={pdfUrl}
+                onLoadSuccess={onDocumentLoadSuccess}
+                loading={
+                  <div className="flex items-center justify-center h-32 text-zinc-500">
+                    Loading PDF…
+                  </div>
+                }
+                error={
+                  <div className="flex items-center justify-center h-32 text-red-400 text-sm">
+                    Failed to load PDF
+                  </div>
+                }
+              >
+                <div className="flex flex-col items-center gap-4">
+                  {Array.from({ length: numPages }, (_, i) => (
+                    <Page
+                      key={i + 1}
+                      pageNumber={i + 1}
+                      width={basePageWidth}
+                      renderAnnotationLayer={false}
+                      renderTextLayer={false}
+                      className="shadow-lg"
+                    />
+                  ))}
+                </div>
+              </Document>
               </div>
-            }
-            error={
-              <div className="flex items-center justify-center h-32 text-red-400 text-sm">
-                Failed to load PDF
-              </div>
-            }
-          >
-            <div className="py-4 flex flex-col items-center gap-4">
-              {Array.from({ length: numPages }, (_, i) => (
-                <Page
-                  key={i + 1}
-                  pageNumber={i + 1}
-                  width={pageWidth}
-                  renderAnnotationLayer={false}
-                  renderTextLayer={false}
-                  className="shadow-lg"
-                />
-              ))}
             </div>
-          </Document>
+          </div>
         )}
       </div>
     </div>

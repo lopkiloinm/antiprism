@@ -16,10 +16,16 @@ const nextConfig: NextConfig = {
     if (isServer) {
       config.externals = [...(config.externals || []), "@huggingface/transformers"];
     }
-    // pandoc-wasm imports .wasm; treat as asset (URL) so webpack doesn't parse as WebAssembly
+    // Enable async WebAssembly so wasm-pack modules (e.g. codemirror-lang-typst) get proper named exports
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
+    // pandoc-wasm: treat only its .wasm as asset (URL); other .wasm (e.g. codemirror-lang-typst) use normal WASM loading
     config.module = config.module || {};
     config.module.rules = config.module.rules || [];
-    config.module.rules.unshift({ test: /\.wasm$/, type: "asset/resource" });
+    config.module.rules.unshift({
+      test: /\.wasm$/,
+      type: "asset/resource",
+      include: [/node_modules[\\/]pandoc-wasm[\\/]/],
+    });
     // Fix pdfjs-dist "Object.defineProperty called on non-object" in dev mode.
     // eval-source-map causes variable shadowing that breaks pdfjs-dist; use source-map instead.
     if (dev && !isServer) {

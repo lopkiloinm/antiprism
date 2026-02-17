@@ -330,6 +330,7 @@ export async function initializeModel(): Promise<boolean> {
 
 import type { ChatMessage } from "./agent";
 import { LFM25_12B } from "./modelConfig";
+import { getAiMaxNewTokens, getAiTemperature, getAiTopP } from "./settings";
 
 export interface StreamingCallbacks {
   onChunk: (text: string) => void;
@@ -369,12 +370,15 @@ export async function generateFromMessages(messages: ChatMessage[]): Promise<str
     inputLen = (inputIds as { size: number }).size;
   }
 
+  const maxNewTokens = getAiMaxNewTokens();
+  const temperature = getAiTemperature();
+  const topP = getAiTopP();
   const outputs = await model.generate({
     ...input,
-    max_new_tokens: LFM25_12B.MAX_NEW_TOKENS,
+    max_new_tokens: maxNewTokens,
     do_sample: true,
-    temperature: 0.7,
-    top_p: 0.9,
+    temperature,
+    top_p: topP,
   });
 
   const out = outputs[0];
@@ -435,12 +439,15 @@ export async function generateFromMessagesStreaming(
       : undefined,
   });
 
+  const maxNewTokens = getAiMaxNewTokens();
+  const temperature = getAiTemperature();
+  const topP = getAiTopP();
   const outputs = await model.generate({
     ...input,
-    max_new_tokens: LFM25_12B.MAX_NEW_TOKENS,
+    max_new_tokens: maxNewTokens,
     do_sample: true,
-    temperature: 0.7,
-    top_p: 0.9,
+    temperature,
+    top_p: topP,
     streamer,
   });
 

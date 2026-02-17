@@ -9,13 +9,14 @@ import { WebrtcProvider } from "y-webrtc";
 import { mount } from "@wwog/idbfs";
 import { FileTree } from "@/components/FileTree";
 import { FileActions } from "@/components/FileActions";
-import { FileTabs } from "@/components/FileTabs";
+import { FileTabs, SETTINGS_TAB_PATH } from "@/components/FileTabs";
 import { ImageViewer } from "@/components/ImageViewer";
 import { EditorPanel, type EditorPanelHandle } from "@/components/EditorPanel";
 import { ChatInput } from "@/components/ChatInput";
 import { AIModelDownloadProgress } from "@/components/AIModelDownloadProgress";
 import { ProjectDropdown } from "@/components/ProjectDropdown";
-import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2 } from "@/components/Icons";
+import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings } from "@/components/Icons";
+import { SettingsPanel } from "@/components/SettingsPanel";
 
 const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => ({ default: m.PdfPreview })), {
   ssr: false,
@@ -23,6 +24,21 @@ const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => (
 import ReactMarkdown from "react-markdown";
 import { generateChatResponse } from "@/lib/localModel";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
+import { compileTypstToPdf, ensureTypstReady } from "@/lib/typstCompiler";
+import {
+  getLatexEngine,
+  type LaTeXEngine,
+  getEditorFontSize,
+  getEditorTabSize,
+  getEditorLineWrapping,
+  getAutoCompileOnChange,
+  getAutoCompileDebounceMs,
+  getAiMaxNewTokens,
+  getAiTemperature,
+  getAiTopP,
+  getPromptAsk,
+  getPromptCreate,
+} from "@/lib/settings";
 import { getProjects, getRooms } from "@/lib/projects";
 import { EditorBufferManager } from "@/lib/editorBufferManager";
 
@@ -56,7 +72,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [ytext, setYtext] = useState<Y.Text | null>(null);
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
-  const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" }[]>([{ path: `${basePath}/main.tex`, type: "text" }]);
+  const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" | "settings" }[]>([
+    { path: `${basePath}/main.tex`, type: "text" },
+  ]);
   const [activeTabPath, _setActiveTabPath] = useState<string>(`${basePath}/main.tex`);
   const activeTabPathRef = useRef<string>(`${basePath}/main.tex`);
   const setActiveTabPath = useCallback((p: string) => {
@@ -76,6 +94,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [isGenerating, setIsGenerating] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [latexReady, setLatexReady] = useState(false);
+  const [typstReady, setTypstReady] = useState(false);
+  const compilerReady = latexReady && typstReady;
   const [isCompiling, setIsCompiling] = useState(false);
   const [lastCompileMs, setLastCompileMs] = useState<number | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
@@ -85,6 +105,19 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [searchQuery, setSearchQuery] = useState("");
   const [chatExpanded, setChatExpanded] = useState(false);
   const [chatMode, setChatMode] = useState<"ask" | "agent">("ask");
+  const [latexEngine, setLatexEngineState] = useState<LaTeXEngine>(() => getLatexEngine());
+  const [editorFontSize, setEditorFontSizeState] = useState(() => getEditorFontSize());
+  const [editorTabSize, setEditorTabSizeState] = useState(() => getEditorTabSize());
+  const [editorLineWrapping, setEditorLineWrappingState] = useState(() => getEditorLineWrapping());
+  const [autoCompileOnChange, setAutoCompileOnChangeState] = useState(() => getAutoCompileOnChange());
+  const [aiMaxNewTokens, setAiMaxNewTokensState] = useState(() => getAiMaxNewTokens());
+  const [aiTemperature, setAiTemperatureState] = useState(() => getAiTemperature());
+  const [aiTopP, setAiTopPState] = useState(() => getAiTopP());
+  const [promptAsk, setPromptAskState] = useState(() => getPromptAsk());
+  const [promptCreate, setPromptCreateState] = useState(() => getPromptCreate());
+  const [autoCompileDebounceMs, setAutoCompileDebounceMsState] = useState(() =>
+    getAutoCompileDebounceMs()
+  );
   const [streamingStats, setStreamingStats] = useState<{
     tokensPerSec: number;
     totalTokens: number;
@@ -99,6 +132,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMessageRef = useRef<HTMLPreElement | null>(null);
   const autoCompileDoneRef = useRef(false);
+  const handleCompileRef = useRef<(() => Promise<void>) | null>(null);
+  const isCompilingRef = useRef(false);
 
   useEffect(() => {
     const p = getProjects().find((x) => x.id === id);
@@ -162,6 +197,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         if (cancelled) return;
 
         const mainPath = `${basePath}/main.tex`;
+        const mainTypPath = `${basePath}/main.typ`;
         const diagramPath = `${basePath}/diagram.jpg`;
 
         // Ensure parent directories exist: /projects, then /projects/{id}
@@ -175,29 +211,59 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         }
 
         if (cancelled) return;
-        // Only initialize when files don't exist - never overwrite existing project content
-        const exists = await idbfs.exists(mainPath).catch(() => false);
-        if (exists) {
-          try {
-            const data = await idbfs.readFile(mainPath);
-            const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-            if (content?.length > 0 && text.length === 0) {
-              text.insert(0, content);
+        const { dirs, files } = await idbfs.readdir(basePath).catch(() => ({ dirs: [] as { name: string }[], files: [] as { name: string }[] }));
+        const isEmpty = dirs.length === 0 && files.length === 0;
+        const hasMainTex = files.some((f: { name: string }) => f.name === "main.tex");
+        const hasMainTyp = files.some((f: { name: string }) => f.name === "main.typ");
+        const isNewProject = isEmpty || (hasMainTex && !hasMainTyp);
+
+        if (isNewProject) {
+          // + New only: seed from public (fetch all in parallel to avoid partial state on Strict Mode double-mount)
+          const [resTex, resTyp, resDiagram] = await Promise.all([
+            fetch(`${BASE}/main.tex`),
+            fetch(`${BASE}/main.typ`),
+            fetch(`${BASE}/diagram.jpg`),
+          ]);
+          if (!resTex.ok) throw new Error(`Failed to load main.tex: ${resTex.status}`);
+          const mainContent = await resTex.text();
+          if (!mainContent?.trim()) throw new Error("main.tex is empty");
+          const typContent = resTyp.ok ? await resTyp.text() : "";
+          const diagramBuf = resDiagram.ok ? await resDiagram.arrayBuffer() : null;
+
+          if (!hasMainTex) {
+            try {
+              await idbfs.writeFile(mainPath, new TextEncoder().encode(mainContent).buffer as ArrayBuffer, { mimeType: "text/x-tex" });
+            } catch (e) {
+              if (!String(e).includes("already exists")) throw e;
             }
-          } catch {
-            // ignore
+            if (text.length === 0) text.insert(0, mainContent);
+          } else if (text.length === 0) {
+            try {
+              const data = await idbfs.readFile(mainPath);
+              const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
+              if (content?.length > 0) text.insert(0, content);
+            } catch {
+              text.insert(0, mainContent);
+            }
+          }
+          if (typContent?.trim() && !hasMainTyp) {
+            try {
+              await idbfs.writeFile(mainTypPath, new TextEncoder().encode(typContent).buffer as ArrayBuffer, { mimeType: "text/x-typst" });
+            } catch (e) {
+              if (!String(e).includes("already exists")) throw e;
+            }
+          }
+          if (diagramBuf && !files.some((f: { name: string }) => f.name === "diagram.jpg")) {
+            try {
+              await idbfs.writeFile(diagramPath, diagramBuf, { mimeType: "image/jpeg" });
+            } catch (e) {
+              if (!String(e).includes("already exists")) throw e;
+            }
           }
         } else {
-          // New project: initialize only from public/main.tex (served at {base}/main.tex)
-          const res = await fetch(`${BASE}/main.tex`);
-          if (!res.ok) throw new Error(`Failed to load main.tex: ${res.status}`);
-          const mainContent = await res.text();
-          if (!mainContent?.trim()) throw new Error("main.tex is empty");
-          try {
-            const buf = new TextEncoder().encode(mainContent).buffer as ArrayBuffer;
-            await idbfs.writeFile(mainPath, buf, { mimeType: "text/x-tex" });
-          } catch (e) {
-            if (!String(e).includes("already exists")) throw e;
+          // Import or existing project: do not add main.tex, main.typ, or diagram.jpg; only load main.tex into editor if present
+          const exists = await idbfs.exists(mainPath).catch(() => false);
+          if (exists) {
             try {
               const data = await idbfs.readFile(mainPath);
               const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
@@ -205,24 +271,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             } catch {
               // ignore
             }
-          }
-          if (text.length === 0) text.insert(0, mainContent);
-        }
-
-        if (cancelled) return;
-        // Only add diagram when missing - never overwrite existing files
-        const diagramExists = await idbfs.exists(diagramPath).catch(() => false);
-        if (!diagramExists) {
-          // New project: initialize from public/diagram.jpg (served at {base}/diagram.jpg)
-          try {
-            const res = await fetch(`${BASE}/diagram.jpg`);
-            if (res.ok) {
-              const buf = await res.arrayBuffer();
-              await idbfs.writeFile(diagramPath, buf, { mimeType: "image/jpeg" });
-            }
-          } catch (e) {
-            // File may already exist (e.g. React Strict Mode double-mount race)
-            if (!String(e).includes("already exists")) throw e;
           }
         }
 
@@ -260,6 +308,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     ensureLatexReady()
       .then(() => setLatexReady(true))
       .catch((e) => console.warn("LaTeX WASM init failed:", e));
+    ensureTypstReady()
+      .then(() => setTypstReady(true))
+      .catch((e) => console.warn("Typst WASM init failed:", e));
   }, []);
 
   const onYtextChangeNoop = useCallback(() => {}, []);
@@ -373,12 +424,17 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
   const handleTabSelect = useCallback(
     async (path: string) => {
-      if (!fs || !ytext) return;
       if (path === activeTabPath) return;
-      const mgr = getBufferMgr();
-
       const tab = openTabs.find((t) => t.path === path);
       if (!tab) return;
+
+      if (tab.type === "settings") {
+        setActiveTabPath(path);
+        return;
+      }
+
+      if (!fs || !ytext) return;
+      const mgr = getBufferMgr();
 
       setCurrentPath(path);
       const parentDir = path.substring(0, path.lastIndexOf("/")) || "/";
@@ -398,7 +454,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
   const handleTabClose = useCallback(
     async (path: string) => {
-      if (!ytext) return;
       const mgr = getBufferMgr();
 
       const idx = openTabs.findIndex((t) => t.path === path);
@@ -408,16 +463,22 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         const remaining = openTabs.filter((t) => t.path !== path);
         const nextActive = remaining[idx] ?? remaining[idx - 1] ?? null;
         if (nextActive) {
-          if (nextActive.type === "text") {
+          if (nextActive.type === "settings") {
+            setActiveTabPath(nextActive.path);
+            setOpenTabs(remaining);
+          } else if (nextActive.type === "text" && ytext && fs) {
             const content = await resolveFileContent(nextActive.path);
             if (mgr) { mgr.switchTo(nextActive.path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(nextActive.path, content); }
+            setActiveTabPath(nextActive.path);
+            setCurrentPath(nextActive.path);
+            setOpenTabs(remaining);
           } else {
             if (mgr) mgr.switchToImage(nextActive.path);
             else saveActiveTextToCache();
+            setActiveTabPath(nextActive.path);
+            setCurrentPath(nextActive.path);
+            setOpenTabs(remaining);
           }
-          setActiveTabPath(nextActive.path);
-          setCurrentPath(nextActive.path);
-          setOpenTabs(remaining);
         } else {
           saveActiveTextToCache();
           setActiveTabPath("");
@@ -496,16 +557,17 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   );
 
   const handleCompile = async () => {
-    if (!latexReady || !ytext || !fs) return;
+    if (!compilerReady || !ytext || !fs) return;
     const fsInstance = fs;
+    const currentActivePath = activeTabPathRef.current;
 
-    const activeTab = openTabs.find((t) => t.path === activeTabPath);
-    if (activeTab?.type === "text" && activeTabPath) {
+    const activeTab = openTabs.find((t) => t.path === currentActivePath);
+    if (activeTab?.type === "text" && currentActivePath) {
       try {
         // idbfs writeFile is create-only; remove first so we can overwrite
-        await fsInstance.rm(activeTabPath).catch(() => {});
+        await fsInstance.rm(currentActivePath).catch(() => {});
         await fsInstance.writeFile(
-          activeTabPath,
+          currentActivePath,
           new TextEncoder().encode(ytext.toString()).buffer as ArrayBuffer,
           { mimeType: "text/x-tex" }
         );
@@ -526,12 +588,24 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       }
 
       const additionalFiles: { path: string; content: string | Uint8Array }[] = [];
+      let mainTypContent: string | null = null;
 
       async function gatherFiles(dir: string) {
         const { dirs, files } = await fsInstance.readdir(dir);
         for (const f of files) {
           const relPath = dir === basePath ? f.name : `${dir.replace(basePath + "/", "")}/${f.name}`;
           if (relPath === "main.tex") continue;
+          if (relPath === "main.typ") {
+            try {
+              const fullPath = dir === "/" ? `/${f.name}` : `${dir}/${f.name}`;
+              const data = await fsInstance.readFile(fullPath);
+              mainTypContent =
+                typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
+            } catch {
+              // skip
+            }
+            continue;
+          }
           try {
             const fullPath = dir === "/" ? `/${f.name}` : `${dir}/${f.name}`;
             const data = await fsInstance.readFile(fullPath);
@@ -555,7 +629,24 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       }
       await gatherFiles(basePath);
 
-      const pdfBlob = await compileLatexToPdf(latex, additionalFiles);
+      if (mainTypContent == null) {
+        const mainTypTab = openTabs.find((t) => t.type === "text" && t.path.endsWith("main.typ"));
+        if (mainTypTab)
+          mainTypContent =
+            currentActivePath === mainTypTab.path
+              ? ytext.toString()
+              : textContentCacheRef.current.get(mainTypTab.path) ?? "";
+      }
+
+      // Choose compiler by active tab: .typ → Typst, .tex (or other) → LaTeX (use ref so debounced/async compile sees current tab)
+      const activeIsTypst = currentActivePath.toLowerCase().endsWith(".typ");
+      const typSource =
+        activeIsTypst ? ytext.toString() : mainTypContent;
+      const useTypst = activeIsTypst && (typSource != null && typSource.trim() !== "");
+
+      const pdfBlob = useTypst
+        ? await compileTypstToPdf(typSource!, additionalFiles)
+        : await compileLatexToPdf(latex, additionalFiles);
       setLastCompileMs(Math.round(performance.now() - start));
       const url = URL.createObjectURL(pdfBlob);
       setPdfUrl((prev) => {
@@ -570,11 +661,39 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   };
 
   useEffect(() => {
-    if (latexReady && ytext && fs && !autoCompileDoneRef.current && !isCompiling) {
+    handleCompileRef.current = handleCompile;
+    return () => {
+      handleCompileRef.current = null;
+    };
+  }, [handleCompile]);
+
+  useEffect(() => {
+    if (compilerReady && ytext && fs && !autoCompileDoneRef.current && !isCompiling) {
       autoCompileDoneRef.current = true;
       void handleCompile();
     }
-  }, [latexReady, ytext, fs, isCompiling]);
+  }, [compilerReady, ytext, fs, isCompiling, handleCompile]);
+
+  useEffect(() => {
+    isCompilingRef.current = isCompiling;
+  }, [isCompiling]);
+
+  useEffect(() => {
+    if (!autoCompileOnChange || !ytext || !compilerReady || !fs) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        if (!isCompilingRef.current) handleCompileRef.current?.();
+      }, autoCompileDebounceMs);
+    };
+    ytext.observe(observer);
+    return () => {
+      ytext.unobserve(observer);
+      if (timer) clearTimeout(timer);
+    };
+  }, [autoCompileOnChange, autoCompileDebounceMs, ytext, compilerReady, fs]);
 
   const handleSendChat = async () => {
     if (!chatInput.trim()) return;
@@ -716,13 +835,30 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     navigator.clipboard?.writeText(window.location.href);
   };
 
+  const openOrSelectSettingsTab = useCallback(() => {
+    const has = openTabs.some((t) => t.path === SETTINGS_TAB_PATH);
+    if (has) {
+      setActiveTabPath(SETTINGS_TAB_PATH);
+    } else {
+      setOpenTabs((t) => [...t, { path: SETTINGS_TAB_PATH, type: "settings" as const }]);
+      setActiveTabPath(SETTINGS_TAB_PATH);
+    }
+  }, [openTabs]);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <aside className="w-64 border-r border-zinc-800 flex flex-col min-h-0 bg-zinc-950">
-        <div className="h-12 flex items-center justify-between px-3 border-b border-zinc-800 shrink-0">
-          <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-400 truncate">
+        <div className="h-12 flex items-center justify-between gap-2 px-3 border-b border-zinc-800 shrink-0">
+          <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-400 truncate min-w-0">
             ← Dashboard
           </Link>
+          <button
+            onClick={openOrSelectSettingsTab}
+            className="shrink-0 text-zinc-400 hover:text-zinc-200 p-1.5 rounded hover:bg-zinc-800 transition-colors"
+            title="Settings"
+          >
+            <IconSettings />
+          </button>
         </div>
         <div className="px-3 py-2 border-b border-zinc-800 shrink-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -785,7 +921,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           )}
         </div>
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          {sidebarTab === "files" ? (
+          {sidebarTab === "files" && (
             <FileTree
               fs={fs}
               basePath={basePath}
@@ -796,7 +932,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
               onFileDeleted={handleFileDeleted}
               searchQuery={searchQuery}
             />
-          ) : (
+          )}
+          {sidebarTab === "chats" && (
             <div className="flex-1 flex flex-col min-h-0 p-3">
               <p className="text-sm text-zinc-500">Chat sessions</p>
               <p className="text-xs text-zinc-600 mt-2">Create and switch between chat sessions.</p>
@@ -820,6 +957,49 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
               <div className="flex-1 relative min-h-0 overflow-hidden">
                 {(() => {
                   const aiOverlayHeight = chatExpanded ? "45%" : "155px";
+                  if (activeTab?.type === "settings") {
+                    return (
+                      <div className="absolute inset-0 overflow-auto bg-zinc-950">
+                        <SettingsPanel
+                          latexEngine={latexEngine}
+                          editorFontSize={editorFontSize}
+                          editorTabSize={editorTabSize}
+                          editorLineWrapping={editorLineWrapping}
+                          autoCompileOnChange={autoCompileOnChange}
+                          autoCompileDebounceMs={autoCompileDebounceMs}
+                          aiMaxNewTokens={aiMaxNewTokens}
+                          aiTemperature={aiTemperature}
+                          aiTopP={aiTopP}
+                          promptAsk={promptAsk}
+                          promptCreate={promptCreate}
+                          onLatexEngineChange={setLatexEngineState}
+                          onEditorFontSizeChange={setEditorFontSizeState}
+                          onEditorTabSizeChange={setEditorTabSizeState}
+                          onEditorLineWrappingChange={setEditorLineWrappingState}
+                          onAutoCompileOnChangeChange={setAutoCompileOnChangeState}
+                          onAutoCompileDebounceMsChange={setAutoCompileDebounceMsState}
+                          onAiMaxNewTokensChange={setAiMaxNewTokensState}
+                          onAiTemperatureChange={setAiTemperatureState}
+                          onAiTopPChange={setAiTopPState}
+                          onPromptAskChange={setPromptAskState}
+                          onPromptCreateChange={setPromptCreateState}
+                          onResetRequested={() => {
+                            setLatexEngineState(getLatexEngine());
+                            setEditorFontSizeState(getEditorFontSize());
+                            setEditorTabSizeState(getEditorTabSize());
+                            setEditorLineWrappingState(getEditorLineWrapping());
+                            setAutoCompileOnChangeState(getAutoCompileOnChange());
+                            setAutoCompileDebounceMsState(getAutoCompileDebounceMs());
+                            setAiMaxNewTokensState(getAiMaxNewTokens());
+                            setAiTemperatureState(getAiTemperature());
+                            setAiTopPState(getAiTopP());
+                            setPromptAskState(getPromptAsk());
+                            setPromptCreateState(getPromptCreate());
+                          }}
+                        />
+                      </div>
+                    );
+                  }
                   if (activeTab?.type === "image") {
                     if (activeTabPath.endsWith(".pdf")) {
                       const pdfBlobUrl = imageUrlCache.get(activeTabPath) ?? null;
@@ -851,6 +1031,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                           provider={provider}
                           currentPath={activeTabPath}
                           onYtextChange={onYtextChangeNoop}
+                          fontSize={editorFontSize}
+                          tabSize={editorTabSize}
+                          lineWrapping={editorLineWrapping}
                         />
                       </div>
                     );
@@ -969,7 +1152,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
               pdfUrl={pdfUrl}
               onCompile={handleCompile}
               isCompiling={isCompiling}
-              latexReady={latexReady}
+              latexReady={compilerReady}
               lastCompileMs={lastCompileMs}
             />
           </div>

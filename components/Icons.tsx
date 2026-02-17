@@ -30,6 +30,9 @@ import {
   Send,
   Image,
   RefreshCw,
+  Settings,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -61,3 +64,6 @@ export const IconCopy = () => <Copy {...iconProps} />;
 export const IconSend = () => <Send {...iconProps} />;
 export const IconImage = () => <Image {...iconProps} />;
 export const IconRefreshCw = () => <RefreshCw {...iconProps} />;
+export const IconSettings = () => <Settings {...iconProps} />;
+export const IconMaximize2 = () => <Maximize2 {...iconProps} />;
+export const IconMinimize2 = () => <Minimize2 {...iconProps} />;

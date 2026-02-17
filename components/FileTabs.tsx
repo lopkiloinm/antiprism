@@ -2,9 +2,11 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 
+export const SETTINGS_TAB_PATH = "__settings__";
+
 interface Tab {
   path: string;
-  type: "text" | "image";
+  type: "text" | "image" | "settings";
 }
 
 interface FileTabsProps {
@@ -14,8 +16,9 @@ interface FileTabsProps {
   onClose: (path: string) => void;
 }
 
-function getFileName(path: string): string {
-  return path.split("/").filter(Boolean).pop() || path;
+function getTabLabel(tab: Tab): string {
+  if (tab.type === "settings" || tab.path === SETTINGS_TAB_PATH) return "Settings";
+  return tab.path.split("/").filter(Boolean).pop() || tab.path;
 }
 
 export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps) {
@@ -102,7 +105,7 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
       >
       {tabs.map((tab) => {
         const isActive = tab.path === activePath;
-        const name = getFileName(tab.path);
+        const name = getTabLabel(tab);
         return (
           <div
             key={tab.path}
