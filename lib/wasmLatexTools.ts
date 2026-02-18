@@ -1,6 +1,7 @@
 "use client";
 
 import { WebPerlRunner, TexCount, TexFmt, type TexCountResult } from "wasm-latex-tools";
+import { latexLogger } from "@/lib/logger";
 
 export { TexCountResult };
 
@@ -15,13 +16,29 @@ export async function getWebPerlRunner(): Promise<WebPerlRunner> {
   const baseNorm = base && !base.startsWith("/") ? `/${base}` : base;
 
   initPromise = (async () => {
-    const runner = new WebPerlRunner({
-      webperlBasePath: `${baseNorm}/core/webperl`,
-      perlScriptsPath: `${baseNorm}/core/perl`,
-    });
-    await runner.initialize();
-    webPerlRunner = runner;
-    return runner;
+    try {
+      latexLogger.info("Initializing WASM LaTeX tools...");
+      
+      // Verify WASM files are accessible before initializing
+      const webperlWasmUrl = `${baseNorm}/core/webperl/emperl.wasm`;
+      const response = await fetch(webperlWasmUrl, { method: 'HEAD' });
+      if (!response.ok) {
+        throw new Error(`WASM file not accessible: ${webperlWasmUrl} (${response.status})`);
+      }
+
+      latexLogger.info("WASM files accessible, initializing WebPerl runner...");
+      const runner = new WebPerlRunner({
+        webperlBasePath: `${baseNorm}/core/webperl`,
+        perlScriptsPath: `${baseNorm}/core/perl`,
+      });
+      await runner.initialize();
+      webPerlRunner = runner;
+      latexLogger.info("WASM LaTeX tools initialized successfully");
+      return runner;
+    } catch (e) {
+      latexLogger.error("WASM LaTeX tools initialization failed", e);
+      throw new Error(`WASM LaTeX tools initialization failed: ${e}`);
+    }
   })();
 
   try {
@@ -30,7 +47,7 @@ export async function getWebPerlRunner(): Promise<WebPerlRunner> {
     initPromise = null;
     webPerlRunner = null;
     throw new Error(
-      `WASM LaTeX tools failed to initialize: ${e}. Run npx wasm-latex-tools copy-assets and ensure /core/webperl and /core/perl are served.`
+      `WASM LaTeX tools failed to initialize: ${e}. Ensure WASM files are properly served with correct headers.`
     );
   }
 }

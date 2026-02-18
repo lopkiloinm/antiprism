@@ -77,7 +77,21 @@ export async function parseCreateResponse(rawOutput: string): Promise<CreatePars
     );
     return { latex: (result.stdout || "").trim(), title, markdown: md };
   } catch (e) {
-    console.error("Pandoc md->latex failed:", e);
+    // Better error handling for pandoc-wasm failures
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    
+    // Check for common WASM-related issues
+    if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('wasm')) {
+      console.error("Pandoc WASM network/initialization failed:", errorMessage);
+      // Fallback to raw markdown if WASM fails
+      return { 
+        latex: `% Pandoc conversion failed - using raw markdown\n\n${md}`, 
+        title, 
+        markdown: md 
+      };
+    }
+    
+    console.error("Pandoc md->latex failed:", errorMessage);
     return { latex: md, title, markdown: md };
   }
 }

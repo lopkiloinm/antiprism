@@ -2,6 +2,7 @@
 
 import { BusyTexRunner, XeLatex, LuaLatex, PdfLatex } from "texlyre-busytex";
 import { getLatexEngine, type LaTeXEngine } from "./settings";
+import { latexLogger } from "@/lib/logger";
 
 export type { LaTeXEngine } from "./settings";
 
@@ -15,15 +16,31 @@ async function getRunner(): Promise<BusyTexRunner> {
   if (runner) return runner;
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
-    const baseNorm = base && !base.startsWith("/") ? `/${base}` : base;
-    const r = new BusyTexRunner({
-      busytexBasePath: `${baseNorm}/core/busytex`,
-      verbose: false,
-    });
-    await r.initialize(true);
-    runner = r;
-    return r;
+    try {
+      latexLogger.info("Initializing LaTeX compiler...");
+      const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+      const baseNorm = base && !base.startsWith("/") ? `/${base}` : base;
+      
+      // Verify WASM files are accessible before initializing
+      const busytexWasmUrl = `${baseNorm}/core/busytex/busytex.wasm`;
+      const response = await fetch(busytexWasmUrl, { method: 'HEAD' });
+      if (!response.ok) {
+        throw new Error(`WASM file not accessible: ${busytexWasmUrl} (${response.status})`);
+      }
+
+      latexLogger.info("WASM files accessible, initializing BusyTex runner...");
+      const r = new BusyTexRunner({
+        busytexBasePath: `${baseNorm}/core/busytex`,
+        verbose: false,
+      });
+      await r.initialize(true);
+      runner = r;
+      latexLogger.info("LaTeX compiler initialized successfully");
+      return r;
+    } catch (e) {
+      latexLogger.error("LaTeX engine initialization failed", e);
+      throw new Error(`LaTeX engine initialization failed: ${e}`);
+    }
   })();
   try {
     return await initPromise;
@@ -31,7 +48,7 @@ async function getRunner(): Promise<BusyTexRunner> {
     initPromise = null;
     runner = null;
     throw new Error(
-      `LaTeX engine failed to initialize: ${e}. Run npm run download-latex-assets and ensure /core/busytex is served.`
+      `LaTeX engine failed to initialize: ${e}. Ensure WASM files are properly served with correct headers.`
     );
   }
 }

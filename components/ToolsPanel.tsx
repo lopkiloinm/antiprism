@@ -1,20 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { IconFileText, IconList, IconCode2 } from "./Icons";
+import { useState, useMemo, useEffect } from "react";
+import { IconFileText, IconList, IconCode2, IconZap, IconType, IconFile } from "./Icons";
+import { logger, type LogEntry } from "@/lib/logger";
 
 interface ToolsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   summaryContent?: string;
-  logsContent?: string;
   /** Raw summary content (pre-parsed TexCount output) */
   summaryRaw?: string;
-  /** Raw logs content (unformatted) */
-  logsRaw?: string;
 }
 
-type ToolsTab = "summary" | "logs";
+type ToolsTab = "summary" | "ai-logs" | "latex-logs" | "typst-logs";
 
 /* ── Parsed log helpers ── */
 
@@ -123,27 +121,93 @@ function ViewToggle({ isRaw, onToggle }: { isRaw: boolean; onToggle: () => void 
 }
 
 
+/* ── Log Display component ── */
+
+function LogDisplay({ logs, category }: { logs: LogEntry[]; category: string }) {
+  if (logs.length === 0) {
+    return (
+      <div className="text-sm text-[var(--muted)] italic">
+        No {category} logs available
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {logs.map((entry: LogEntry, i: number) => (
+        <div
+          key={i}
+          className={`text-sm font-mono p-2 rounded ${
+            entry.level === "error"
+              ? "bg-red-500/10 text-red-400"
+              : entry.level === "warn"
+                ? "bg-yellow-500/10 text-yellow-400"
+                : "bg-[color-mix(in_srgb,var(--border)_10%,transparent)] text-[var(--muted)]"
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <span className="text-[var(--muted)] text-xs min-w-[80px]">
+              {new Date(entry.timestamp).toLocaleTimeString()}
+            </span>
+            <span className="flex-1">{entry.message}</span>
+            {entry.data && (
+              <details className="text-xs">
+                <summary className="cursor-pointer text-[var(--muted)]">Data</summary>
+                <pre className="mt-1 text-[var(--muted)] whitespace-pre-wrap">
+                  {JSON.stringify(entry.data, null, 2)}
+                </pre>
+              </details>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Main component ── */
 
 export function ToolsPanel({
   isOpen,
   onClose,
   summaryContent = "",
-  logsContent = "",
   summaryRaw,
-  logsRaw,
 }: ToolsPanelProps) {
   const [activeTab, setActiveTab] = useState<ToolsTab>("summary");
   const [summaryRawView, setSummaryRawView] = useState(false);
-  const [logsRawView, setLogsRawView] = useState(false);
+  const [aiLogs, setAiLogs] = useState<LogEntry[]>([]);
+  const [latexLogs, setLatexLogs] = useState<LogEntry[]>([]);
+  const [typstLogs, setTypstLogs] = useState<LogEntry[]>([]);
 
-  const parsedLogs = useMemo(() => parseLogs(logsContent), [logsContent]);
   const parsedSummary = useMemo(() => parseSummary(summaryContent), [summaryContent]);
+
+  // Subscribe to log updates
+  useEffect(() => {
+    const unsubscribeAi = logger.subscribe((category, logs) => {
+      if (category === 'ai') setAiLogs(logs);
+    });
+    const unsubscribeLatex = logger.subscribe((category, logs) => {
+      if (category === 'latex') setLatexLogs(logs);
+    });
+    const unsubscribeTypst = logger.subscribe((category, logs) => {
+      if (category === 'typst') setTypstLogs(logs);
+    });
+
+    // Initial load
+    setAiLogs(logger.getLogs('ai'));
+    setLatexLogs(logger.getLogs('latex'));
+    setTypstLogs(logger.getLogs('typst'));
+
+    return () => {
+      unsubscribeAi();
+      unsubscribeLatex();
+      unsubscribeTypst();
+    };
+  }, []);
 
   if (!isOpen) return null;
 
   const effectiveSummaryRaw = summaryRaw ?? summaryContent;
-  const effectiveLogsRaw = logsRaw ?? logsContent;
 
   return (
     <div className="absolute inset-0 flex flex-col bg-[var(--background)]">
@@ -156,10 +220,22 @@ export function ToolsPanel({
           label="Summary"
         />
         <TabButton
-          active={activeTab === "logs"}
-          onClick={() => setActiveTab("logs")}
-          icon={<IconList />}
-          label="Logs"
+          active={activeTab === "ai-logs"}
+          onClick={() => setActiveTab("ai-logs")}
+          icon={<IconZap />}
+          label="AI"
+        />
+        <TabButton
+          active={activeTab === "latex-logs"}
+          onClick={() => setActiveTab("latex-logs")}
+          icon={<IconType />}
+          label="LaTeX"
+        />
+        <TabButton
+          active={activeTab === "typst-logs"}
+          onClick={() => setActiveTab("typst-logs")}
+          icon={<IconFile />}
+          label="Typst"
         />
         <div className="flex-1" />
         <button
@@ -171,16 +247,12 @@ export function ToolsPanel({
         </button>
       </div>
 
-      {/* Sub-header with toggle (for summary and logs) */}
-      {(activeTab === "summary" || activeTab === "logs") && (
+      {/* Sub-header with toggle (for summary only) */}
+      {activeTab === "summary" && (
         <div className="h-8 shrink-0 flex items-center justify-end px-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_10%,transparent)]">
           <ViewToggle
-            isRaw={activeTab === "summary" ? summaryRawView : logsRawView}
-            onToggle={() =>
-              activeTab === "summary"
-                ? setSummaryRawView((v) => !v)
-                : setLogsRawView((v) => !v)
-            }
+            isRaw={summaryRawView}
+            onToggle={() => setSummaryRawView((v: boolean) => !v)}
           />
         </div>
       )}
@@ -198,11 +270,11 @@ export function ToolsPanel({
                   <div className="text-sm text-[var(--muted)] italic">No summary available</div>
                 )
               ) : parsedSummary.length > 0 ? (
-                <div className="space-y-1">
-                  {parsedSummary.map((s, i) => (
-                    <div key={i} className="flex gap-2 text-sm">
-                      <span className="text-[var(--muted)] shrink-0 w-32 truncate" title={s.label}>{s.label}</span>
-                      <span className="text-[var(--foreground)] font-medium break-words flex-1">{s.value}</span>
+                <div className="space-y-4">
+                  {parsedSummary.map((section, i) => (
+                    <div key={i} className="border-b border-[var(--border)] pb-2">
+                      <div className="font-medium text-[var(--foreground)] mb-1">{section.label}</div>
+                      <div className="text-sm text-[var(--muted)]">{section.value}</div>
                     </div>
                   ))}
                 </div>
@@ -212,50 +284,19 @@ export function ToolsPanel({
             </div>
           )}
 
-          {/* ── Logs tab ── */}
-          {activeTab === "logs" && (
-            <div>
-              {logsRawView ? (
-                logsContent ? (
-                  <div className="text-sm text-[var(--foreground)] whitespace-pre-wrap font-mono">{effectiveLogsRaw}</div>
-                ) : (
-                  <div className="text-sm text-[var(--muted)] italic">No logs available</div>
-                )
-              ) : parsedLogs.length > 0 ? (
-                <div className="space-y-1">
-                  {parsedLogs.map((entry, i) => (
-                    <div
-                      key={i}
-                      className={`flex gap-2 text-xs font-mono py-1 px-2 rounded ${
-                        entry.level === "error"
-                          ? "bg-red-500/10 text-red-400"
-                          : entry.level === "warn"
-                            ? "bg-yellow-500/10 text-yellow-400"
-                            : "text-[var(--foreground)]"
-                      }`}
-                    >
-                      <span className="text-[var(--muted)] shrink-0 tabular-nums text-[10px]">
-                        {entry.timestamp.split("T")[1]?.slice(0, 8) || entry.timestamp}
-                      </span>
-                      <span
-                        className={`shrink-0 uppercase text-[10px] font-semibold w-10 ${
-                          entry.level === "error"
-                            ? "text-red-400"
-                            : entry.level === "warn"
-                              ? "text-yellow-400"
-                              : "text-[var(--muted)]"
-                        }`}
-                      >
-                        {entry.level}
-                      </span>
-                      <span className="break-all">{entry.message}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-[var(--muted)] italic">No logs available</div>
-              )}
-            </div>
+          {/* ── AI Logs tab ── */}
+          {activeTab === "ai-logs" && (
+            <LogDisplay logs={aiLogs} category="AI" />
+          )}
+
+          {/* ── LaTeX Logs tab ── */}
+          {activeTab === "latex-logs" && (
+            <LogDisplay logs={latexLogs} category="LaTeX" />
+          )}
+
+          {/* ── Typst Logs tab ── */}
+          {activeTab === "typst-logs" && (
+            <LogDisplay logs={typstLogs} category="Typst" />
           )}
         </div>
       </div>

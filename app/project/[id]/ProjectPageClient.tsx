@@ -37,6 +37,7 @@ import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from "@/lib/modelConfig";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { compileTypstToPdf, ensureTypstReady } from "@/lib/typstCompiler";
 import { countLaTeXWords, type TexCountResult, formatLaTeX } from "@/lib/wasmLatexTools";
+import { aiLogger, latexLogger, typstLogger } from "@/lib/logger";
 import {
   getLatexEngine,
   type LaTeXEngine,
@@ -123,40 +124,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [chatExpanded, setChatExpanded] = useState(false);
   const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
   const [summaryContent, setSummaryContent] = useState("");
-  const [logsContent, setLogsContent] = useState("");
   const [isFormatting, setIsFormatting] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [editorFraction, setEditorFraction] = useState(0.5);
   const [outlineHeight, setOutlineHeight] = useState(400); // Default to maximum height
   const [selectedModelId, setSelectedModelId] = useState<string>(DEFAULT_MODEL_ID);
 
-  // Capture console logs
-  useEffect(() => {
-    const originalLog = console.log;
-    const originalError = console.error;
-    const originalWarn = console.warn;
-    
-    const logs: string[] = [];
-    
-    const captureLog = (...args: any[]) => {
-      const message = args.map(arg => 
-        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-      ).join(' ');
-      logs.push(`[${new Date().toISOString()}] ${message}`);
-      setLogsContent(logs.slice(-50).join('\n')); // Keep last 50 log entries
-    };
-    
-    console.log = captureLog;
-    console.error = (...args) => captureLog('ERROR:', ...args);
-    console.warn = (...args) => captureLog('WARN:', ...args);
-    
-    return () => {
-      console.log = originalLog;
-      console.error = originalError;
-      console.warn = originalWarn;
-    };
-  }, []);
-
+  
   const [chatMode, setChatMode] = useState<"ask" | "agent">("ask");
   const [latexEngine, setLatexEngineState] = useState<LaTeXEngine>(() => getLatexEngine());
   const [editorFontSize, setEditorFontSizeState] = useState(() => getEditorFontSize());
@@ -430,11 +404,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   // Generate summary content from current document
   const generateSummary = useCallback(async () => {
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
-    console.log('[summary] activeTab:', activeTab, 'activeTabPath:', activeTabPath);
-    
     if (activeTab?.type === "text") {
       const bufferMgr = getBufferMgr();
-      console.log('[summary] buffer manager exists:', !!bufferMgr);
       
       if (bufferMgr) {
         // Ensure current buffer is saved to cache before retrieving
@@ -442,15 +413,10 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         
         // Try to get content from cache first, then from buffer
         let content = bufferMgr.getCachedContent(activeTabPath);
-        console.log('[summary] cached content length:', content?.length || 0);
         
         if (!content || content.trim() === '') {
           content = bufferMgr.getBufferContent();
-          console.log('[summary] buffer content length:', content?.length || 0);
         }
-        
-        console.log('[summary] final content length:', content?.length || 0);
-        console.log('[summary] content preview:', content?.substring(0, 100) || 'empty');
         
         if (content && content.trim()) {
           const isTex = activeTabPath.endsWith('.tex');
@@ -560,9 +526,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       // Update cache
       bufferMgr.saveActiveToCache();
 
-      console.log('[format] Document formatted successfully');
+      latexLogger.info("Document formatted successfully");
     } catch (error) {
-      console.error('[format] Error formatting document:', error);
+      latexLogger.error("Error formatting document", error);
     } finally {
       setIsFormatting(false);
     }
@@ -984,13 +950,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     
     // Check if model is loaded, if not, load it first
     if (!modelReady || isModelLoading()) {
-      console.log("🔄 Model not ready, loading before sending message...");
+      aiLogger.info("Model not ready, loading before sending message...");
       try {
         await initializeModel();
         setModelReady(true);
-        console.log("✅ Model loaded successfully");
+        aiLogger.info("Model loaded successfully");
       } catch (error) {
-        console.error("❌ Failed to load model:", error);
+        aiLogger.error("Failed to load model", error);
         // Add error message to chat
         const errorMessage = { role: "assistant" as const, content: "Error: Failed to load model. Please try again." };
         if (chatContext === "big") {
@@ -1256,14 +1222,11 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                   </button>
                   <button
                     onClick={() => {
-                      console.log("➕ Creating new chat with model:", selectedModelId);
                       const chat = createChat(selectedModelId);
-                      console.log("➕ Chat created:", chat);
                       const chatPath = `/ai-chat/${chat.id}`;
                       setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
                       setActiveTabPath(chatPath);
                       setRefreshTrigger((t) => t + 1); // Refresh ChatTree
-                      console.log("➕ Refresh trigger updated for ChatTree");
                     }}
                     className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center"
                     title="New chat"
@@ -1663,7 +1626,6 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                 isOpen={true}
                 onClose={() => setToolsPanelOpen(false)}
                 summaryContent={summaryContent}
-                logsContent={logsContent}
               />
             ) : (
               <PdfPreview

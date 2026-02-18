@@ -82,8 +82,7 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
           }
           
           if (allFilesCached) {
-            console.log(`🔍 Cache hit for ${model.label} - marking as loaded`);
-            setModelStatuses(prev => ({
+                        setModelStatuses(prev => ({
               ...prev,
               [model.id]: {
                 ...prev[model.id],
@@ -105,9 +104,7 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
     let lastUpdate = 0;
     const throttleMs = 200;
     
-    console.log("🔥 Setting up progress callback");
     setProgressCallback((progress, stats) => {
-      console.log("🔥 PROGRESS CALLBACK:", { progress, stats, activeId: getActiveModelId() });
       const now = Date.now();
       if (now - lastUpdate < throttleMs && progress < 100) return;
       lastUpdate = now;
@@ -126,7 +123,6 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
     });
 
     return () => {
-      console.log("🔥 Cleaning up progress callback");
       setProgressCallback(() => {});
     };
   }, []);
@@ -142,20 +138,14 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node | null;
-      const targetInfo = target ? `${target.nodeName}: ${target.textContent?.slice(0, 20)}` : 'null';
-      console.log("🔥 MOUSE DOWN TARGET:", targetInfo);
       
       if (!target) return;
 
       const inButton = !!buttonRef.current && buttonRef.current.contains(target);
       const inMenu = !!portalRef.current && portalRef.current.contains(target);
-      console.log("🔥 CLICK CHECK - inButton:", inButton, "inMenu:", inMenu, "isOpen:", isOpen);
       
       if (!inButton && !inMenu) {
-        console.log("🔥 CLOSING DROPDOWN");
         setIsOpen(false);
-      } else {
-        console.log("🔥 NOT CLOSING DROPDOWN");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -164,14 +154,10 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
 
   const handleModelSelect = async (modelId: string) => {
     if (isAnyDownloading) {
-      console.log("🔥 Model selection blocked - download in progress");
       return;
     }
     
-    console.log("🔥 MODEL CLICKED:", modelId);
     setIsOpen(false);
-    
-    console.log("🔥 Setting downloading status for:", modelId);
     // Update status to downloading immediately
     setModelStatuses(prev => ({
       ...prev,
@@ -187,12 +173,10 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
     onModelChange(modelId);
     await switchModel(modelId);
     
-    console.log("🔥 About to initialize model...");
     try {
       await initializeModel(); // Normal download flow
-      console.log("🔥 Model initialization complete!");
     } catch (error) {
-      console.error("🔥 Model initialization failed:", error);
+      console.error("Model initialization failed:", error);
       // Reset status on error
       setModelStatuses(prev => ({
         ...prev,
@@ -207,10 +191,8 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
   };
 
   const handleButtonClick = (e: React.MouseEvent) => {
-    console.log("🔥 BUTTON CLICKED");
     if (!buttonRef.current) return;
     if (isAnyDownloading) {
-      console.log("🔥 Dropdown blocked - download in progress");
       return;
     }
     setIsOpen((v) => !v);
@@ -313,7 +295,6 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
                 <button
                   key={model.id}
                   onClick={() => {
-                    console.log("🔥 MENU ITEM CLICKED:", model.id);
                     handleModelSelect(model.id);
                   }}
                   disabled={isAnyDownloading && !isSelected}

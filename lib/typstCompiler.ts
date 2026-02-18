@@ -6,6 +6,7 @@
  */
 
 import type { TypstSnippet } from "@myriaddreamin/typst.ts/contrib/snippet";
+import { typstLogger } from "@/lib/logger";
 
 const COMPILER_WASM_URL =
   "https://cdn.jsdelivr.net/npm/@myriaddreamin/typst-ts-web-compiler@0.7.0-rc2/pkg/typst_ts_web_compiler_bg.wasm";
@@ -15,11 +16,26 @@ let initPromise: Promise<TypstSnippet> | null = null;
 function getTypst(): Promise<TypstSnippet> {
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    const { $typst } = await import("@myriaddreamin/typst.ts/contrib/snippet");
-    $typst.setCompilerInitOptions({
-      getModule: () => COMPILER_WASM_URL,
-    });
-    return $typst;
+    try {
+      typstLogger.info("Initializing Typst compiler...");
+      
+      // Verify WASM is accessible from CDN
+      const response = await fetch(COMPILER_WASM_URL, { method: 'HEAD' });
+      if (!response.ok) {
+        throw new Error(`Typst WASM not accessible: ${COMPILER_WASM_URL} (${response.status})`);
+      }
+
+      typstLogger.info("WASM accessible, loading Typst module...");
+      const { $typst } = await import("@myriaddreamin/typst.ts/contrib/snippet");
+      $typst.setCompilerInitOptions({
+        getModule: () => COMPILER_WASM_URL,
+      });
+      typstLogger.info("Typst compiler initialized successfully");
+      return $typst;
+    } catch (e) {
+      typstLogger.error("Typst compiler initialization failed", e);
+      throw new Error(`Typst compiler initialization failed: ${e}`);
+    }
   })();
   return initPromise;
 }

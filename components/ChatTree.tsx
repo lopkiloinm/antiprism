@@ -148,8 +148,7 @@ export function ChatTree({ onChatSelect, refreshTrigger, onRefresh, searchQuery 
       try {
         const stored = localStorage.getItem("antiprism_chats");
         const parsed = stored ? JSON.parse(stored) : [];
-        console.log("🌳 ChatTree loading chats:", parsed.length, "chats found");
-        setChats(parsed);
+                setChats(parsed);
       } catch (e) {
         console.error("Failed to load chats:", e);
         setChats([]);
@@ -167,8 +166,7 @@ export function ChatTree({ onChatSelect, refreshTrigger, onRefresh, searchQuery 
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  console.log("🌳 ChatTree refreshTrigger changed:", refreshTrigger);
-  }, [refreshTrigger]);
+    }, [refreshTrigger]);
 
   const performRename = async (newName: string) => {
     if (!renameModal) return;
