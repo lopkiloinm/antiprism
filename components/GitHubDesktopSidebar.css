@@ -1,0 +1,667 @@
+/* GitHub Desktop Sidebar Layout Styles */
+
+/* Main Repository Layout */
+.repository {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  border-top: 1px solid var(--border, #e1e5e9);
+  height: 100vh;
+  min-height: 0;
+  background: var(--background, #ffffff);
+  color: var(--foreground, #24292f);
+}
+
+/* Repository Sidebar */
+.repository-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--box-border-color, #d0d7de);
+  background: var(--sidebar-background, #f6f8fa);
+  min-width: 200px;
+  max-width: 400px;
+  position: relative;
+}
+
+.repository-sidebar .tab-bar {
+  flex-shrink: 0;
+  display: flex;
+  border-bottom: 1px solid var(--border, #d0d7de);
+}
+
+.repository-sidebar .panel {
+  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--panel-background, #ffffff);
+}
+
+/* Tab Bar */
+.tab-bar {
+  display: flex;
+  background: var(--tab-bar-background, #f6f8fa);
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 16px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tab-color, #57606a);
+  position: relative;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tab:hover {
+  color: var(--tab-hover-color, #24292f);
+  background: var(--tab-hover-background, #f3f4f6);
+}
+
+.tab.active {
+  color: var(--tab-active-color, #24292f);
+  background: var(--tab-active-background, #ffffff);
+  border-bottom: 2px solid var(--accent, #0969da);
+}
+
+.tab .badge {
+  background: var(--badge-background, #0969da);
+  color: var(--badge-color, #ffffff);
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 16px;
+  text-align: center;
+}
+
+/* Resize Handle */
+.resize-handle {
+  width: 4px;
+  background: var(--resize-handle-background, #d0d7de);
+  cursor: col-resize;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover {
+  background: var(--resize-handle-hover-background, #0969da);
+}
+
+.resize-handle::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+}
+
+/* Repository Content */
+.repository-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--content-background, #ffffff);
+}
+
+/* Changes Panel */
+.changes-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Changes List Container */
+.changes-list-container.file-list {
+  flex: 1;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border, #d0d7de);
+}
+
+.changes-list-container .header {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border, #e1e5e9);
+  background: var(--header-background, #f6f8fa);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.changes-list-check-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-foreground, #656d76);
+}
+
+.changes-list-check-all input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.changes-list-check-all label {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* File List */
+.file-list {
+  overflow-y: auto;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.file-item:hover {
+  background: var(--file-item-hover-background, #f6f8fa);
+}
+
+.file-item.selected {
+  background: var(--file-item-selected-background, #e3f2ff);
+}
+
+.file-checkbox {
+  margin-right: 8px;
+}
+
+.file-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.file-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--file-name-color, #24292f);
+}
+
+.file-status {
+  font-size: 11px;
+  text-transform: capitalize;
+  font-weight: 500;
+}
+
+.file-status.modified {
+  color: var(--status-modified-color, #8250df);
+}
+
+.file-status.added {
+  color: var(--status-added-color, #1a7f37);
+}
+
+.file-status.deleted {
+  color: var(--status-deleted-color, #d1242f);
+}
+
+.file-status.renamed {
+  color: var(--status-renamed-color, #9a6700);
+}
+
+.file-status.untracked {
+  color: var(--status-untracked-color, #656d76);
+}
+
+/* Commit Message */
+.commit-message {
+  padding: 16px;
+  border-top: 1px solid var(--border, #d0d7de);
+  background: var(--commit-background, #f6f8fa);
+}
+
+.commit-avatar {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--avatar-background, #0969da);
+  color: var(--avatar-color, #ffffff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.commit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-input,
+.description-input {
+  border: 1px solid var(--input-border, #d0d7de);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--input-background, #ffffff);
+  color: var(--input-color, #24292f);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-input:focus,
+.description-input:focus {
+  outline: none;
+  border-color: var(--accent, #0969da);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+.summary-input::placeholder,
+.description-input::placeholder {
+  color: var(--input-placeholder-color, #656d76);
+}
+
+.summary-input {
+  font-weight: 600;
+}
+
+.description-input {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.action-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.co-author-toggle,
+.copilot-button {
+  padding: 6px 12px;
+  border: 1px solid var(--button-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--button-background, #ffffff);
+  color: var(--button-color, #24292f);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.co-author-toggle:hover,
+.copilot-button:hover {
+  background: var(--button-hover-background, #f3f4f6);
+  border-color: var(--button-hover-border, #d0d7de);
+}
+
+.commit-button {
+  padding: 8px 16px;
+  border: 1px solid var(--commit-button-border, #1f883d);
+  border-radius: 6px;
+  background: var(--commit-button-background, #1f883d);
+  color: var(--commit-button-color, #ffffff);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.commit-button:hover:not(:disabled) {
+  background: var(--commit-button-hover-background, #1a7f37);
+  border-color: var(--commit-button-hover-border, #1a7f37);
+}
+
+.commit-button:disabled {
+  background: var(--button-disabled-background, #f3f4f6);
+  border-color: var(--button-disabled-border, #d0d7de);
+  color: var(--button-disabled-color, #656d76);
+  cursor: not-allowed;
+}
+
+/* Compare View */
+#compare-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.compare-form {
+  padding: 16px;
+  border-bottom: 1px solid var(--border, #d0d7de);
+}
+
+.branch-filter {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--input-border, #d0d7de);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--input-background, #ffffff);
+  color: var(--input-color, #24292f);
+}
+
+.branch-filter:focus {
+  outline: none;
+  border-color: var(--accent, #0969da);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+.branch-list,
+.compare-commit-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.branch-item,
+.commit-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.branch-item:hover,
+.commit-item:hover {
+  background: var(--list-item-hover-background, #f6f8fa);
+}
+
+.commit-message {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--commit-message-color, #24292f);
+  margin-bottom: 4px;
+}
+
+.commit-author {
+  font-size: 12px;
+  color: var(--commit-author-color, #656d76);
+}
+
+/* Diff Content */
+.diff-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted-foreground, #656d76);
+  font-size: 16px;
+}
+
+.diff-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.diff-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border, #d0d7de);
+  background: var(--header-background, #f6f8fa);
+}
+
+.diff-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--foreground, #24292f);
+}
+
+.diff-view {
+  flex: 1;
+  overflow-y: auto;
+  font-family: var(--font-mono, 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.diff-hunk {
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.diff-line {
+  display: flex;
+  align-items: stretch;
+  min-height: 20px;
+}
+
+.diff-line.hunk {
+  background: var(--hunk-background, #f6f8fa);
+}
+
+.diff-line.hunk .line-content pre {
+  background: var(--accent, #0969da);
+  color: var(--accent-foreground, #ffffff);
+  font-weight: 600;
+  padding: 0 8px;
+}
+
+.diff-line.add {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.diff-line.add .line-content pre {
+  color: rgba(34, 197, 94, 1);
+}
+
+.diff-line.delete {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.diff-line.delete .line-content pre {
+  color: rgba(239, 68, 68, 1);
+}
+
+.diff-line.context {
+  background: transparent;
+}
+
+.diff-line.context .line-content pre {
+  color: var(--foreground, #24292f);
+}
+
+.line-numbers {
+  display: flex;
+  width: 80px;
+  background: var(--line-numbers-background, #f6f8fa);
+  border-right: 1px solid var(--border, #d0d7de);
+  font-size: 11px;
+  line-height: 20px;
+  text-align: right;
+  user-select: none;
+}
+
+.old-line,
+.new-line {
+  flex: 1;
+  padding: 0 8px;
+  color: var(--line-numbers-color, #656d76);
+}
+
+.line-content {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.line-content pre {
+  margin: 0;
+  padding: 0 8px;
+  white-space: pre;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* History Content */
+.history-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted-foreground, #656d76);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .repository-sidebar {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  .repository-content {
+    display: none;
+  }
+  
+  .repository-sidebar.mobile-full .repository-content {
+    display: flex;
+  }
+  
+  .repository-sidebar.mobile-full {
+    width: 100% !important;
+  }
+}
+
+/* Dark Theme Support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0d1117;
+    --foreground: #e6edf3;
+    --border: #30363d;
+    --box-border-color: #30363d;
+    --sidebar-background: #161b22;
+    --panel-background: #0d1117;
+    --tab-bar-background: #161b22;
+    --tab-color: #8b949e;
+    --tab-hover-color: #e6edf3;
+    --tab-hover-background: #21262d;
+    --tab-active-color: #e6edf3;
+    --tab-active-background: #0d1117;
+    --badge-background: #58a6ff;
+    --header-background: #161b22;
+    --muted-foreground: #7d8590;
+    --file-name-color: #e6edf3;
+    --file-item-hover-background: #161b22;
+    --file-item-selected-background: #0c2d4b;
+    --status-modified-color: #a371f7;
+    --status-added-color: #3fb950;
+    --status-deleted-color: #f85149;
+    --status-renamed-color: #d29922;
+    --input-border: #30363d;
+    --input-background: #0d1117;
+    --input-color: #e6edf3;
+    --input-placeholder-color: #7d8590;
+    --button-border: #30363d;
+    --button-background: #21262d;
+    --button-color: #e6edf3;
+    --button-hover-background: #30363d;
+    --button-hover-border: #30363d;
+    --commit-background: #161b22;
+    --avatar-background: #58a6ff;
+    --commit-button-border: #238636;
+    --commit-button-background: #238636;
+    --commit-button-hover-background: #2ea043;
+    --commit-button-hover-border: #2ea043;
+    --button-disabled-background: #21262d;
+    --button-disabled-border: #30363d;
+    --button-disabled-color: #7d8590;
+    --list-item-hover-background: #161b22;
+    --commit-message-color: #e6edf3;
+    --commit-author-color: #8b949e;
+    --hunk-background: #161b22;
+    --accent: #58a6ff;
+    --accent-foreground: #ffffff;
+    --line-numbers-background: #161b22;
+    --line-numbers-color: #7d8590;
+  }
+}
+
+/* Scrollbar Styling */
+.repository-sidebar::-webkit-scrollbar,
+.file-list::-webkit-scrollbar,
+.diff-view::-webkit-scrollbar,
+.branch-list::-webkit-scrollbar,
+.compare-commit-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.repository-sidebar::-webkit-scrollbar-track,
+.file-list::-webkit-scrollbar-track,
+.diff-view::-webkit-scrollbar-track,
+.branch-list::-webkit-scrollbar-track,
+.compare-commit-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.repository-sidebar::-webkit-scrollbar-thumb,
+.file-list::-webkit-scrollbar-thumb,
+.diff-view::-webkit-scrollbar-thumb,
+.branch-list::-webkit-scrollbar-thumb,
+.compare-commit-list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, #d0d7de);
+  border-radius: 4px;
+}
+
+.repository-sidebar::-webkit-scrollbar-thumb:hover,
+.file-list::-webkit-scrollbar-thumb:hover,
+.diff-view::-webkit-scrollbar-thumb:hover,
+.branch-list::-webkit-scrollbar-thumb:hover,
+.compare-commit-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, #a8b3c1);
+}
+
+/* Focus States */
+.tab:focus,
+.file-item:focus,
+.branch-item:focus,
+.commit-item:focus {
+  outline: 2px solid var(--accent, #0969da);
+  outline-offset: -2px;
+}
+
+/* Loading States */
+.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid var(--accent, #0969da);
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

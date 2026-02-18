@@ -36,7 +36,8 @@ import { createChat, getChatMessages, saveChatMessages } from "@/lib/chatStore";
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from "@/lib/modelConfig";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { compileTypstToPdf, ensureTypstReady } from "@/lib/typstCompiler";
-import { countLaTeXWords, type TexCountResult, formatLaTeX } from "@/lib/wasmLatexTools";
+import { documentParser } from "@/lib/document-parser";
+import { formatLaTeX } from "@/lib/wasmLatexTools";
 import { aiLogger, latexLogger, typstLogger } from "@/lib/logger";
 import {
   getLatexEngine,
@@ -422,55 +423,112 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           const isTex = activeTabPath.endsWith('.tex');
           const isTyp = activeTabPath.endsWith('.typ');
           
-          if (isTex) {
+          if (isTex || isTyp) {
             try {
-              // Use TexCount for accurate LaTeX statistics
-              const { rawOutput } = await countLaTeXWords(content);
+              // Use our new document parser for comprehensive statistics
+              const result = await documentParser.parseDocument(content);
+              const { ast, stats, metadata } = result;
               
-              // Display raw TexCount output directly
-              return `${rawOutput}
+              // Format comprehensive statistics display
+              let statsText = `${result.type.toUpperCase()} Document Analysis
+========================
+
+Document Overview
+-----------------
+Words: ${metadata.wordCount.toLocaleString()}
+Sections: ${metadata.totalSections}
+Max Depth: ${metadata.maxDepth}
+Complexity Score: ${metadata.complexity}
+
+Content Statistics
+------------------
+Words in Text: ${stats.wordsInText.toLocaleString()}
+Words in Headers: ${result.type === 'latex' ? (stats as any).wordsInHeaders : 0}`;
+              
+              if (result.type === 'latex') {
+                statsText += `
+Words Outside Text: ${(stats as any).wordsOutsideText.toLocaleString()}`;
+              } else {
+                statsText += `
+Words in Markup: ${(stats as any).wordsInMarkup.toLocaleString()}`;
+              }
+              
+              statsText += `
+Math Inline: ${metadata.mathInlineCount}
+Math Displayed: ${metadata.mathDisplayedCount}`;
+
+              if (result.type === 'latex') {
+                statsText += `
+Floats: ${metadata.floatCount}`;
+              } else {
+                statsText += `
+Figures: ${metadata.figureCount}
+Tables: ${metadata.tableCount}`;
+              }
+
+              // Add section/heading details
+              const details = result.type === 'latex' ? (stats as any).sectionStats : (stats as any).headingStats;
+              const detailType = result.type === 'latex' ? 'Section' : 'Heading';
+              
+              if (details && details.length > 0) {
+                statsText += `
+
+${detailType} Details
+----------------`;
+                details.slice(0, 10).forEach((item: any, index: number) => {
+                  const wordsInContent = result.type === 'latex' 
+                    ? item.wordsInText + item.wordsInHeaders 
+                    : item.wordsInText + item.wordsInHeaders;
+                  statsText += `
+${index + 1}. ${item.title} (Level ${item.level})
+   Words: ${wordsInContent}
+   Math: ${item.mathInlines} inline, ${item.mathDisplayed} displayed`;
+                });
+                
+                if (details.length > 10) {
+                  statsText += `
+... and ${details.length - 10} more ${detailType.toLowerCase()}s`;
+                }
+              }
+
+              statsText += `
 
 File Information
 ===============
 Path: ${activeTabPath}
-Type: LaTeX
-Characters: ${content.length}
-Lines: ${content.split('\n').length}
-Last modified: ${new Date().toLocaleString()}`;
-            } catch (error) {
-              console.error('[summary] TexCount error:', error);
-              return `Error generating summary
-=========================
-
-Failed to analyze document with TexCount.
-Please check the console for details.
-
-Path: ${activeTabPath}
-Type: LaTeX
+Type: ${result.type.toUpperCase()}
 Characters: ${content.length}
 Lines: ${content.split('\n').length}
 Last modified: ${new Date().toLocaleString()}
+Processing time: ${metadata.processingTime}ms
 
-Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-            }
-          } else if (isTyp) {
-            // For Typst, provide basic info without detailed statistics
-            return `Document Statistics
-================
+Parser Features
+--------------
+✓ Auto-detection: ${result.type}
+✓ Math analysis: ${metadata.hasMath ? 'Yes' : 'No'}
+✓ Structure parsing: ${metadata.totalSections} sections
+✓ Comprehensive statistics: Full analysis`;
 
+              return statsText;
+            } catch (error) {
+              console.error('[summary] Document parser error:', error);
+              return `Error generating analysis
+=========================
+
+Failed to analyze document with advanced parser.
+Falling back to basic statistics.
+
+Path: ${activeTabPath}
+Type: ${isTex ? 'LaTeX' : 'Typst'}
 Words: ${content.split(/\s+/).filter(Boolean).length}
 Characters: ${content.length}
 Lines: ${content.split('\n').length}
-
-File Information
-===============
-
-Path: ${activeTabPath}
-Type: Typst
 Last modified: ${new Date().toLocaleString()}
 
-Note: Detailed statistics are only available for LaTeX files.
-TexCount (WebPerl WASM) does not support Typst yet.`;
+Error: ${error instanceof Error ? error.message : 'Unknown error'}
+
+Basic statistics shown above. Advanced features unavailable.`;
+            }
           }
         }
       }
@@ -1318,13 +1376,27 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           </div>
           <div className="flex-1 overflow-auto min-h-0 py-1">
             {(() => {
-              // Use summary content for outline since it contains the section structure
-              const summaryContentForOutline = summaryContent || "";
-              const entries = summaryContentForOutline ? parseOutline(summaryContentForOutline, activeTabPath) : [];
+              // Get actual document content for outline parsing
+              const bufferMgr = getBufferMgr();
+              let entries: OutlineEntry[] = [];
+              
+              if (bufferMgr && activeTabPath) {
+                bufferMgr.saveActiveToCache();
+                let content = bufferMgr.getCachedContent(activeTabPath);
+                
+                if (!content || content.trim() === '') {
+                  content = bufferMgr.getBufferContent();
+                }
+                
+                if (content && content.trim()) {
+                  entries = parseOutline(content, activeTabPath);
+                }
+              }
+              
               if (entries.length === 0) {
                 return (
                   <div className="p-3 text-[var(--muted)] italic text-sm">
-                    {summaryContentForOutline ? "No sections found in document" : "Open a document to see its outline"}
+                    {bufferMgr ? "No sections found in document" : "Open a document to see its outline"}
                   </div>
                 );
               }
@@ -1333,8 +1405,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                 <button
                   key={i}
                   onClick={() => {
-                    // For summary-based outline, we can't jump to line numbers
-                    // But we could search for the section in the document
+                    // Jump to the section line in the editor
                     if (entry.line > 0) {
                       editorRef.current?.gotoLine(entry.line);
                     }

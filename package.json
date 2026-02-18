@@ -16,6 +16,7 @@
     "test:wasm:realworld": "node scripts/test-wasm-realworld.mjs"
   },
   "dependencies": {
+    "@bottxrnif/latex-json-ast-converter": "^1.0.0",
     "@codemirror/lang-xml": "^6.0.2",
     "@codemirror/state": "^6.4.1",
     "@codemirror/theme-one-dark": "^6.1.3",

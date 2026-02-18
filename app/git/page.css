@@ -1,0 +1,10 @@
+.git-page {
+  height: 100vh;
+  overflow: hidden;
+  background: var(--background, #ffffff);
+}
+
+/* Ensure the GitHubDesktopSidebar takes full height */
+.git-page .repository {
+  height: 100%;
+}

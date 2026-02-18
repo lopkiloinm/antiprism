@@ -32,8 +32,9 @@ export function parseLatexOutline(content: string): OutlineEntry[] {
 
     for (const [cmd, level] of Object.entries(LATEX_SECTION_COMMANDS)) {
       // Match \section{Title}, \section*{Title}, \section[short]{Title}
+      const escapedCmd = cmd.replace(/\\/g, '\\\\');
       const re = new RegExp(
-        `\\${cmd.replace("\\", "\\\\")}\\*?(?:\\[[^\\]]*\\])?\\{([^}]+)\\}`
+        `${escapedCmd}\\*?(?:\\[[^\\]]*\\])?\\{([^}]+)\\}`
       );
       const match = line.match(re);
       if (match) {

@@ -1,0 +1,287 @@
+/* UI Components Styles */
+
+/* Resizable Container */
+.resizable-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.resizable-container .resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--resize-handle-background, #d0d7de);
+  cursor: col-resize;
+  transition: background-color 0.2s ease;
+  z-index: 10;
+}
+
+.resizable-container .resize-handle:hover {
+  background: var(--resize-handle-hover-background, #0969da);
+}
+
+.resizable-container .resize-handle.resizing {
+  background: var(--resize-handle-active-background, #0969da);
+}
+
+/* Virtual List */
+.virtual-list {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.virtual-list-content {
+  position: relative;
+}
+
+.virtual-list-row {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-bottom: 1px solid var(--border-light, #f0f0f0);
+}
+
+.virtual-list-row:hover {
+  background: var(--list-item-hover-background, #f6f8fa);
+}
+
+.virtual-list-row.selected {
+  background: var(--list-item-selected-background, #e3f2ff);
+}
+
+/* Focus Container */
+.focus-container {
+  position: relative;
+}
+
+.focus-container:focus-within {
+  outline: 2px solid var(--accent, #0969da);
+  outline-offset: -2px;
+}
+
+/* Checkbox */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.checkbox label {
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--checkbox-label-color, #24292f);
+}
+
+/* Tooltipped Content */
+.tooltipped-content {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltipped-content:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--tooltip-background, #24292f);
+  color: var(--tooltip-color, #ffffff);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 4px;
+}
+
+/* Fancy Text Box */
+.fancy-text-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fancy-text-box input {
+  flex: 1;
+  padding: 8px 12px 8px 32px;
+  border: 1px solid var(--input-border, #d0d7de);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--input-background, #ffffff);
+  color: var(--input-color, #24292f);
+}
+
+.fancy-text-box .symbol {
+  position: absolute;
+  left: 10px;
+  color: var(--symbol-color, #656d76);
+  font-size: 14px;
+}
+
+.fancy-text-box .clear-button {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--clear-button-color, #656d76);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 2px;
+}
+
+.fancy-text-box .clear-button:hover {
+  background: var(--clear-button-hover-background, #f3f4f6);
+}
+
+/* Button */
+.button {
+  padding: 6px 12px;
+  border: 1px solid var(--button-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--button-background, #ffffff);
+  color: var(--button-color, #24292f);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.button:hover {
+  background: var(--button-hover-background, #f3f4f6);
+  border-color: var(--button-hover-border, #d0d7de);
+}
+
+.button:disabled {
+  background: var(--button-disabled-background, #f3f4f6);
+  border-color: var(--button-disabled-border, #d0d7de);
+  color: var(--button-disabled-color, #656d76);
+  cursor: not-allowed;
+}
+
+.button.primary {
+  background: var(--primary-button-background, #0969da);
+  border-color: var(--primary-button-border, #0969da);
+  color: var(--primary-button-color, #ffffff);
+}
+
+.button.primary:hover:not(:disabled) {
+  background: var(--primary-button-hover-background, #0860ca);
+  border-color: var(--primary-button-hover-border, #0860ca);
+}
+
+/* Autocompleting Input */
+.autocompleting-input,
+.autocompleting-textarea {
+  position: relative;
+}
+
+.autocompleting-input input,
+.autocompleting-textarea textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--input-border, #d0d7de);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--input-background, #ffffff);
+  color: var(--input-color, #24292f);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.autocompleting-input input:focus,
+.autocompleting-textarea textarea:focus {
+  outline: none;
+  border-color: var(--accent, #0969da);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+}
+
+.autocompleting-textarea textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* Avatar */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--avatar-background, #0969da);
+  color: var(--avatar-color, #ffffff);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.avatar.small {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.avatar.large {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+
+/* Dark theme support for UI components */
+@media (prefers-color-scheme: dark) {
+  .fancy-text-box input {
+    background: var(--input-background, #0d1117);
+    color: var(--input-color, #e6edf3);
+    border-color: var(--input-border, #30363d);
+  }
+  
+  .fancy-text-box .symbol {
+    color: var(--symbol-color, #7d8590);
+  }
+  
+  .fancy-text-box .clear-button {
+    color: var(--clear-button-color, #7d8590);
+  }
+  
+  .fancy-text-box .clear-button:hover {
+    background: var(--clear-button-hover-background, #21262d);
+  }
+  
+  .button {
+    background: var(--button-background, #21262d);
+    border-color: var(--button-border, #30363d);
+    color: var(--button-color, #e6edf3);
+  }
+  
+  .button:hover {
+    background: var(--button-hover-background, #30363d);
+    border-color: var(--button-hover-border, #30363d);
+  }
+  
+  .button:disabled {
+    background: var(--button-disabled-background, #21262d);
+    border-color: var(--button-disabled-border, #30363d);
+    color: var(--button-disabled-color, #7d8590);
+  }
+  
+  .autocompleting-input input,
+  .autocompleting-textarea textarea {
+    background: var(--input-background, #0d1117);
+    color: var(--input-color, #e6edf3);
+    border-color: var(--input-border, #30363d);
+  }
+}
