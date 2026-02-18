@@ -38,9 +38,12 @@ import {
   getAiTopP,
   getPromptAsk,
   getPromptCreate,
+  getTheme,
+  type Theme,
 } from "@/lib/settings";
 import { getAllProjects, getRooms } from "@/lib/projects";
 import { EditorBufferManager } from "@/lib/editorBufferManager";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const DEFAULT_FILE = "/main.tex";
 const DEFAULT_DIAGRAM = "/diagram.jpg";
@@ -58,6 +61,7 @@ function isBinaryPath(path: string): boolean {
 }
 
 export default function ProjectPageClient({ idOverride }: { idOverride?: string }) {
+  const { theme, setTheme } = useTheme();
   const params = useParams();
   const pathname = usePathname();
   // With middleware rewrite, pathname stays as /project/:id in browser; params.id may be "new"
@@ -861,10 +865,10 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       <div className="h-screen flex flex-col items-center justify-center p-8 gap-4">
         <div className="max-w-md text-center">
           <h1 className="text-xl font-semibold text-red-400 mb-2">Initialization Error</h1>
-          <p className="text-zinc-400 text-sm mb-4">{initError}</p>
-          <p className="text-zinc-500 text-xs">Ensure you have a modern browser with WebGPU support.</p>
+          <p className="text-[var(--muted)] text-sm mb-4">{initError}</p>
+          <p className="text-[var(--muted)] text-xs">Ensure you have a modern browser with WebGPU support.</p>
         </div>
-        <Link href="/" className="text-sm text-blue-500 hover:underline">
+        <Link href="/" className="text-sm text-[var(--accent)] hover:underline">
           ← Back to Dashboard
         </Link>
       </div>
@@ -887,21 +891,21 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   }, [openTabs]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <aside className="w-64 border-r border-zinc-800 flex flex-col min-h-0 bg-zinc-950">
-        <div className="h-12 flex items-center justify-between gap-2 px-3 border-b border-zinc-800 shrink-0">
-          <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-400 truncate min-w-0">
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+      <aside className="w-64 border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)]">
+        <div className="h-12 flex items-center justify-between gap-2 px-3 border-b border-[var(--border)] shrink-0">
+          <Link href="/" className="text-xs text-[var(--muted)] hover:text-[var(--foreground)] truncate min-w-0">
             ← Dashboard
           </Link>
           <button
             onClick={openOrSelectSettingsTab}
-            className="shrink-0 text-zinc-400 hover:text-zinc-200 p-1.5 rounded hover:bg-zinc-800 transition-colors"
+            className="shrink-0 text-[var(--muted)] hover:text-[var(--foreground)] p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
             title="Settings"
           >
             <IconSettings />
           </button>
         </div>
-        <div className="px-3 py-2 border-b border-zinc-800 shrink-0 space-y-2">
+        <div className="px-3 py-2 border-b border-[var(--border)] shrink-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <ProjectDropdown
               projectId={id}
@@ -914,23 +918,23 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             </ProjectDropdown>
             <button
               onClick={handleShare}
-              className="shrink-0 text-zinc-400 hover:text-zinc-200 p-1.5 rounded hover:bg-zinc-800 transition-colors"
+              className="shrink-0 text-[var(--muted)] hover:text-[var(--foreground)] p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
               title="Share"
             >
               <IconShare2 />
             </button>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <div className="flex rounded bg-zinc-900 border border-zinc-700 overflow-hidden shrink-0">
+            <div className="flex rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] overflow-hidden shrink-0">
               <button
                 onClick={() => setSidebarTab("files")}
-                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "files" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "files" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
               >
                 Files
               </button>
               <button
                 onClick={() => setSidebarTab("chats")}
-                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "chats" ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}
+                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "chats" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
               >
                 Chats
               </button>
@@ -940,7 +944,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                 <>
                   <button
                     onClick={() => setSearchOpen((o) => !o)}
-                    className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-zinc-700 text-zinc-200" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}
+                    className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-[var(--foreground)]"}`}
                     title="Search"
                   >
                     <IconSearch />
@@ -956,7 +960,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
               placeholder="Search files…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs rounded bg-zinc-900 border border-zinc-700 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+              className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
               autoFocus
             />
           )}
@@ -976,8 +980,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           )}
           {sidebarTab === "chats" && (
             <div className="flex-1 flex flex-col min-h-0 p-3">
-              <p className="text-sm text-zinc-500">Chat sessions</p>
-              <p className="text-xs text-zinc-600 mt-2">Create and switch between chat sessions.</p>
+              <p className="text-sm text-[var(--muted)]">Chat sessions</p>
+              <p className="text-xs text-[var(--muted)] mt-2">Create and switch between chat sessions.</p>
             </div>
           )}
         </div>
@@ -988,7 +992,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           const activeTab = openTabs.find((t) => t.path === activeTabPath);
           const showAIPanel = activeTab?.type === "text" && ydoc && ytext && provider;
           return (
-            <section className="w-1/2 flex flex-col border-r border-zinc-800 min-w-0 min-h-0 overflow-hidden">
+            <section className="w-1/2 flex flex-col border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
               <FileTabs
                 tabs={openTabs}
                 activePath={activeTabPath}
@@ -1000,7 +1004,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                   const aiOverlayHeight = chatExpanded ? "45%" : "155px";
                   if (activeTab?.type === "settings") {
                     return (
-                      <div className="absolute inset-0 overflow-auto bg-zinc-950">
+                      <div className="absolute inset-0 overflow-auto bg-[var(--background)]">
                         <SettingsPanel
                           latexEngine={latexEngine}
                           editorFontSize={editorFontSize}
@@ -1013,6 +1017,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                           aiTopP={aiTopP}
                           promptAsk={promptAsk}
                           promptCreate={promptCreate}
+                          theme={theme}
+                          onThemeChange={setTheme}
                           onLatexEngineChange={setLatexEngineState}
                           onEditorFontSizeChange={setEditorFontSizeState}
                           onEditorTabSizeChange={setEditorTabSizeState}
@@ -1047,7 +1053,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                       return pdfBlobUrl ? (
                         <PdfPreview pdfUrl={pdfBlobUrl} onCompile={() => {}} isCompiling={false} />
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-zinc-950">
+                        <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
                           Loading PDF…
                         </div>
                       );
@@ -1075,26 +1081,27 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                           fontSize={editorFontSize}
                           tabSize={editorTabSize}
                           lineWrapping={editorLineWrapping}
+                          theme={theme}
                         />
                       </div>
                     );
                   }
                   if (!ydoc || !ytext || !provider) {
                     return (
-                      <div className="absolute inset-0 flex items-center justify-center text-zinc-500 bg-zinc-950">
+                      <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
                         Loading editor…
                       </div>
                     );
                   }
                   return (
-                    <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm bg-zinc-950">
+                    <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] text-sm bg-[var(--background)]">
                       Open a file to get started
                     </div>
                   );
                 })()}
                 {showAIPanel && (
                   <div
-                    className={`absolute bottom-0 left-0 right-0 flex flex-col bg-zinc-950 border-t border-zinc-800/80 transition-[height] duration-200 ease-out overflow-hidden ${
+                    className={`absolute bottom-0 left-0 right-0 flex flex-col bg-[var(--background)] border-t border-[var(--border)] transition-[height] duration-200 ease-out overflow-hidden ${
                       chatExpanded ? "h-[45%]" : "h-[155px]"
                     }`}
                   >
@@ -1104,14 +1111,14 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                           setChatMessages([]);
                           setStreamingStats(null);
                         }}
-                        className="w-7 h-7 rounded flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                        className="w-7 h-7 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
                         title="Clear chat"
                       >
                         <IconTrash2 />
                       </button>
                       <button
                         onClick={() => setChatExpanded((e) => !e)}
-                        className="w-7 h-7 rounded flex items-center justify-center text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                        className="w-7 h-7 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
                         title={chatExpanded ? "Collapse" : "Expand"}
                       >
                         {chatExpanded ? <IconChevronDown /> : <IconChevronUp />}
@@ -1131,25 +1138,25 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                             <div
                               className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
                                 m.role === "user"
-                                  ? "bg-blue-600 text-white rounded-br-sm"
-                                  : "bg-zinc-700/80 text-zinc-200 rounded-bl-sm"
+                                  ? "bg-[var(--accent)] text-white rounded-br-sm"
+                                  : "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)] rounded-bl-sm"
                               }`}
                             >
                               {m.role === "assistant" && m.responseType === "agent" ? (
                                 <pre
                                   ref={i === chatMessages.length - 1 && m.role === "assistant" ? lastMessageRef : undefined}
-                                  className="text-sm overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono bg-zinc-800/50 rounded p-3 max-h-64"
+                                  className="text-sm overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded p-3 max-h-64"
                                 >
                                   {m.content}
                                 </pre>
                               ) : m.content === "Thinking..." ? (
-                                <span className="text-zinc-400 italic">{m.content}</span>
+                                <span className="text-[var(--muted)] italic">{m.content}</span>
                               ) : m.role === "assistant" && m.responseType === "ask" ? (
-                                <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
+                                <div className="prose prose-sm max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
                                   <ReactMarkdown>{m.content}</ReactMarkdown>
                                 </div>
                               ) : m.role === "assistant" ? (
-                                <div className="prose prose-invert prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
+                                <div className="prose prose-sm max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
                                   <ReactMarkdown>{m.content}</ReactMarkdown>
                                 </div>
                               ) : (
@@ -1160,8 +1167,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                         ))}
                       </div>
                     )}
-                    <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-zinc-500 shrink-0 border-t border-zinc-800/60">
-                      <span className={isGenerating ? "text-zinc-400" : streamingStats ? "text-emerald-500/80" : "text-zinc-500"}>
+                    <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-[var(--muted)] shrink-0 border-t border-[var(--border)]">
+                      <span className={isGenerating ? "text-[var(--muted)]" : streamingStats ? "text-[var(--accent)]" : "text-[var(--muted)]"}>
                         {isGenerating ? "Streaming…" : streamingStats ? "Done!" : "—"}
                       </span>
                       <span className="tabular-nums">

@@ -43,6 +43,9 @@ import {
   Server,
   FileCode,
   ArrowRight,
+  CheckSquare,
+  Square,
+  X,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -61,6 +64,7 @@ export const IconPlus = () => <Plus {...iconProps} />;
 export const IconUpload = () => <Upload {...iconProps} />;
 export const IconDownload = () => <Download {...iconProps} />;
 export const IconRestore = () => <RotateCcw {...iconProps} />;
+export const IconRotateCcw = () => <RotateCcw {...iconProps} />;
 export const IconPencil = () => <Pencil {...iconProps} />;
 export const IconTrash2 = () => <Trash2 {...iconProps} />;
 export const IconShare2 = () => <Share2 {...iconProps} />;
@@ -87,3 +91,6 @@ export const IconEye = () => <Eye {...iconProps} />;
 export const IconServer = () => <Server {...iconProps} />;
 export const IconFileCode = () => <FileCode {...iconProps} />;
 export const IconArrowRight = () => <ArrowRight {...iconProps} />;
+export const IconCheckSquare = () => <CheckSquare {...iconProps} />;
+export const IconSquare = () => <Square {...iconProps} />;
+export const IconX = () => <X {...iconProps} />;

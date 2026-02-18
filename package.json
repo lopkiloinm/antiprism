@@ -16,7 +16,7 @@
     "@codemirror/state": "^6.4.1",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.34.1",
-    "@huggingface/transformers": "^3.8.1",
+    "@huggingface/transformers": "4.0.0-next.4",
     "@myriaddreamin/typst-ts-renderer": "^0.7.0-rc2",
     "@myriaddreamin/typst-ts-web-compiler": "^0.7.0-rc2",
     "@myriaddreamin/typst.ts": "^0.7.0-rc2",

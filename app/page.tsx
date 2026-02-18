@@ -31,6 +31,7 @@ export default function DashboardPage() {
   const [items, setItems] = useState<Project[]>([]);
   const [refresh, setRefresh] = useState(0);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
   const loadItems = useCallback(() => {
     let list: Project[];
@@ -238,8 +239,40 @@ export default function DashboardPage() {
     setRefresh((r) => r + 1);
   };
 
+  const handleSelectionChange = (selectedIds: string[]) => {
+    setSelectedItems(selectedIds);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedItems([]);
+  };
+
+  const handleBulkDelete = async () => {
+    const selectedProjects = items.filter(item => selectedItems.includes(item.id));
+    for (const item of selectedProjects) {
+      await handleDelete(item);
+    }
+    setSelectedItems([]);
+  };
+
+  const handleBulkDownload = async () => {
+    const selectedProjects = items.filter(item => selectedItems.includes(item.id) && !item.isRoom);
+    for (const item of selectedProjects) {
+      await handleDownloadProject(item);
+    }
+  };
+
+  const handleBulkRestore = async () => {
+    const selectedProjects = items.filter(item => selectedItems.includes(item.id) && !item.isRoom);
+    for (const item of selectedProjects) {
+      handleRestoreProject(item);
+    }
+    setSelectedItems([]);
+  };
+
+
   return (
-    <div className="flex h-screen w-screen bg-zinc-950">
+    <div className="flex h-screen w-screen bg-[var(--background)] text-[var(--foreground)]">
       <DashboardSidebar activeNav={activeNav} onNavChange={setActiveNav} />
       <div className="flex-1 flex flex-col min-w-0">
         <DashboardHeader
@@ -251,6 +284,11 @@ export default function DashboardPage() {
           onViewModeChange={setViewMode}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          selectedCount={selectedItems.length}
+          onClearSelection={handleClearSelection}
+          onBulkDelete={handleBulkDelete}
+          onBulkDownload={activeNav === "trash" ? undefined : handleBulkDownload}
+          onBulkRestore={activeNav === "trash" ? handleBulkRestore : undefined}
         />
         <ProjectList
           items={items}
@@ -259,6 +297,8 @@ export default function DashboardPage() {
           onDownload={activeNav === "trash" ? undefined : handleDownloadProject}
           onRestore={activeNav === "trash" ? handleRestoreProject : undefined}
           deleteTitle={activeNav === "trash" ? "Delete permanently" : "Move to trash"}
+          selectedItems={selectedItems}
+          onSelectionChange={handleSelectionChange}
         />
       </div>
     </div>

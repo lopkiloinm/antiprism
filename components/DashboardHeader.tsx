@@ -1,7 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { IconSearch, IconList, IconLayoutGrid, IconChevronDown, IconPlus } from "./Icons";
+import {
+  IconSearch,
+  IconList,
+  IconLayoutGrid,
+  IconChevronDown,
+  IconPlus,
+  IconTrash2,
+  IconDownload,
+  IconRotateCcw,
+  IconX,
+} from "./Icons";
 
 type NavItem = "all" | "projects" | "rooms" | "trash";
 
@@ -21,6 +31,11 @@ interface DashboardHeaderProps {
   onViewModeChange: (mode: "list" | "icons") => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  selectedCount: number;
+  onClearSelection: () => void;
+  onBulkDelete: () => void;
+  onBulkDownload?: () => void;
+  onBulkRestore?: () => void;
 }
 
 export function DashboardHeader({
@@ -32,6 +47,11 @@ export function DashboardHeader({
   onViewModeChange,
   searchQuery,
   onSearchChange,
+  selectedCount,
+  onClearSelection,
+  onBulkDelete,
+  onBulkDownload,
+  onBulkRestore,
 }: DashboardHeaderProps) {
   const [importOpen, setImportOpen] = useState(false);
   const importRef = useRef<HTMLDivElement>(null);
@@ -47,32 +67,87 @@ export function DashboardHeader({
   }, []);
 
   return (
-    <div className="h-14 flex items-center justify-between px-4 border-b border-zinc-800 bg-zinc-950 shrink-0">
-      <h1 className="text-lg font-semibold text-zinc-100">{TITLES[activeNav]}</h1>
-      <div className="flex items-center gap-2">
+    <div className="h-14 flex items-center justify-between px-4 border-b border-[var(--border)] bg-[var(--background)] shrink-0">
+      <div className="flex items-center gap-3">
+        <h1 className="text-lg font-semibold text-[var(--foreground)]">{TITLES[activeNav]}</h1>
+      </div>
+      <div className="flex items-center gap-3">
+        {selectedCount > 0 && (
+          <div
+            className="flex items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_92%,white)] shadow-sm overflow-hidden"
+            role="toolbar"
+            aria-label="Bulk actions"
+          >
+            <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)]">
+              <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)] px-2 py-0.5 font-medium">
+                {selectedCount} selected
+              </span>
+              <button
+                onClick={onClearSelection}
+                className="p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                title="Clear selection"
+              >
+                <IconX />
+              </button>
+            </div>
+
+            <div className="w-px self-stretch bg-[var(--border)]" />
+
+            <div className="flex items-center">
+              {onBulkDownload && (
+                <button
+                  onClick={onBulkDownload}
+                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors flex items-center gap-2"
+                  title="Download selected"
+                >
+                  <IconDownload />
+                  <span className="hidden sm:inline">Download</span>
+                </button>
+              )}
+              {onBulkRestore && activeNav === "trash" && (
+                <button
+                  onClick={onBulkRestore}
+                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors flex items-center gap-2 border-l border-[var(--border)]"
+                  title="Restore selected"
+                >
+                  <IconRotateCcw />
+                  <span className="hidden sm:inline">Restore</span>
+                </button>
+              )}
+              <button
+                onClick={onBulkDelete}
+                className="px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-2 border-l border-[var(--border)]"
+                title="Delete selected"
+              >
+                <IconTrash2 />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            </div>
+          </div>
+        )}
         <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none">
             <IconSearch />
           </span>
           <input
             type="text"
             placeholder="Search…"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-8 pr-3 py-2 text-sm rounded bg-zinc-800 border border-zinc-700 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 w-40"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-10 pr-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] w-64"
           />
         </div>
-        <div className="flex items-center border border-zinc-700 rounded overflow-hidden">
+        <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
           <button
             onClick={() => onViewModeChange("list")}
-            className={`px-2 py-2 ${viewMode === "list" ? "bg-zinc-700 text-zinc-100" : "bg-zinc-800 text-zinc-400 hover:text-zinc-300"}`}
+            className={`p-2 ${viewMode === "list" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
             title="List view"
           >
             <IconList />
           </button>
           <button
             onClick={() => onViewModeChange("icons")}
-            className={`px-2 py-2 border-l border-zinc-700 ${viewMode === "icons" ? "bg-zinc-700 text-zinc-100" : "bg-zinc-800 text-zinc-400 hover:text-zinc-300"}`}
+            className={`p-2 border-l border-[var(--border)] ${viewMode === "icons" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
             title="Icons view"
           >
             <IconLayoutGrid />
@@ -81,19 +156,19 @@ export function DashboardHeader({
         <div className="relative" ref={importRef}>
           <button
             onClick={() => setImportOpen(!importOpen)}
-            className="px-3 py-2 text-sm rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 flex items-center gap-1.5"
+            className="px-4 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-2"
           >
             Import
             <IconChevronDown />
           </button>
           {importOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded border border-zinc-700 bg-zinc-900 shadow-xl py-2">
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
               <button
                 onClick={() => {
                   onImportZip();
                   setImportOpen(false);
                 }}
-                className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+                className="w-full px-4 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
               >
                 Import zip
               </button>
@@ -102,7 +177,7 @@ export function DashboardHeader({
                   onImportFolder();
                   setImportOpen(false);
                 }}
-                className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800"
+                className="w-full px-4 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
               >
                 Import folder
               </button>
@@ -111,7 +186,7 @@ export function DashboardHeader({
         </div>
         <button
           onClick={onNewProject}
-          className="px-4 py-2 text-sm rounded bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center gap-1.5"
+          className="px-4 py-2 text-sm rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium flex items-center gap-2"
         >
           <IconPlus />
           New

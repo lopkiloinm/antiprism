@@ -31,6 +31,10 @@ import {
   setPromptAsk,
   getPromptCreate,
   setPromptCreate,
+  getTheme,
+  setTheme,
+  THEME_LABELS,
+  type Theme,
   resetAllSettingsToDefaults,
 } from "@/lib/settings";
 import { DEFAULT_PROMPT_ASK } from "@/lib/agent/ask";
@@ -48,6 +52,8 @@ interface SettingsPanelProps {
   aiTopP: number;
   promptAsk: string;
   promptCreate: string;
+  theme: Theme;
+  onThemeChange: (theme: Theme) => void;
   onLatexEngineChange: (v: LaTeXEngine) => void;
   onEditorFontSizeChange: (v: number) => void;
   onEditorTabSizeChange: (v: number) => void;
@@ -66,7 +72,7 @@ interface SettingsPanelProps {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mb-5">
-      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{title}</h3>
+      <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">{title}</h3>
       <div className="space-y-3">{children}</div>
     </section>
   );
@@ -75,10 +81,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Label({ id, label, hint }: { id: string; label: string; hint?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <label htmlFor={id} className="text-sm text-zinc-200">
+      <label htmlFor={id} className="text-sm text-[var(--foreground)]">
         {label}
       </label>
-      {hint && <span className="text-xs text-zinc-500">{hint}</span>}
+      {hint && <span className="text-xs text-[var(--muted)]">{hint}</span>}
     </div>
   );
 }
@@ -99,7 +105,9 @@ function Toggle({
       aria-checked={checked}
       onClick={onToggle}
       className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
-        checked ? "bg-zinc-500" : "bg-zinc-700"
+        checked
+          ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+          : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
       }`}
     >
       <span
@@ -123,6 +131,8 @@ export function SettingsPanel({
   aiTopP,
   promptAsk,
   promptCreate,
+  theme,
+  onThemeChange,
   onLatexEngineChange,
   onEditorFontSizeChange,
   onEditorTabSizeChange,
@@ -143,6 +153,28 @@ export function SettingsPanel({
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-auto p-3 text-left">
+      <Section title="Theme">
+        <div className="flex flex-col gap-1.5">
+          <Label id="settings-theme" label="Color theme" hint="Choose your preferred color scheme." />
+          <select
+            id="settings-theme"
+            value={theme}
+            onChange={(e) => {
+              const v = e.target.value as Theme;
+              setTheme(v);
+              onThemeChange(v);
+            }}
+            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] cursor-pointer"
+          >
+            {(Object.keys(THEME_LABELS) as Theme[]).map((t) => (
+              <option key={t} value={t}>
+                {THEME_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Section>
+
       <Section title="Compiler">
         <div className="flex flex-col gap-1.5">
           <Label id="settings-latex-engine" label="LaTeX engine" hint="Engine used to compile .tex to PDF." />
@@ -154,7 +186,7 @@ export function SettingsPanel({
               setLatexEngine(v);
               onLatexEngineChange(v);
             }}
-            className="w-full text-sm rounded bg-zinc-900 border border-zinc-700 text-zinc-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-zinc-500 cursor-pointer"
+            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] cursor-pointer"
           >
             {(Object.keys(LATEX_ENGINE_LABELS) as LaTeXEngine[]).map((eng) => (
               <option key={eng} value={eng}>
@@ -184,9 +216,9 @@ export function SettingsPanel({
                 setEditorFontSize(v);
                 onEditorFontSizeChange(v);
               }}
-              className="flex-1 h-2 rounded bg-zinc-700 accent-zinc-400"
+              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-zinc-400 w-8 tabular-nums">{editorFontSize}</span>
+            <span className="text-sm text-[var(--muted)] w-8 tabular-nums">{editorFontSize}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -207,9 +239,9 @@ export function SettingsPanel({
                 setEditorTabSize(v);
                 onEditorTabSizeChange(v);
               }}
-              className="flex-1 h-2 rounded bg-zinc-700 accent-zinc-400"
+              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-zinc-400 w-8 tabular-nums">{editorTabSize}</span>
+            <span className="text-sm text-[var(--muted)] w-8 tabular-nums">{editorTabSize}</span>
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -262,9 +294,9 @@ export function SettingsPanel({
                 setAutoCompileDebounceMs(v);
                 onAutoCompileDebounceMsChange(v);
               }}
-              className="flex-1 h-2 rounded bg-zinc-700 accent-zinc-400"
+              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-zinc-400 w-14 tabular-nums">{autoCompileDebounceMs}</span>
+            <span className="text-sm text-[var(--muted)] w-14 tabular-nums">{autoCompileDebounceMs}</span>
           </div>
         </div>
       </Section>
@@ -289,9 +321,9 @@ export function SettingsPanel({
                 setAiMaxNewTokens(v);
                 onAiMaxNewTokensChange(v);
               }}
-              className="flex-1 h-2 rounded bg-zinc-700 accent-zinc-400"
+              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-zinc-400 w-12 tabular-nums">{aiMaxNewTokens}</span>
+            <span className="text-sm text-[var(--muted)] w-12 tabular-nums">{aiMaxNewTokens}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -309,9 +341,9 @@ export function SettingsPanel({
                 setAiTemperature(v);
                 onAiTemperatureChange(v);
               }}
-              className="flex-1 h-2 rounded bg-zinc-700 accent-zinc-400"
+              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-zinc-400 w-10 tabular-nums">{aiTemperature.toFixed(2)}</span>
+            <span className="text-sm text-[var(--muted)] w-10 tabular-nums">{aiTemperature.toFixed(2)}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -329,9 +361,9 @@ export function SettingsPanel({
                 setAiTopP(v);
                 onAiTopPChange(v);
               }}
-              className="flex-1 h-2 rounded bg-zinc-700 accent-zinc-400"
+              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-zinc-400 w-10 tabular-nums">{aiTopP.toFixed(2)}</span>
+            <span className="text-sm text-[var(--muted)] w-10 tabular-nums">{aiTopP.toFixed(2)}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -349,7 +381,7 @@ export function SettingsPanel({
             }}
             placeholder={DEFAULT_PROMPT_ASK}
             rows={4}
-            className="w-full text-sm rounded bg-zinc-900 border border-zinc-700 text-zinc-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-500 resize-y min-h-[80px]"
+            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] placeholder-[var(--muted)] resize-y min-h-[80px]"
           />
           <button
             type="button"
@@ -357,7 +389,7 @@ export function SettingsPanel({
               setPromptAsk("");
               onPromptAskChange("");
             }}
-            className="text-xs text-zinc-400 hover:text-zinc-200"
+            className="text-xs text-[var(--muted)] hover:text-[var(--foreground)]"
           >
             Restore default
           </button>
@@ -377,7 +409,7 @@ export function SettingsPanel({
             }}
             placeholder={DEFAULT_PROMPT_CREATE}
             rows={4}
-            className="w-full text-sm rounded bg-zinc-900 border border-zinc-700 text-zinc-200 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-zinc-500 placeholder-zinc-500 resize-y min-h-[80px]"
+            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] placeholder-[var(--muted)] resize-y min-h-[80px]"
           />
           <button
             type="button"
@@ -385,7 +417,7 @@ export function SettingsPanel({
               setPromptCreate("");
               onPromptCreateChange("");
             }}
-            className="text-xs text-zinc-400 hover:text-zinc-200"
+            className="text-xs text-[var(--muted)] hover:text-[var(--foreground)]"
           >
             Restore default
           </button>
@@ -393,13 +425,13 @@ export function SettingsPanel({
       </Section>
 
       <Section title="Reset">
-        <p className="text-xs text-zinc-500 mb-2">
+        <p className="text-xs text-[var(--muted)] mb-2">
           Restore all settings to their default values. This cannot be undone.
         </p>
         <button
           type="button"
           onClick={handleResetAll}
-          className="px-3 py-2 text-sm rounded bg-zinc-800 border border-zinc-600 text-zinc-200 hover:bg-zinc-700 hover:border-zinc-500 transition-colors"
+          className="px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
         >
           Reset all to defaults
         </button>

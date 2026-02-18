@@ -6,12 +6,14 @@ import { WebrtcProvider } from "y-webrtc";
 import { EditorView, basicSetup } from "codemirror";
 import { keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
-import { oneDark } from "@codemirror/theme-one-dark";
 import type { LanguageSupport } from "@codemirror/language";
 import { indentUnit } from "@codemirror/language";
 import { yCollab } from "y-codemirror.next";
 import { EditorState } from "@codemirror/state";
 import { latex } from "codemirror-lang-latex";
+import type { Theme } from "@/lib/settings";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags as t } from "@lezer/highlight";
 
 const DEFAULT_LATEX = `\\documentclass{article}
 \\usepackage{amsmath}
@@ -40,13 +42,24 @@ interface EditorPanelProps {
   fontSize?: number;
   tabSize?: number;
   lineWrapping?: boolean;
+  theme?: Theme;
 }
 
 const DEFAULT_FONT_SIZE = 14;
 const DEFAULT_TAB_SIZE = 4;
 
 export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(function EditorPanel(
-  { ydoc, ytext, provider, currentPath, onYtextChange, fontSize = DEFAULT_FONT_SIZE, tabSize = DEFAULT_TAB_SIZE, lineWrapping = true },
+  {
+    ydoc,
+    ytext,
+    provider,
+    currentPath,
+    onYtextChange,
+    fontSize = DEFAULT_FONT_SIZE,
+    tabSize = DEFAULT_TAB_SIZE,
+    lineWrapping = true,
+    theme = "dark",
+  },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -98,10 +111,90 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
     const indentStr = " ".repeat(Math.max(1, Math.min(8, Math.round(tabSize))));
     const isTypst = currentPath.toLowerCase().endsWith(".typ");
     const langSupport = isTypst && typstSupport ? typstSupport : latex();
+
+    const isLightTheme = theme === "light" || theme === "sepia";
+
+    const highlight = HighlightStyle.define(
+      theme === "dark-purple"
+        ? [
+            { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#c4b5fd" },
+            { tag: [t.string, t.special(t.string)], color: "#f9a8d4" },
+            { tag: [t.number, t.bool, t.null], color: "#93c5fd" },
+            { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#67e8f9" },
+            { tag: [t.definition(t.variableName), t.variableName], color: "#e9d5ff" },
+            { tag: [t.typeName, t.className], color: "#a7f3d0" },
+            { tag: [t.comment], color: "#9ca3af", fontStyle: "italic" },
+            { tag: [t.heading, t.strong], color: "#e9d5ff", fontWeight: "600" },
+            { tag: [t.link, t.url], color: "#93c5fd", textDecoration: "underline" },
+          ]
+        : isLightTheme
+          ? [
+              { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#7c3aed" },
+              { tag: [t.string, t.special(t.string)], color: "#b45309" },
+              { tag: [t.number, t.bool, t.null], color: "#2563eb" },
+              { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#0f766e" },
+              { tag: [t.definition(t.variableName), t.variableName], color: "#111827" },
+              { tag: [t.typeName, t.className], color: "#0f766e" },
+              { tag: [t.comment], color: "#6b7280", fontStyle: "italic" },
+            ]
+          : [
+              // Dark (default) palette tuned to match app dark surface (no oneDark background overrides)
+              { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#93c5fd" },
+              { tag: [t.string, t.special(t.string)], color: "#fca5a5" },
+              { tag: [t.number, t.bool, t.null], color: "#a7f3d0" },
+              { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#67e8f9" },
+              { tag: [t.definition(t.variableName), t.variableName], color: "#e5e7eb" },
+              { tag: [t.typeName, t.className], color: "#fcd34d" },
+              { tag: [t.comment], color: "#9ca3af", fontStyle: "italic" },
+              { tag: [t.heading, t.strong], color: "#e5e7eb", fontWeight: "600" },
+              { tag: [t.link, t.url], color: "#93c5fd", textDecoration: "underline" },
+            ]
+    );
+    const cmBaseTheme = EditorView.theme(
+      {
+        "&": {
+          backgroundColor: "var(--background)",
+          color: "var(--foreground)",
+        },
+        ".cm-content": {
+          caretColor: "var(--foreground)",
+        },
+        ".cm-gutters": {
+          backgroundColor: "var(--cm-gutter-bg, color-mix(in srgb, var(--background) 92%, black))",
+          color: "var(--muted)",
+          borderRight: "1px solid var(--border)",
+        },
+        ".cm-activeLine": {
+          backgroundColor:
+            theme === "dark-purple"
+              ? "color-mix(in srgb, var(--accent) 14%, transparent)"
+              : "color-mix(in srgb, var(--accent) 10%, transparent)",
+        },
+        ".cm-activeLineGutter": {
+          backgroundColor:
+            theme === "dark-purple"
+              ? "color-mix(in srgb, var(--accent) 18%, transparent)"
+              : "color-mix(in srgb, var(--accent) 14%, transparent)",
+        },
+        ".cm-selectionBackground": {
+          backgroundColor: isLightTheme
+            ? "color-mix(in srgb, var(--accent) 25%, transparent)"
+            : "color-mix(in srgb, var(--accent) 35%, transparent)",
+        },
+        "&.cm-focused .cm-selectionBackground": {
+          backgroundColor: isLightTheme
+            ? "color-mix(in srgb, var(--accent) 30%, transparent)"
+            : "color-mix(in srgb, var(--accent) 45%, transparent)",
+        },
+      },
+      { dark: !isLightTheme }
+    );
+
     const extensions = [
       basicSetup,
       keymap.of([indentWithTab]),
-      oneDark,
+      cmBaseTheme,
+      syntaxHighlighting(highlight),
       indentUnit.of(indentStr),
       EditorView.theme({
         "&.cm-editor .cm-scroller": { fontSize: `${Math.max(10, Math.min(24, fontSize))}px` },
@@ -123,7 +216,7 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
 
     viewRef.current = view;
     onYtextChange(ytext);
-  }, [ydoc, ytext, provider, onYtextChange, fontSize, tabSize, lineWrapping, currentPath, typstSupport]);
+  }, [ydoc, ytext, provider, onYtextChange, fontSize, tabSize, lineWrapping, currentPath, typstSupport, theme]);
 
   useEffect(() => {
     initEditor();

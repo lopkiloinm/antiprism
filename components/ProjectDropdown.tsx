@@ -159,39 +159,39 @@ export function ProjectDropdown({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex-1 min-w-0 text-left truncate font-semibold text-xs hover:bg-zinc-800/50 rounded px-1 py-0.5 -mx-1 transition-colors"
+        className="flex-1 min-w-0 text-left truncate font-semibold text-xs hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded px-1 py-0.5 -mx-1 transition-colors"
       >
         {children}
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-[160px] rounded border border-zinc-700 bg-zinc-900 shadow-xl py-2">
+        <div className="absolute left-0 top-full mt-1 z-50 min-w-[160px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
           <button
             onClick={() => {
               setModalMode("rename");
               setOpen(false);
             }}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
           >
             <IconPencil />
             Rename
           </button>
           <button
             onClick={() => handleDelete()}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 text-red-400 hover:text-red-300 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-red-300 flex items-center gap-2"
           >
             <IconTrash2 />
             Move to trash
           </button>
           <button
             onClick={handleDuplicate}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
           >
             <IconCopy />
             Duplicate
           </button>
           <button
             onClick={handleExport}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
           >
             <IconFileArchive />
             Export (zip)

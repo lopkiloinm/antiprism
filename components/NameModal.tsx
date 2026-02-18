@@ -56,30 +56,30 @@ export function NameModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-sm rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl p-4"
+        className="w-full max-w-sm rounded-lg border border-[var(--border)] bg-[var(--background)] shadow-xl p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-zinc-100 mb-3">{title}</h2>
+        <h2 className="text-sm font-semibold text-[var(--foreground)] mb-3">{title}</h2>
         <form onSubmit={handleSubmit}>
           <input
             ref={inputRef}
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            className="w-full px-3 py-2 text-sm rounded bg-zinc-800 border border-zinc-600 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 focus:border-transparent mb-3"
+            className="w-full px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] focus:border-transparent mb-3"
             placeholder={placeholder}
           />
           <div className="flex gap-2 justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2 rounded text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+              className="px-3 py-2 rounded text-sm text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)] transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-3 py-2 rounded text-sm bg-zinc-600 hover:bg-zinc-500 text-white font-medium transition-colors"
+              className="px-3 py-2 rounded text-sm bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium transition-colors"
             >
               {label}
             </button>

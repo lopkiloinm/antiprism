@@ -12,10 +12,10 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarProps) {
   return (
-    <aside className="w-56 border-r border-zinc-800 flex flex-col bg-zinc-950 shrink-0">
+    <aside className="w-56 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0">
       <Link
         href="/features"
-        className="h-14 flex items-center px-4 font-semibold text-lg border-b border-zinc-800 text-zinc-200 shrink-0 hover:text-zinc-100 transition-colors"
+        className="h-14 flex items-center px-4 font-semibold text-lg border-b border-[var(--border)] text-[var(--foreground)] shrink-0 hover:opacity-90 transition-opacity"
       >
         Antiprism
       </Link>
@@ -24,8 +24,8 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
           onClick={() => onNavChange("all")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
             activeNav === "all"
-              ? "bg-zinc-800 text-zinc-100"
-              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
           }`}
         >
           <IconFolder />
@@ -35,8 +35,8 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
           onClick={() => onNavChange("projects")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
             activeNav === "projects"
-              ? "bg-zinc-800 text-zinc-100"
-              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
           }`}
         >
           <IconFileText />
@@ -46,8 +46,8 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
           onClick={() => onNavChange("rooms")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
             activeNav === "rooms"
-              ? "bg-zinc-800 text-zinc-100"
-              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
           }`}
         >
           <IconUsers />
@@ -57,8 +57,8 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
           onClick={() => onNavChange("trash")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
             activeNav === "trash"
-              ? "bg-zinc-800 text-zinc-100"
-              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-300"
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
           }`}
         >
           <IconTrash2 />

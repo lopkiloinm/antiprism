@@ -48,10 +48,10 @@ export function AIModelDownloadProgress({ onModelReady, compact }: AIModelDownlo
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2 text-xs text-zinc-500 shrink-0">
+      <div className="flex items-center gap-2 text-xs text-[var(--muted)] shrink-0">
         <span>LFM2.5-1.2B</span>
         {modelReady ? (
-          <span className="text-emerald-500/90">Ready</span>
+          <span className="text-[var(--accent)]">Ready</span>
         ) : (
           <span className="tabular-nums">{Math.round(downloadProgress)}%</span>
         )}
@@ -60,16 +60,16 @@ export function AIModelDownloadProgress({ onModelReady, compact }: AIModelDownlo
   }
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1.5 text-sm text-zinc-400 shrink-0">
+    <div className="flex items-center gap-3 px-3 py-1.5 text-sm text-[var(--muted)] shrink-0">
       <span>AI assistant</span>
       {modelReady ? (
-        <span className="text-emerald-500/90">Ready</span>
+        <span className="text-[var(--accent)]">Ready</span>
       ) : (
         <>
-          <span className="tabular-nums text-zinc-500">{Math.round(downloadProgress)}%</span>
-          <div className="flex-1 min-w-[60px] h-1 rounded-full bg-zinc-800 overflow-hidden">
+          <span className="tabular-nums text-[var(--muted)]">{Math.round(downloadProgress)}%</span>
+          <div className="flex-1 min-w-[60px] h-1 rounded-full bg-[color-mix(in_srgb,var(--border)_60%,transparent)] overflow-hidden">
             <div
-              className="h-full bg-blue-500/80 rounded-full transition-[width] duration-300 ease-out"
+              className="h-full bg-[color-mix(in_srgb,var(--accent)_80%,transparent)] rounded-full transition-[width] duration-300 ease-out"
               style={{ width: `${downloadProgress}%` }}
             />
           </div>

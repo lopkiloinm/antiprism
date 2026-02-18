@@ -8,14 +8,14 @@ interface ImageViewerProps {
 export function ImageViewer({ imageUrl, alt = "Image" }: ImageViewerProps) {
   if (!imageUrl) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center text-sm text-zinc-500 bg-zinc-950">
+      <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--muted)] bg-[var(--background)]">
         No image
       </div>
     );
   }
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-zinc-950 p-4">
+    <div className="absolute inset-0 flex items-center justify-center overflow-auto bg-[var(--background)] p-4">
       <img
         src={imageUrl}
         alt={alt}

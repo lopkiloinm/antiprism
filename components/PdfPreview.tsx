@@ -197,12 +197,12 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
   };
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col bg-zinc-900">
+    <div ref={containerRef} className="h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">
       {/* Toolbar: Compile left | Page center | Zoom % + controls + Download + Fullscreen right */}
-      <div className="h-12 flex items-center justify-between px-3 border-b border-zinc-800 bg-zinc-950 shrink-0">
+      <div className="h-12 flex items-center justify-between px-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] shrink-0">
         <div className="flex items-center gap-2">
           <button
-            className="w-7 h-7 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors flex items-center justify-center"
+            className="w-7 h-7 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-50 transition-colors flex items-center justify-center"
             onClick={onCompile}
             disabled={!latexReady || isCompiling}
             title={!latexReady ? "Loading LaTeX…" : isCompiling ? "Compiling…" : "Compile PDF"}
@@ -216,34 +216,34 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
             )}
           </button>
           {lastCompileMs != null && !isCompiling && (
-            <span className="text-xs text-zinc-500">{lastCompileMs} ms</span>
+            <span className="text-xs text-[var(--muted)]">{lastCompileMs} ms</span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
           {pdfUrl && numPages > 0 && (
-            <span className="text-xs text-zinc-400">{numPages} page{numPages !== 1 ? "s" : ""}</span>
+            <span className="text-xs text-[var(--muted)]">{numPages} page{numPages !== 1 ? "s" : ""}</span>
           )}
           {pdfUrl && (
             <>
               <div className="flex items-center gap-2">
                 <button
                   onClick={zoomOut}
-                  className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"
+                  className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center"
                   title="Zoom out"
                 >
                   <IconZoomOut />
                 </button>
                 <button
                   onClick={zoomFit}
-                  className="min-w-[2.5rem] px-2 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs tabular-nums"
+                  className="min-w-[2.5rem] px-2 py-1.5 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] text-xs tabular-nums"
                   title="Fit to width"
                 >
                   {zoomPercent}%
                 </button>
                 <button
                   onClick={zoomIn}
-                  className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-center"
+                  className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center"
                   title="Zoom in"
                 >
                   <IconZoomIn />
@@ -251,14 +251,14 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
               </div>
               <button
                 onClick={handleDownload}
-                className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors flex items-center justify-center"
+                className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors flex items-center justify-center"
                 title="Download PDF"
               >
                 <IconDownload />
               </button>
               <button
                 onClick={toggleFullscreen}
-                className="w-7 h-7 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors flex items-center justify-center"
+                className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors flex items-center justify-center"
                 title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
               >
                 {isFullscreen ? <IconMinimize2 /> : <IconMaximize2 />}
@@ -271,7 +271,7 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
       {/* PDF viewer: scrollable area with inner content at fixed width so scroll works both ways */}
       <div className="flex-1 min-h-0 flex flex-col">
         {!pdfUrl ? (
-          <div className="flex-1 flex items-center justify-center text-sm text-zinc-500">
+          <div className="flex-1 flex items-center justify-center text-sm text-[var(--muted)]">
             Compile to see PDF
           </div>
         ) : (
@@ -301,7 +301,7 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
                 file={pdfUrl}
                 onLoadSuccess={onDocumentLoadSuccess}
                 loading={
-                  <div className="flex items-center justify-center h-32 text-zinc-500">
+                  <div className="flex items-center justify-center h-32 text-[var(--muted)]">
                     Loading PDF…
                   </div>
                 }

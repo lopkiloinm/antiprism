@@ -227,7 +227,11 @@ function TreeNodeComponent({
     return (
       <>
         <div
-          className={`px-3 py-2 cursor-pointer text-sm hover:bg-zinc-800 flex items-center gap-2 min-w-0 ${isSelected ? "bg-zinc-700" : ""}`}
+          className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-2 min-w-0 transition-colors ${
+            isSelected
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+              : "hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+          }`}
           style={{ paddingLeft: `${level * 12 + 12}px` }}
           onClick={() => onFileSelect(node.path)}
           onContextMenu={handleContextMenu}
@@ -240,27 +244,27 @@ function TreeNodeComponent({
         {contextMenu && (
           <div
             ref={contextMenuRef}
-            className="fixed z-50 w-[180px] rounded border border-zinc-700 bg-zinc-900 shadow-xl py-2"
+            className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={handleRename}
-              className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
             >
               <IconPencil />
               Rename file
             </button>
             <button
               onClick={handleDownload}
-              className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
             >
               <IconDownload />
               Download file
             </button>
             <button
               onClick={handleDelete}
-              className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-800 flex items-center gap-2"
+              className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
             >
               <IconTrash2 />
               Delete file
@@ -274,7 +278,11 @@ function TreeNodeComponent({
   return (
     <div>
       <div
-        className={`px-3 py-2 cursor-pointer text-sm hover:bg-zinc-800 flex items-center gap-1 min-w-0 ${isSelected ? "bg-zinc-700" : ""}`}
+        className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-1 min-w-0 transition-colors ${
+          isSelected
+            ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+            : "hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+        }`}
         style={{ paddingLeft: `${level * 12 + 12}px` }}
         onClick={handleExpand}
         onContextMenu={handleContextMenu}
@@ -287,27 +295,27 @@ function TreeNodeComponent({
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 w-[180px] rounded border border-zinc-700 bg-zinc-900 shadow-xl py-2"
+          className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           <button
             onClick={handleRenameFolder}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
           >
             <IconPencil />
             Rename folder
           </button>
           <button
             onClick={handleDownloadFolder}
-            className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-zinc-800 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
           >
             <IconDownload />
             Download folder
           </button>
           <button
             onClick={handleDeleteFolder}
-            className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-zinc-800 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
           >
             <IconTrash2 />
             Delete folder
@@ -381,7 +389,7 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
 
   if (!fs) {
     return (
-      <div className="p-3 text-sm text-zinc-500">Loading filesystem…</div>
+      <div className="p-3 text-sm text-[var(--muted)]">Loading filesystem…</div>
     );
   }
 
@@ -391,7 +399,7 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
     <>
     <div className="overflow-auto flex-1 min-h-0 py-3">
       {filteredNodes.length === 0 ? (
-        <div className="p-3 text-sm text-zinc-500">
+        <div className="p-3 text-sm text-[var(--muted)]">
           {searchQuery?.trim() ? "No matching files." : "No files. Create a new file to get started."}
         </div>
         ) : (

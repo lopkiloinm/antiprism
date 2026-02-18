@@ -95,7 +95,7 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
 
   return (
     <div
-      className="relative h-12 shrink-0 border-b border-zinc-800 bg-zinc-900"
+      className="relative h-12 shrink-0 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)]"
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => !isDragging && setIsHovering(false)}
     >
@@ -109,10 +109,10 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
         return (
           <div
             key={tab.path}
-            className={`group relative flex items-center px-3 pr-3 border-r border-zinc-800 cursor-pointer shrink-0 min-w-0 max-w-[180px] h-full overflow-hidden ${
+            className={`group relative flex items-center px-3 pr-3 border-r border-[var(--border)] cursor-pointer shrink-0 min-w-0 max-w-[180px] h-full overflow-hidden ${
               isActive
-                ? "bg-zinc-950 border-b-2 border-b-zinc-950 -mb-px text-zinc-100 [--gradient-end:rgb(3_7_18)]"
-                : "bg-zinc-900/80 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300 [--gradient-end:rgb(24_24_27)] hover:[--gradient-end:rgb(39_39_42)]"
+                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => onSelect(tab.path)}
           >
@@ -120,7 +120,11 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
             <div
               className="absolute right-0 top-0 bottom-0 w-12 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
               style={{
-                background: "linear-gradient(to right, transparent 0%, var(--gradient-end) 45%)",
+                background: `linear-gradient(to right, transparent 0%, ${
+                  isActive
+                    ? "var(--background)"
+                    : "color-mix(in srgb, var(--border) 18%, transparent)"
+                } 45%)`,
               }}
             />
             <button
@@ -128,7 +132,7 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
                 e.stopPropagation();
                 onClose(tab.path);
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-[var(--foreground)] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
               title="Close"
             >
               ×
@@ -141,7 +145,7 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
         <div className="absolute bottom-0 left-0 right-0 h-1.5 px-1 flex items-center pointer-events-none">
           <div className="flex-1 h-1 rounded-full bg-transparent relative">
             <div
-              className="absolute top-0 h-1 rounded-full bg-zinc-600 hover:bg-zinc-500 cursor-grab active:cursor-grabbing pointer-events-auto"
+              className="absolute top-0 h-1 rounded-full bg-[color-mix(in_srgb,var(--border)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_75%,transparent)] cursor-grab active:cursor-grabbing pointer-events-auto"
               style={{ left: thumbLeft, width: thumbWidth }}
               onMouseDown={handleThumbMouseDown}
             />
