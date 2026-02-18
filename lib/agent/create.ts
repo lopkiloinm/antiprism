@@ -4,6 +4,7 @@
 
 import { convert } from "pandoc-wasm";
 import type { ChatMessage } from "./types";
+import { stripThinking } from "./thinking";
 
 /** Default system prompt for Create mode. Used when user has not set a custom prompt. */
 export const DEFAULT_PROMPT_CREATE = `You write markdown. Output only the document. No code fences, no extra text.
@@ -61,7 +62,8 @@ export interface CreateParseResult {
 }
 
 export async function parseCreateResponse(rawOutput: string): Promise<CreateParseResult> {
-  const md = extractMarkdown(rawOutput);
+  const { output } = stripThinking(rawOutput);
+  const md = extractMarkdown(output);
   const title = parseTitleFromMarkdown(md);
   if (!md.trim()) return { latex: "", title: "", markdown: "" };
 

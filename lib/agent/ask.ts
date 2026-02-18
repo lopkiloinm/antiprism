@@ -4,6 +4,7 @@
  */
 
 import type { ChatMessage, PriorMessage } from "./types";
+import { stripThinking } from "./thinking";
 
 const DEFAULT_FALLBACK = "I'm sorry, I couldn't generate a response. Please try again.";
 
@@ -42,7 +43,8 @@ export function buildAskMessages(
 }
 
 export function parseAskResponse(rawOutput: string): string {
-  let result = rawOutput.trim();
+  const { output } = stripThinking(rawOutput);
+  let result = output.trim();
   if (!result) return DEFAULT_FALLBACK;
 
   const assistantMarker = result.lastIndexOf("assistant");

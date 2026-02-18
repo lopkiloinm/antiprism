@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
+import { IconTool } from "./Icons";
 
 export const SETTINGS_TAB_PATH = "__settings__";
 
 interface Tab {
   path: string;
-  type: "text" | "image" | "settings";
+  type: "text" | "image" | "settings" | "chat";
 }
 
 interface FileTabsProps {
@@ -14,14 +15,28 @@ interface FileTabsProps {
   activePath: string | null;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
+  onToggleTools?: () => void;
 }
 
 function getTabLabel(tab: Tab): string {
   if (tab.type === "settings" || tab.path === SETTINGS_TAB_PATH) return "Settings";
+  if (tab.type === "chat") {
+    const chatId = tab.path.replace("/ai-chat/", "");
+    // Get the actual chat title from localStorage
+    try {
+      const stored = localStorage.getItem("antiprism_chats");
+      if (stored) {
+        const chats = JSON.parse(stored);
+        const chat = chats.find((c: any) => c.id === chatId);
+        if (chat) return chat.title;
+      }
+    } catch {}
+    return "New Chat";
+  }
   return tab.path.split("/").filter(Boolean).pop() || tab.path;
 }
 
-export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps) {
+export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools }: FileTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
   const [isHovering, setIsHovering] = useState(false);
@@ -109,16 +124,16 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
         return (
           <div
             key={tab.path}
-            className={`group relative flex items-center px-3 pr-3 border-r border-[var(--border)] cursor-pointer shrink-0 min-w-0 max-w-[180px] h-full overflow-hidden ${
+            className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 min-w-0 max-w-[240px] h-full overflow-hidden ${
               isActive
                 ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => onSelect(tab.path)}
           >
-            <span className="text-sm truncate block">{name}</span>
+                        <span className="text-sm truncate">{name}</span>
             <div
-              className="absolute right-0 top-0 bottom-0 w-12 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+              className="absolute right-0 top-0 bottom-0 w-16 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
               style={{
                 background: `linear-gradient(to right, transparent 0%, ${
                   isActive
@@ -140,6 +155,17 @@ export function FileTabs({ tabs, activePath, onSelect, onClose }: FileTabsProps)
           </div>
         );
       })}
+      {onToggleTools && (
+        <div className="ml-auto flex items-center h-full border-l border-[var(--border)]">
+          <button
+            onClick={onToggleTools}
+            className="px-3 h-full flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] hover:text-[var(--foreground)] transition-colors"
+            title="Toggle tools panel"
+          >
+            <IconTool />
+          </button>
+        </div>
+      )}
       </div>
       {overflow && (isHovering || isDragging) && (
         <div className="absolute bottom-0 left-0 right-0 h-1.5 px-1 flex items-center pointer-events-none">

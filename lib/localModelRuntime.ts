@@ -59,10 +59,10 @@ function dtypeToModelStem(dtype: string): string {
   return "model_q4";
 }
 
-async function listModelFiles(dtype: string = MODEL_DTYPE): Promise<string[]> {
+async function listModelFiles(dtype: string = MODEL_DTYPE()): Promise<string[]> {
   // Prefer dynamic discovery so we handle upstream changes (e.g. multiple onnx_data shards).
   // HuggingFace model API returns siblings list.
-  const apiUrl = `${HF_CDN_BASE}/api/models/${MODEL_ID}?revision=${encodeURIComponent(MODEL_REVISION)}`;
+  const apiUrl = `${HF_CDN_BASE}/api/models/${MODEL_ID()}?revision=${encodeURIComponent(MODEL_REVISION())}`;
   try {
     const res = await fetchWithRetry(apiUrl, 3);
     if (!res.ok) throw new Error(`HF API failed: ${res.status}`);
@@ -92,8 +92,8 @@ async function listModelFiles(dtype: string = MODEL_DTYPE): Promise<string[]> {
   }
 }
 
-async function ensureFilesCached(files: string[]): Promise<void> {
-  const cache = await openModelCache();
+async function ensureFilesCached(def: ModelDef, files: string[]): Promise<void> {
+  const cache = await openModelCacheFor(def);
   if (!cache) {
     throw new Error(
       "Cache Storage is unavailable, so the model cannot be persisted locally. " +
@@ -101,13 +101,14 @@ async function ensureFilesCached(files: string[]): Promise<void> {
     );
   }
 
-  const urls = files.map((f) => `${HF_CDN_BASE}/${MODEL_ID}/resolve/${MODEL_REVISION}/${f}`);
+  const urls = files.map((f) => `${HF_CDN_BASE}/${def.hfId}/resolve/${def.revision}/${f}`);
   const sizes = await Promise.all(urls.map((u) => headContentLength(u)));
   const totalSize = sizes.reduce((a, b) => a + b, 0);
   console.info("[model] ensure cache", {
     count: files.length,
     totalBytes: totalSize,
     files: files.map((f, i) => ({ file: f, bytes: sizes[i] || 0 })),
+    cache: cacheNameFor(def),
   });
 
   let cumulativeDownloaded = 0;
@@ -134,23 +135,51 @@ async function ensureFilesCached(files: string[]): Promise<void> {
 let AutoModelForCausalLM: any = null;
 let AutoTokenizer: any = null;
 
-const MODEL_ID = "LiquidAI/LFM2.5-1.2B-Instruct-ONNX";
-const MODEL_DTYPE = "q4"; // Use Q4 for WebGPU (recommended)
+import { getModelById, DEFAULT_MODEL_ID, type ModelDef } from "./modelConfig";
 
-// Optional: pin a specific HuggingFace git revision (commit SHA or tag) to avoid upstream breaking changes.
-// Set NEXT_PUBLIC_MODEL_REVISION to a known-good revision.
-const MODEL_REVISION = process.env.NEXT_PUBLIC_MODEL_REVISION || "main";
+let activeModelDef: ModelDef = getModelById(DEFAULT_MODEL_ID);
 
-// Bump this to force clients to redownload if the upstream model files change.
+function MODEL_ID() { return activeModelDef.hfId; }
+function MODEL_DTYPE() { return activeModelDef.dtype; }
+function MODEL_REVISION() { return activeModelDef.revision; }
+
 const MODEL_CACHE_VERSION = 2;
 
-const MODEL_ONNX_FILE = "onnx/model_q4.onnx";
-const MODEL_DATA_PREFIX = "onnx/model_q4.onnx_data";
-
 const HF_CDN_BASE = "https://huggingface.co";
-// Single canonical cache: only ever download once, always use this root cache
-const CACHE_PREFIX = `antiprism-model-${MODEL_ID.replace(/\//g, "-")}-${MODEL_REVISION}`;
-const CACHE_NAME = `${CACHE_PREFIX}-v${MODEL_CACHE_VERSION}`;
+
+function cachePrefixFor(def: ModelDef): string {
+  const modelName = def.label
+    .replace(/[^a-zA-Z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .toLowerCase();
+  return `antiprism-model-${modelName}-${def.revision}`;
+}
+
+function cacheNameFor(def: ModelDef): string {
+  return `${cachePrefixFor(def)}-v${MODEL_CACHE_VERSION}`;
+}
+
+export function getActiveModelId(): string {
+  return activeModelDef.id;
+}
+
+export function getActiveModelDef(): ModelDef {
+  return activeModelDef;
+}
+
+export function switchModel(modelId: string): void {
+  const def = getModelById(modelId);
+  if (!def) throw new Error(`Model not found: ${modelId}`);
+  // Always unload when switching to ensure download happens
+  loadGeneration++;
+  model = null;
+  tokenizer = null;
+  isLoading = false;
+  loadPromise = null;
+  downloadProgress = 0;
+  activeModelDef = def;
+  console.info("[model] switched to", { id: def.id, hfId: def.hfId });
+}
 
 function isCacheStorageAvailable(): boolean {
   return typeof window !== "undefined" && "caches" in window;
@@ -159,7 +188,7 @@ function isCacheStorageAvailable(): boolean {
 async function openModelCache(): Promise<Cache | null> {
   if (!isCacheStorageAvailable()) return null;
   try {
-    return await caches.open(CACHE_NAME);
+    return await caches.open(cacheNameFor(activeModelDef));
   } catch {
     return null;
   }
@@ -169,13 +198,40 @@ async function cleanupOldModelCaches(): Promise<void> {
   if (!isCacheStorageAvailable()) return;
   try {
     const keys = await caches.keys();
-    const toDelete = keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME);
+    const prefix = cachePrefixFor(activeModelDef);
+    const keep = cacheNameFor(activeModelDef);
+    const toDelete = keys.filter((k) => k.startsWith(prefix) && k !== keep);
     if (toDelete.length > 0) {
-      console.info("[model] clearing old caches", { keep: CACHE_NAME, delete: toDelete });
+      console.info("[model] clearing old caches", { keep, delete: toDelete });
     }
     await Promise.all(
       toDelete.map((k) => caches.delete(k))
     );
+  } catch {
+    // ignore
+  }
+}
+
+async function openModelCacheFor(def: ModelDef): Promise<Cache | null> {
+  if (!isCacheStorageAvailable()) return null;
+  try {
+    return await caches.open(cacheNameFor(def));
+  } catch {
+    return null;
+  }
+}
+
+async function cleanupOldModelCachesFor(def: ModelDef): Promise<void> {
+  if (!isCacheStorageAvailable()) return;
+  try {
+    const keys = await caches.keys();
+    const prefix = cachePrefixFor(def);
+    const keep = cacheNameFor(def);
+    const toDelete = keys.filter((k) => k.startsWith(prefix) && k !== keep);
+    if (toDelete.length > 0) {
+      console.info("[model] clearing old caches", { keep, delete: toDelete });
+    }
+    await Promise.all(toDelete.map((k) => caches.delete(k)));
   } catch {
     // ignore
   }
@@ -190,7 +246,7 @@ export function isV0Preview(): boolean {
   );
 }
 
-async function loadTransformers() {
+async function loadTransformers(modelDefForCache?: ModelDef) {
   if (typeof window === "undefined") {
     throw new Error("Transformers library can only be loaded in browser");
   }
@@ -198,32 +254,32 @@ async function loadTransformers() {
     throw new Error("V0_PREVIEW_UNSUPPORTED");
   }
 
-  if (!AutoModelForCausalLM || !AutoTokenizer) {
-    const transformers = await import("@huggingface/transformers");
-    // Use our cache so transformers.js reads/writes the same cache we pre-download to.
-    // Without this, transformers uses "transformers-cache" and never sees our cached files.
-    await cleanupOldModelCaches();
-    const cache = await openModelCache();
-    if (cache) {
-      transformers.env.useCustomCache = true;
-      transformers.env.customCache = cache;
-      console.info("[model] using Cache Storage", { cache: CACHE_NAME });
-    } else {
-      // Some contexts (private browsing, blocked storage, non-secure origins) may not allow Cache Storage.
-      // Fall back to transformers' default caching behavior.
-      transformers.env.useCustomCache = false;
-      console.warn(
-        "Model cache disabled: Cache Storage unavailable. Model will re-download and may fail on flaky networks. " +
-          "Try a non-private window, allow site storage, and use https/localhost."
-      );
-    }
-    transformers.env.allowLocalModels = false;
-    if (transformers.env.backends?.onnx?.wasm) {
-      transformers.env.backends.onnx.wasm.numThreads = 1;
-    }
-    AutoModelForCausalLM = transformers.AutoModelForCausalLM;
-    AutoTokenizer = transformers.AutoTokenizer;
+  const transformers = await import("@huggingface/transformers");
+  
+  // Always reconfigure cache to prevent cross-contamination
+  const def = modelDefForCache ?? activeModelDef;
+  await cleanupOldModelCachesFor(def);
+  const cache = await openModelCacheFor(def);
+  if (cache) {
+    transformers.env.useCustomCache = true;
+    transformers.env.customCache = cache;
+    console.info("[model] using Cache Storage", { cache: cacheNameFor(def) });
+  } else {
+    // Some contexts (private browsing, blocked storage, non-secure origins) may not allow Cache Storage.
+    // Fall back to transformers' default caching behavior.
+    transformers.env.useCustomCache = false;
+    console.warn(
+      "Model cache disabled: Cache Storage unavailable. Model will re-download and may fail on flaky networks. " +
+        "Try a non-private window, allow site storage, and use https/localhost."
+    );
   }
+  transformers.env.allowLocalModels = false;
+  if (transformers.env.backends?.onnx?.wasm) {
+    transformers.env.backends.onnx.wasm.numThreads = 1;
+  }
+  
+  AutoModelForCausalLM = transformers.AutoModelForCausalLM;
+  AutoTokenizer = transformers.AutoTokenizer;
   return { AutoModelForCausalLM, AutoTokenizer };
 }
 
@@ -240,6 +296,9 @@ let loadPromise: Promise<void> | null = null;
 let downloadProgress = 0;
 let progressCallback: ((progress: number, stats?: DownloadStats) => void) | null = null;
 let isDownloadPhase = true;
+let isVerifyingCache = false;
+
+let loadGeneration = 0;
 
 let currentStats: DownloadStats = {
   downloadedBytes: 0,
@@ -329,22 +388,22 @@ async function preflightWebGPU(): Promise<void> {
   }
 }
 
-async function logCacheStatus(requiredFiles: string[]): Promise<void> {
-  const cache = await openModelCache();
+async function logCacheStatus(requiredFiles: string[], def: ModelDef = activeModelDef): Promise<void> {
+  const cache = await openModelCacheFor(def);
   if (!cache) {
     console.info("[model] cache status", { available: false });
     return;
   }
   const missing: string[] = [];
   for (const file of requiredFiles) {
-    const fileUrl = `${HF_CDN_BASE}/${MODEL_ID}/resolve/${MODEL_REVISION}/${file}`;
+    const fileUrl = `${HF_CDN_BASE}/${def.hfId}/resolve/${def.revision}/${file}`;
     const res = await cache.match(fileUrl);
     if (!res || !res.ok) missing.push(file);
   }
   console.info("[model] cache status", {
     available: true,
-    cache: CACHE_NAME,
-    revision: MODEL_REVISION,
+    cache: cacheNameFor(def),
+    revision: def.revision,
     requiredCount: requiredFiles.length,
     missingCount: missing.length,
     missing,
@@ -360,7 +419,7 @@ export function getDownloadProgress(): number {
 }
 
 export function isDownloading(): boolean {
-  return isLoading && isDownloadPhase;
+  return isLoading && (isDownloadPhase || isVerifyingCache);
 }
 
 export function isModelLoading(): boolean {
@@ -412,10 +471,10 @@ async function downloadFileWithProgress(
   });
 }
 
-async function ensureTokenizer(): Promise<void> {
+async function ensureTokenizer(modelId: string, def: ModelDef = activeModelDef): Promise<void> {
   if (tokenizer) return;
-  const { AutoTokenizer: TokenizerClass } = await loadTransformers();
-  tokenizer = await TokenizerClass.from_pretrained(MODEL_ID);
+  const { AutoTokenizer: TokenizerClass } = await loadTransformers(def);
+  tokenizer = await TokenizerClass.from_pretrained(modelId);
 }
 
 /**
@@ -423,7 +482,7 @@ async function ensureTokenizer(): Promise<void> {
  * Keeps the end of the text (most recent content). Caller must ensure tokenizer is loaded.
  */
 export async function truncateToTokenLimit(text: string, maxTokens: number): Promise<string> {
-  await ensureTokenizer();
+  await ensureTokenizer(MODEL_ID(), activeModelDef);
   const ids = tokenizer.encode(text, { add_special_tokens: false });
   if (ids.length <= maxTokens) return text;
   const truncated = ids.slice(-maxTokens);
@@ -431,25 +490,33 @@ export async function truncateToTokenLimit(text: string, maxTokens: number): Pro
 }
 
 async function loadModel(): Promise<void> {
-  if (model && tokenizer) {
-    return Promise.resolve();
-  }
   if (isLoading) {
     return loadPromise || Promise.resolve();
   }
+  // Always proceed to cache check - let cache logic determine if download is needed
+
+  const def = activeModelDef;
+  const modelId = def.hfId;
+  const revision = def.revision;
+  const dtype = def.dtype;
+  const myGeneration = loadGeneration;
 
   isLoading = true;
   loadPromise = (async () => {
     try {
-      await cleanupOldModelCaches();
+      if (myGeneration !== loadGeneration) return;
+      await cleanupOldModelCachesFor(def);
+      if (myGeneration !== loadGeneration) return;
       currentStats = { downloadedBytes: 0, totalBytes: 0, speedBytesPerSecond: 0 };
       updateProgress(0);
 
-      console.info("[model] load start", { modelId: MODEL_ID, dtype: MODEL_DTYPE, cache: CACHE_NAME });
-      console.info("[model] revision", { revision: MODEL_REVISION });
+      console.info("[model] load start", { modelId, dtype, cache: cacheNameFor(def) });
+      console.info("[model] revision", { revision });
 
       const { AutoModelForCausalLM: ModelClass, AutoTokenizer: TokenizerClass } =
-        await loadTransformers();
+        await loadTransformers(def);
+
+      if (myGeneration !== loadGeneration) return;
 
       if (!checkWebGPUSupport()) {
         throw new Error("WebGPU is not available. Please enable WebGPU in your browser settings.");
@@ -457,20 +524,26 @@ async function loadModel(): Promise<void> {
 
       await preflightWebGPU();
 
-      await ensureTokenizer();
+      if (myGeneration !== loadGeneration) return;
+
+      if (!tokenizer) {
+        tokenizer = await TokenizerClass.from_pretrained(modelId, { revision });
+      }
+
+      if (myGeneration !== loadGeneration) return;
 
       let needsDownload = true;
       try {
-        const cache = await openModelCache();
+        const cache = await openModelCacheFor(def);
         if (!cache) {
           needsDownload = true;
           throw new Error("CACHE_STORAGE_UNAVAILABLE");
         }
-        const requiredFiles = await listModelFiles(MODEL_DTYPE);
-        await logCacheStatus(requiredFiles);
+        const requiredFiles = await listModelFiles(dtype);
+        await logCacheStatus(requiredFiles, def);
         let allFilesCached = true;
         for (const file of requiredFiles) {
-          const fileUrl = `${HF_CDN_BASE}/${MODEL_ID}/resolve/${MODEL_REVISION}/${file}`;
+          const fileUrl = `${HF_CDN_BASE}/${modelId}/resolve/${revision}/${file}`;
           const cachedResponse = await cache.match(fileUrl);
           if (!cachedResponse || !cachedResponse.ok) {
             allFilesCached = false;
@@ -488,9 +561,10 @@ async function loadModel(): Promise<void> {
       }
 
       if (needsDownload) {
-        const files = await listModelFiles(MODEL_DTYPE);
+        if (myGeneration !== loadGeneration) return;
+        const files = await listModelFiles(dtype);
         // After download completes we log cache status again.
-        const urls = files.map((f) => `${HF_CDN_BASE}/${MODEL_ID}/resolve/${MODEL_REVISION}/${f}`);
+        const urls = files.map((f) => `${HF_CDN_BASE}/${modelId}/resolve/${revision}/${f}`);
         const sizes = await Promise.all(urls.map((u) => headContentLength(u)));
         const totalSize = sizes.reduce((a, b) => a + b, 0);
         currentStats.totalBytes = totalSize;
@@ -504,7 +578,7 @@ async function loadModel(): Promise<void> {
         isDownloadPhase = true;
         updateProgress(0, { totalBytes: totalSize, downloadedBytes: 0 });
 
-        const cache = await openModelCache();
+        const cache = await openModelCacheFor(def);
         if (!cache) {
           throw new Error(
             "Cache Storage is unavailable, so the model cannot be persisted locally. " +
@@ -562,7 +636,7 @@ async function loadModel(): Promise<void> {
           console.info("[model] cached", { file, downloadedBytes: cumulativeDownloaded });
         }
 
-        await logCacheStatus(files);
+        await logCacheStatus(files, def);
 
         updateProgress(100, { downloadedBytes: totalSize || cumulativeDownloaded });
         isDownloadPhase = false;
@@ -572,10 +646,12 @@ async function loadModel(): Promise<void> {
         updateProgress(0);
       }
 
-      const modelPromise = ModelClass.from_pretrained(MODEL_ID, {
+      if (myGeneration !== loadGeneration) return;
+
+      const modelPromise = ModelClass.from_pretrained(modelId, {
         device: "webgpu",
-        dtype: MODEL_DTYPE,
-        revision: MODEL_REVISION,
+        dtype,
+        revision,
       });
 
       console.info("[model] initializing onnx/webgpu runtime");
@@ -596,19 +672,19 @@ async function loadModel(): Promise<void> {
 
           // Upstream ONNX exports may change in ways that break a specific dtype.
           // Retry with alternative WebGPU-compatible variants if available.
-          const fallbacks = MODEL_DTYPE === "q4" ? (["q4f16", "fp16"] as const) : ([] as const);
+          const fallbacks = dtype === "q4" ? (["q4f16", "fp16"] as const) : ([] as const);
           for (const dtype of fallbacks) {
             try {
               console.info("[model] retrying from_pretrained", { dtype });
 
               // Ensure the variant's ONNX + external data files exist in cache before retrying.
               const dtypeFiles = await listModelFiles(dtype);
-              await ensureFilesCached(dtypeFiles);
+              await ensureFilesCached(def, dtypeFiles);
 
-              model = await ModelClass.from_pretrained(MODEL_ID, {
+              model = await ModelClass.from_pretrained(modelId, {
                 device: "webgpu",
                 dtype,
-                revision: MODEL_REVISION,
+                revision,
               });
               console.info("[model] from_pretrained retry succeeded", { dtype });
               break;
@@ -622,10 +698,10 @@ async function loadModel(): Promise<void> {
             // falling back to WASM (slower), using the same model files.
             try {
               console.warn("[model] webgpu load failed; falling back to wasm backend");
-              model = await ModelClass.from_pretrained(MODEL_ID, {
+              model = await ModelClass.from_pretrained(modelId, {
                 device: "wasm",
                 dtype: "q4",
-                revision: MODEL_REVISION,
+                revision,
               });
               console.info("[model] wasm fallback load succeeded");
             } catch (e3) {
@@ -636,6 +712,35 @@ async function loadModel(): Promise<void> {
         }
       } finally {
         clearInterval(loadingInterval);
+      }
+
+      if (myGeneration !== loadGeneration) return;
+
+      // Final cache verification to ensure everything is properly stored
+      if (myGeneration !== loadGeneration) return;
+      isVerifyingCache = true;
+      updateProgress(95); // Show verification progress
+      try {
+        const finalCache = await openModelCacheFor(def);
+        if (finalCache) {
+          const requiredFiles = await listModelFiles(dtype);
+          let allFilesVerified = true;
+          for (const file of requiredFiles) {
+            const fileUrl = `${HF_CDN_BASE}/${modelId}/resolve/${revision}/${file}`;
+            const cachedResponse = await finalCache.match(fileUrl);
+            if (!cachedResponse || !cachedResponse.ok) {
+              allFilesVerified = false;
+              console.error("[model] cache verification failed for file:", file);
+              break;
+            }
+          }
+          if (!allFilesVerified) {
+            throw new Error("Model files not properly cached after load");
+          }
+          console.info("[model] cache verification passed - all files stored");
+        }
+      } finally {
+        isVerifyingCache = false;
       }
 
       updateProgress(100);
@@ -653,6 +758,7 @@ async function loadModel(): Promise<void> {
       throw error;
     } finally {
       isLoading = false;
+      isVerifyingCache = false;
     }
   })();
 
@@ -665,7 +771,10 @@ export function scheduleBackgroundDownload(delayMs: number = 5000): void {
   setTimeout(() => loadModel().catch(console.warn), delayMs);
 }
 
-export async function initializeModel(): Promise<boolean> {
+export { _initializeModel as initializeModel, listModelFiles };
+
+
+async function _initializeModel(): Promise<boolean> {
   try {
     if (!checkWebGPUSupport()) {
       console.warn("WebGPU not available");
@@ -721,12 +830,14 @@ export async function generateFromMessages(messages: ChatMessage[]): Promise<str
     inputLen = (inputIds as { size: number }).size;
   }
 
-  const maxNewTokens = getAiMaxNewTokens();
+  // Use model's configured maxNewTokens if available, otherwise fall back to settings
+  const activeDef = getActiveModelDef();
+  const modelMaxTokens = activeDef?.maxNewTokens || getAiMaxNewTokens();
   const temperature = getAiTemperature();
   const topP = getAiTopP();
   const outputs = await model.generate({
     ...input,
-    max_new_tokens: maxNewTokens,
+    max_new_tokens: modelMaxTokens,
     do_sample: true,
     temperature,
     top_p: topP,
@@ -790,12 +901,14 @@ export async function generateFromMessagesStreaming(
       : undefined,
   });
 
-  const maxNewTokens = getAiMaxNewTokens();
+  // Use model's configured maxNewTokens if available, otherwise fall back to settings
+  const activeDef = getActiveModelDef();
+  const modelMaxTokens = activeDef?.maxNewTokens || getAiMaxNewTokens();
   const temperature = getAiTemperature();
   const topP = getAiTopP();
   const outputs = await model.generate({
     ...input,
-    max_new_tokens: maxNewTokens,
+    max_new_tokens: modelMaxTokens,
     do_sample: true,
     temperature,
     top_p: topP,

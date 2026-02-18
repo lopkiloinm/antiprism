@@ -140,6 +140,16 @@ select,
   font-family: "JetBrains Mono", "Fira Code", "SF Mono", monospace;
 }
 
+/* CodeMirror minimap */
+.cm-minimap {
+  border-left: 1px solid var(--border);
+  opacity: 0.9;
+}
+.cm-minimap .cm-minimap-overlay {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
 /* File manager overrides */
 .svar-filemanager {
   --svar-fm-bg: var(--background);

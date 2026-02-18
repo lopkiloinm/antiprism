@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  initializeModel as _initializeModel,
+  initializeModel,
   generateFromMessages,
   generateFromMessagesStreaming,
   truncateToTokenLimit,
@@ -11,6 +11,10 @@ import {
   isDownloading,
   isModelLoading,
   checkWebGPUSupport as _checkWebGPUSupport,
+  switchModel as _switchModel,
+  getActiveModelId as _getActiveModelId,
+  getActiveModelDef as _getActiveModelDef,
+  listModelFiles,
 } from "./localModelRuntime";
 import {
   buildMessages,
@@ -26,11 +30,9 @@ export function checkWebGPUSupport(): boolean {
   return _checkWebGPUSupport();
 }
 
-export async function initializeModel(): Promise<boolean> {
-  return _initializeModel();
-}
 
 export type { AgentResponse, AgentMode };
+export { initializeModel, listModelFiles };
 
 export interface StreamCallbacks {
   onChunk: (text: string) => void;
@@ -79,6 +81,19 @@ export async function generateChatResponse(
     return { type: "agent", content: latex, title, markdown };
   }
   return { type: "ask", content: parseAskResponse(rawOutput) };
+}
+
+
+export async function switchModel(modelId: string): Promise<void> {
+  return _switchModel(modelId);
+}
+
+export function getActiveModelId(): string {
+  return _getActiveModelId();
+}
+
+export function getActiveModelDef() {
+  return _getActiveModelDef();
 }
 
 export {

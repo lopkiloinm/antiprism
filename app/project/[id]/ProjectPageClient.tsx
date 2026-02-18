@@ -14,17 +14,29 @@ import { ImageViewer } from "@/components/ImageViewer";
 import { EditorPanel, type EditorPanelHandle } from "@/components/EditorPanel";
 import { ChatInput } from "@/components/ChatInput";
 import { AIModelDownloadProgress } from "@/components/AIModelDownloadProgress";
+import { ChatTree, type ChatTreeProps } from "@/components/ChatTree";
+import { BigChatMessage } from "@/components/BigChatMessage";
+import { SmallChatMessage } from "@/components/SmallChatMessage";
+import { ChatTelemetry } from "@/components/ChatTelemetry";
 import { ProjectDropdown } from "@/components/ProjectDropdown";
-import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings } from "@/components/Icons";
+import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare } from "@/components/Icons";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { ToolsPanel } from "@/components/ToolsPanel";
+import { ResizableDivider } from "@/components/ResizableDivider";
+import { GitPanel } from "@/components/GitPanel";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { parseOutline, type OutlineEntry } from "@/lib/documentOutline";
 
 const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => ({ default: m.PdfPreview })), {
   ssr: false,
 });
 import ReactMarkdown from "react-markdown";
-import { generateChatResponse } from "@/lib/localModel";
+import { generateChatResponse, switchModel, getActiveModelId, initializeModel, isModelLoading } from "@/lib/localModel";
+import { createChat, getChatMessages, saveChatMessages } from "@/lib/chatStore";
+import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from "@/lib/modelConfig";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { compileTypstToPdf, ensureTypstReady } from "@/lib/typstCompiler";
+import { countLaTeXWords, type TexCountResult, formatLaTeX } from "@/lib/wasmLatexTools";
 import {
   getLatexEngine,
   type LaTeXEngine,
@@ -76,7 +88,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [ytext, setYtext] = useState<Y.Text | null>(null);
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
-  const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" | "settings" }[]>([]);
+  const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" | "settings" | "chat" }[]>([]);
   const [activeTabPath, _setActiveTabPath] = useState<string>("");
   const activeTabPathRef = useRef<string>("");
   const setActiveTabPath = useCallback((p: string) => {
@@ -90,7 +102,10 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const bufferMgrRef = useRef<EditorBufferManager | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<
+  const [bigChatMessages, setBigChatMessages] = useState<
+    { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
+  >([]);
+  const [smallChatMessages, setSmallChatMessages] = useState<
     { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
   >([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -102,10 +117,46 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [lastCompileMs, setLastCompileMs] = useState<number | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [sidebarTab, setSidebarTab] = useState<"files" | "chats">("files");
+  const [sidebarTab, setSidebarTab] = useState<"files" | "chats" | "git">("files");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
+  const [summaryContent, setSummaryContent] = useState("");
+  const [logsContent, setLogsContent] = useState("");
+  const [isFormatting, setIsFormatting] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(256);
+  const [editorFraction, setEditorFraction] = useState(0.5);
+  const [outlineHeight, setOutlineHeight] = useState(400); // Default to maximum height
+  const [selectedModelId, setSelectedModelId] = useState<string>(DEFAULT_MODEL_ID);
+
+  // Capture console logs
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    
+    const logs: string[] = [];
+    
+    const captureLog = (...args: any[]) => {
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      logs.push(`[${new Date().toISOString()}] ${message}`);
+      setLogsContent(logs.slice(-50).join('\n')); // Keep last 50 log entries
+    };
+    
+    console.log = captureLog;
+    console.error = (...args) => captureLog('ERROR:', ...args);
+    console.warn = (...args) => captureLog('WARN:', ...args);
+    
+    return () => {
+      console.log = originalLog;
+      console.error = originalError;
+      console.warn = originalWarn;
+    };
+  }, []);
+
   const [chatMode, setChatMode] = useState<"ask" | "agent">("ask");
   const [latexEngine, setLatexEngineState] = useState<LaTeXEngine>(() => getLatexEngine());
   const [editorFontSize, setEditorFontSizeState] = useState(() => getEditorFontSize());
@@ -159,16 +210,37 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
       });
     }
-  }, [chatMessages, chatExpanded]);
+  }, [bigChatMessages, chatExpanded]);
+
+  // Load big chat messages when switching to a chat tab
+  useEffect(() => {
+    if (!activeTabPath) return;
+    const activeTab = openTabs.find((t) => t.path === activeTabPath);
+    if (activeTab?.type === "chat") {
+      const chatId = activeTab.path.replace("/ai-chat/", "");
+      const persistedMsgs = getChatMessages(chatId, "big");
+      setBigChatMessages(persistedMsgs);
+    }
+  }, [activeTabPath, openTabs]);
+
+  // Load small chat messages when switching to text file context
+  useEffect(() => {
+    if (!activeTabPath) return;
+    const activeTab = openTabs.find((t) => t.path === activeTabPath);
+    if (activeTab?.type === "text") {
+      const persistedMsgs = getChatMessages("", "small");
+      setSmallChatMessages(persistedMsgs);
+    }
+  }, [activeTabPath, openTabs]);
 
   useEffect(() => {
-    if (isGenerating && lastMessageRef.current) {
+    if (isGenerating && chatScrollRef.current) {
       requestAnimationFrame(() => {
-        const el = lastMessageRef.current;
+        const el = chatScrollRef.current;
         if (el) el.scrollTop = el.scrollHeight;
       });
     }
-  }, [chatMessages, isGenerating]);
+  }, [bigChatMessages, smallChatMessages, isGenerating]);
 
   useEffect(() => {
     if (!id || initRef.current) return;
@@ -355,6 +427,166 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     return bufferMgrRef.current;
   }, [ytext]);
 
+  // Generate summary content from current document
+  const generateSummary = useCallback(async () => {
+    const activeTab = openTabs.find((t) => t.path === activeTabPath);
+    console.log('[summary] activeTab:', activeTab, 'activeTabPath:', activeTabPath);
+    
+    if (activeTab?.type === "text") {
+      const bufferMgr = getBufferMgr();
+      console.log('[summary] buffer manager exists:', !!bufferMgr);
+      
+      if (bufferMgr) {
+        // Ensure current buffer is saved to cache before retrieving
+        bufferMgr.saveActiveToCache();
+        
+        // Try to get content from cache first, then from buffer
+        let content = bufferMgr.getCachedContent(activeTabPath);
+        console.log('[summary] cached content length:', content?.length || 0);
+        
+        if (!content || content.trim() === '') {
+          content = bufferMgr.getBufferContent();
+          console.log('[summary] buffer content length:', content?.length || 0);
+        }
+        
+        console.log('[summary] final content length:', content?.length || 0);
+        console.log('[summary] content preview:', content?.substring(0, 100) || 'empty');
+        
+        if (content && content.trim()) {
+          const isTex = activeTabPath.endsWith('.tex');
+          const isTyp = activeTabPath.endsWith('.typ');
+          
+          if (isTex) {
+            try {
+              // Use TexCount for accurate LaTeX statistics
+              const { rawOutput } = await countLaTeXWords(content);
+              
+              // Display raw TexCount output directly
+              return `${rawOutput}
+
+File Information
+===============
+Path: ${activeTabPath}
+Type: LaTeX
+Characters: ${content.length}
+Lines: ${content.split('\n').length}
+Last modified: ${new Date().toLocaleString()}`;
+            } catch (error) {
+              console.error('[summary] TexCount error:', error);
+              return `Error generating summary
+=========================
+
+Failed to analyze document with TexCount.
+Please check the console for details.
+
+Path: ${activeTabPath}
+Type: LaTeX
+Characters: ${content.length}
+Lines: ${content.split('\n').length}
+Last modified: ${new Date().toLocaleString()}
+
+Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            }
+          } else if (isTyp) {
+            // For Typst, provide basic info without detailed statistics
+            return `Document Statistics
+================
+
+Words: ${content.split(/\s+/).filter(Boolean).length}
+Characters: ${content.length}
+Lines: ${content.split('\n').length}
+
+File Information
+===============
+
+Path: ${activeTabPath}
+Type: Typst
+Last modified: ${new Date().toLocaleString()}
+
+Note: Detailed statistics are only available for LaTeX files.
+TexCount (WebPerl WASM) does not support Typst yet.`;
+          }
+        }
+      }
+    }
+    return `No active text document
+=======================
+
+Active tab: ${activeTab?.type || 'none'}
+Path: ${activeTabPath || 'none'}
+Available tabs: ${openTabs.map(t => `${t.path} (${t.type})`).join(', ')}
+
+YText exists: ${!!ytext}
+Buffer manager exists: ${!!getBufferMgr()}`;
+  }, [openTabs, activeTabPath, getBufferMgr, ytext]);
+
+  // Handle document formatting
+  const handleFormatDocument = useCallback(async () => {
+    const activeTab = openTabs.find((t) => t.path === activeTabPath);
+    if (!activeTab || activeTab.type !== "text" || !activeTabPath.endsWith('.tex')) {
+      return;
+    }
+
+    const bufferMgr = getBufferMgr();
+    if (!bufferMgr) return;
+
+    setIsFormatting(true);
+    try {
+      // Get current content
+      bufferMgr.saveActiveToCache();
+      let content = bufferMgr.getCachedContent(activeTabPath);
+      if (!content) {
+        content = bufferMgr.getBufferContent();
+      }
+
+      if (!content || !content.trim()) {
+        return;
+      }
+
+      // Format the document
+      const formattedContent = await formatLaTeX(content, {
+        wrap: true,
+        wraplen: 80,
+        tabsize: editorTabSize,
+        usetabs: false,
+      });
+
+      // Update the buffer with formatted content
+      if (ytext) {
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, formattedContent);
+      }
+
+      // Update cache
+      bufferMgr.saveActiveToCache();
+
+      console.log('[format] Document formatted successfully');
+    } catch (error) {
+      console.error('[format] Error formatting document:', error);
+    } finally {
+      setIsFormatting(false);
+    }
+  }, [openTabs, activeTabPath, getBufferMgr, ytext]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    { metaKey: true, key: "b", action: () => setSidebarWidth((w) => w > 0 ? 0 : 256) },
+    { metaKey: true, shiftKey: true, key: "t", action: () => setToolsPanelOpen((o) => !o) },
+    { metaKey: true, shiftKey: true, key: "f", action: () => handleFormatDocument() },
+    { metaKey: true, key: "1", action: () => setSidebarTab("files") },
+    { metaKey: true, key: "2", action: () => setSidebarTab("chats") },
+    { metaKey: true, key: "3", action: () => setSidebarTab("git") },
+  ]);
+
+  // Update summary when active tab changes
+  useEffect(() => {
+    const updateSummary = async () => {
+      const summary = await generateSummary();
+      setSummaryContent(summary);
+    };
+    updateSummary();
+  }, [generateSummary]);
+
   const saveActiveTextToCache = useCallback(() => {
     const mgr = getBufferMgr();
     if (mgr) {
@@ -453,7 +685,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       const tab = openTabs.find((t) => t.path === path);
       if (!tab) return;
 
-      if (tab.type === "settings") {
+      if (tab.type === "settings" || tab.type === "chat") {
         setActiveTabPath(path);
         return;
       }
@@ -488,7 +720,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         const remaining = openTabs.filter((t) => t.path !== path);
         const nextActive = remaining[idx] ?? remaining[idx - 1] ?? null;
         if (nextActive) {
-          if (nextActive.type === "settings") {
+          if (nextActive.type === "settings" || nextActive.type === "chat") {
             setActiveTabPath(nextActive.path);
             setOpenTabs(remaining);
           } else if (nextActive.type === "text" && ytext && fs) {
@@ -740,10 +972,43 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     };
   }, [autoCompileOnChange, autoCompileDebounceMs, ytext, compilerReady, fs]);
 
+  const getCurrentChatContext = () => {
+    const activeTab = openTabs.find((t) => t.path === activeTabPath);
+    return activeTab?.type === "chat" ? "big" : "small";
+  };
+
   const handleSendChat = async () => {
     if (!chatInput.trim()) return;
     const userMessage = chatInput.trim();
-    setChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, { role: "assistant", content: "Thinking..." }]);
+    const chatContext = getCurrentChatContext();
+    
+    // Check if model is loaded, if not, load it first
+    if (!modelReady || isModelLoading()) {
+      console.log("🔄 Model not ready, loading before sending message...");
+      try {
+        await initializeModel();
+        setModelReady(true);
+        console.log("✅ Model loaded successfully");
+      } catch (error) {
+        console.error("❌ Failed to load model:", error);
+        // Add error message to chat
+        const errorMessage = { role: "assistant" as const, content: "Error: Failed to load model. Please try again." };
+        if (chatContext === "big") {
+          setBigChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, errorMessage]);
+        } else {
+          setSmallChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, errorMessage]);
+        }
+        setChatInput("");
+        return;
+      }
+    }
+    
+    if (chatContext === "big") {
+      setBigChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, { role: "assistant", content: "Thinking..." }]);
+    } else {
+      setSmallChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, { role: "assistant", content: "Thinking..." }]);
+    }
+    
     setChatInput("");
     setChatExpanded(true);
     setIsGenerating(true);
@@ -759,7 +1024,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         chatMode,
         {
           onChunk: (text) => {
-            setChatMessages((msgs) => {
+            const chatContext = getCurrentChatContext();
+            const setMessages = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
+            setMessages((msgs: any) => {
               const next = [...msgs];
               const lastIdx = next.length - 1;
               if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
@@ -793,7 +1060,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             });
           },
         },
-        chatMessages.map((m) => ({
+        (getCurrentChatContext() === "big" ? bigChatMessages : smallChatMessages).map((m: any) => ({
           role: m.role,
           content: m.role === "assistant" && m.responseType === "agent" && m.markdown ? m.markdown : m.content,
         }))
@@ -826,7 +1093,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         await handleFileSelect(path);
       }
 
-      setChatMessages((msgs) => {
+      const chatContext = getCurrentChatContext();
+      const setMessages = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
+      setMessages((msgs: any) => {
         const next = [...msgs];
         const lastIdx = next.length - 1;
         const assistantMsg = {
@@ -845,7 +1114,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       });
     } catch (e) {
       console.error(e);
-      setChatMessages((msgs) => {
+      const chatContext = getCurrentChatContext();
+      const setMessages = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
+      setMessages((msgs: any) => {
         const next = [...msgs];
         const lastIdx = next.length - 1;
         if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
@@ -857,6 +1128,22 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       });
     } finally {
       setIsGenerating(false);
+      // Persist chat messages to localStorage
+      const activeTab = openTabs.find((t) => t.path === activeTabPath);
+      if (activeTab?.type === "chat") {
+        // Big chat
+        const chatId = activeTab.path.replace("/ai-chat/", "");
+        setBigChatMessages((msgs: any) => {
+          saveChatMessages(chatId, msgs, "big");
+          return msgs;
+        });
+      } else if (activeTab?.type === "text") {
+        // Small chat
+        setSmallChatMessages((msgs: any) => {
+          saveChatMessages("", msgs, "small");
+          return msgs;
+        });
+      }
     }
   };
 
@@ -892,7 +1179,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
-      <aside className="w-64 border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)]">
+      <aside style={{ width: sidebarWidth, minWidth: sidebarWidth > 0 ? 180 : 0, maxWidth: 480, transition: "width 0.15s ease-out" }} className="border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden">
         <div className="h-12 flex items-center justify-between gap-2 px-3 border-b border-[var(--border)] shrink-0">
           <Link href="/" className="text-xs text-[var(--muted)] hover:text-[var(--foreground)] truncate min-w-0">
             ← Dashboard
@@ -938,6 +1225,12 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
               >
                 Chats
               </button>
+              <button
+                onClick={() => setSidebarTab("git")}
+                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "git" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              >
+                Git
+              </button>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               {sidebarTab === "files" && (
@@ -952,12 +1245,49 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                   <FileActions fs={fs} basePath={addTargetPath} onAction={() => setRefreshTrigger((t) => t + 1)} />
                 </>
               )}
+              {sidebarTab === "chats" && (
+                <>
+                  <button
+                    onClick={() => setSearchOpen((o) => !o)}
+                    className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-[var(--foreground)]"}`}
+                    title="Search chats"
+                  >
+                    <IconSearch />
+                  </button>
+                  <button
+                    onClick={() => {
+                      console.log("➕ Creating new chat with model:", selectedModelId);
+                      const chat = createChat(selectedModelId);
+                      console.log("➕ Chat created:", chat);
+                      const chatPath = `/ai-chat/${chat.id}`;
+                      setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
+                      setActiveTabPath(chatPath);
+                      setRefreshTrigger((t) => t + 1); // Refresh ChatTree
+                      console.log("➕ Refresh trigger updated for ChatTree");
+                    }}
+                    className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center"
+                    title="New chat"
+                  >
+                    <IconPlus />
+                  </button>
+                </>
+              )}
             </div>
           </div>
-          {sidebarTab === "files" && searchOpen && (
+          {(sidebarTab === "files" && searchOpen) && (
             <input
               type="text"
               placeholder="Search files…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
+              autoFocus
+            />
+          )}
+          {(sidebarTab === "chats" && searchOpen) && (
+            <input
+              type="text"
+              placeholder="Search chats…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
@@ -979,29 +1309,106 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             />
           )}
           {sidebarTab === "chats" && (
-            <div className="flex-1 flex flex-col min-h-0 p-3">
-              <p className="text-sm text-[var(--muted)]">Chat sessions</p>
-              <p className="text-xs text-[var(--muted)] mt-2">Create and switch between chat sessions.</p>
-            </div>
+            <ChatTree
+              onChatSelect={(chatId) => {
+                const chatPath = `/ai-chat/${chatId}`;
+                if (!openTabs.find((t) => t.path === chatPath)) {
+                  setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
+                }
+                setActiveTabPath(chatPath);
+              }}
+              refreshTrigger={refreshTrigger}
+              onRefresh={() => {
+                setRefreshTrigger((t) => t + 1);
+              }}
+              searchQuery={searchQuery}
+            />
+          )}
+          {sidebarTab === "git" && (
+            <GitPanel
+              filePaths={openTabs.filter(t => t.type === "text").map(t => t.path)}
+              currentPath={activeTabPath}
+            />
           )}
         </div>
+        
+        {/* Resizable divider for outline */}
+        <ResizableDivider 
+          direction="vertical" 
+          onResize={(d) => setOutlineHeight((h) => Math.max(80, Math.min(400, h - d)))}
+          onDoubleClick={() => setOutlineHeight((h) => h > 80 ? 80 : 400)}
+        />
+        
+        {/* Document outline at bottom */}
+        <div className="border-t border-[var(--border)] flex flex-col" style={{ height: outlineHeight, minHeight: 80, maxHeight: 400 }}>
+          <div className="px-3 py-2 flex items-center gap-2 shrink-0">
+            <IconBookOpen />
+            <span className="text-xs font-medium text-[var(--foreground)]">Outline</span>
+            <div className="flex-1" />
+            <button
+              onClick={() => setOutlineHeight((h) => h > 80 ? 80 : 400)}
+              className="text-[var(--muted)] hover:text-[var(--foreground)] p-1 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
+              title={outlineHeight > 80 ? "Collapse outline" : "Expand outline"}
+            >
+              {outlineHeight > 80 ? <IconChevronDown /> : <IconChevronUp />}
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto min-h-0 py-1">
+            {(() => {
+              // Use summary content for outline since it contains the section structure
+              const summaryContentForOutline = summaryContent || "";
+              const entries = summaryContentForOutline ? parseOutline(summaryContentForOutline, activeTabPath) : [];
+              if (entries.length === 0) {
+                return (
+                  <div className="p-3 text-[var(--muted)] italic text-sm">
+                    {summaryContentForOutline ? "No sections found in document" : "Open a document to see its outline"}
+                  </div>
+                );
+              }
+              const minLevel = Math.min(...entries.map((e) => e.level));
+              return entries.map((entry, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    // For summary-based outline, we can't jump to line numbers
+                    // But we could search for the section in the document
+                    if (entry.line > 0) {
+                      editorRef.current?.gotoLine(entry.line);
+                    }
+                  }}
+                  className="w-full text-left px-3 py-2 cursor-pointer text-sm flex items-center gap-2 min-w-0 transition-colors hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                  style={{ paddingLeft: `${(entry.level - minLevel) * 12 + 12}px` }}
+                  title={entry.line > 0 ? `Line ${entry.line}` : entry.title}
+                >
+                  <span className="shrink-0 flex items-center text-[var(--muted)]">
+                    <IconChevronRight />
+                  </span>
+                  <span className="truncate min-w-0 text-[var(--foreground)]">{entry.title}</span>
+                  {entry.line > 0 && (
+                    <span className="ml-auto text-[10px] text-[var(--muted)] tabular-nums shrink-0">L{entry.line}</span>
+                  )}
+                </button>
+              ));
+            })()}
+          </div>
+        </div>
       </aside>
-
+      <ResizableDivider direction="horizontal" onResize={(d) => setSidebarWidth((w) => Math.max(180, Math.min(480, w + d)))} onDoubleClick={() => setSidebarWidth((w) => w > 0 ? 0 : 256)} />
       <main className="flex-1 flex min-w-0 min-h-0">
         {(() => {
           const activeTab = openTabs.find((t) => t.path === activeTabPath);
           const showAIPanel = activeTab?.type === "text" && ydoc && ytext && provider;
           return (
-            <section className="w-1/2 flex flex-col border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
+            <section style={{ flex: `${editorFraction} 1 0%` }} className="flex flex-col border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
               <FileTabs
                 tabs={openTabs}
                 activePath={activeTabPath}
                 onSelect={handleTabSelect}
                 onClose={handleTabClose}
+                onToggleTools={() => setToolsPanelOpen(!toolsPanelOpen)}
               />
               <div className="flex-1 relative min-h-0 overflow-hidden">
                 {(() => {
-                  const aiOverlayHeight = chatExpanded ? "45%" : "155px";
                   if (activeTab?.type === "settings") {
                     return (
                       <div className="absolute inset-0 overflow-auto bg-[var(--background)]">
@@ -1065,7 +1472,59 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                       />
                     );
                   }
+                  if (activeTab?.type === "chat") {
+                    const mdClasses = "prose prose-sm max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5";
+                    // Use big chat messages from state
+                    const msgs = bigChatMessages;
+
+                    return (
+                      <div className="absolute inset-0 flex flex-col bg-[var(--background)]">
+                        {/* Messages Area */}
+                        <div
+                          ref={chatScrollRef}
+                          className="flex-1 overflow-y-auto"
+                        >
+                          {msgs.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-[var(--muted)] px-6">
+                              <p className="text-sm">Send a message to start chatting.</p>
+                            </div>
+                          ) : (
+                            <div className="px-4 py-3 space-y-3">
+                              {msgs.map((m: any, i: number) => (
+                                <BigChatMessage 
+                                  key={i}
+                                  message={m}
+                                  isLast={i === msgs.length - 1}
+                                  lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Bottom bar: status + input */}
+                        <div className="shrink-0 border-t border-[var(--border)]">
+                          <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />
+                          <ChatInput
+                            chatInput={chatInput}
+                            setChatInput={setChatInput}
+                            chatMode={chatMode}
+                            setChatMode={setChatMode}
+                            isGenerating={isGenerating}
+                            onSend={handleSendChat}
+                            selectedModelId={selectedModelId}
+                            onModelChange={async (id) => {
+                              setSelectedModelId(id);
+                              setModelReady(false);
+                              await switchModel(id);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }
                   if (activeTab?.type === "text" && ydoc && ytext && provider) {
+                    const aiOverlayHeight = chatExpanded ? "45%" : "155px";
                     return (
                       <div
                         className="absolute inset-0 overflow-hidden"
@@ -1083,6 +1542,24 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                           lineWrapping={editorLineWrapping}
                           theme={theme}
                         />
+                        {/* Floating format button for LaTeX files */}
+                        {handleFormatDocument && activeTabPath.endsWith('.tex') && (
+                          <button
+                            onClick={handleFormatDocument}
+                            disabled={isFormatting}
+                            className="absolute bottom-4 right-4 w-10 h-10 bg-[var(--accent)] text-white rounded-full shadow-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center z-10"
+                            title="Format document"
+                          >
+                            {isFormatting ? (
+                              <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5a2.121 2.121 0 0 1 0-3Z"/>
+                              </svg>
+                            )}
+                          </button>
+                        )}
                       </div>
                     );
                   }
@@ -1108,8 +1585,18 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                     <div className="flex items-center justify-end gap-1 shrink-0 px-1 py-1">
                       <button
                         onClick={() => {
-                          setChatMessages([]);
-                          setStreamingStats(null);
+                          const activeTab = openTabs.find((t) => t.path === activeTabPath);
+                          if (activeTab?.type === "chat") {
+                            // Big chat
+                            const chatId = activeTab.path.replace("/ai-chat/", "");
+                            setBigChatMessages([]);
+                            saveChatMessages(chatId, [], "big");
+                          } else {
+                            // Small chat
+                            setSmallChatMessages([]);
+                            saveChatMessages("", [], "small");
+                          }
+                          // Don't reset streamingStats to null so telemetry remains visible
                         }}
                         className="w-7 h-7 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
                         title="Clear chat"
@@ -1130,62 +1617,30 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                         className="flex-1 min-h-0 overflow-auto px-3 py-2 text-sm space-y-3 shrink min-h-0 flex flex-col scroll-smooth"
                         style={{ scrollBehavior: "smooth" }}
                       >
-                        {chatMessages.map((m, i) => (
-                          <div
+                        {smallChatMessages.map((m: any, i: any) => (
+                          <SmallChatMessage 
                             key={i}
-                            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-                          >
-                            <div
-                              className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                                m.role === "user"
-                                  ? "bg-[var(--accent)] text-white rounded-br-sm"
-                                  : "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)] rounded-bl-sm"
-                              }`}
-                            >
-                              {m.role === "assistant" && m.responseType === "agent" ? (
-                                <pre
-                                  ref={i === chatMessages.length - 1 && m.role === "assistant" ? lastMessageRef : undefined}
-                                  className="text-sm overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded p-3 max-h-64"
-                                >
-                                  {m.content}
-                                </pre>
-                              ) : m.content === "Thinking..." ? (
-                                <span className="text-[var(--muted)] italic">{m.content}</span>
-                              ) : m.role === "assistant" && m.responseType === "ask" ? (
-                                <div className="prose prose-sm max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
-                                  <ReactMarkdown>{m.content}</ReactMarkdown>
-                                </div>
-                              ) : m.role === "assistant" ? (
-                                <div className="prose prose-sm max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0">
-                                  <ReactMarkdown>{m.content}</ReactMarkdown>
-                                </div>
-                              ) : (
-                                <span>{m.content}</span>
-                              )}
-                            </div>
-                          </div>
+                            message={m}
+                            isLast={i === smallChatMessages.length - 1}
+                            lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
+                          />
                         ))}
                       </div>
                     )}
-                    <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-[var(--muted)] shrink-0 border-t border-[var(--border)]">
-                      <span className={isGenerating ? "text-[var(--muted)]" : streamingStats ? "text-[var(--accent)]" : "text-[var(--muted)]"}>
-                        {isGenerating ? "Streaming…" : streamingStats ? "Done!" : "—"}
-                      </span>
-                      <span className="tabular-nums">
-                        {streamingStats
-                          ? `${streamingStats.totalTokens} tokens · ${streamingStats.elapsedSeconds}s · ${streamingStats.tokensPerSec} tok/s · ${streamingStats.contextUsed.toLocaleString()} / 32K context`
-                          : "— tokens · — s · — tok/s · — context"}
-                      </span>
-                    </div>
+                    <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />
                     <ChatInput
                       chatInput={chatInput}
                       setChatInput={setChatInput}
                       chatMode={chatMode}
                       setChatMode={setChatMode}
-                      modelReady={modelReady}
                       isGenerating={isGenerating}
-                      onModelReady={setModelReady}
                       onSend={handleSendChat}
+                      selectedModelId={selectedModelId}
+                      onModelChange={async (id) => {
+                        setSelectedModelId(id);
+                        setModelReady(false);
+                        await switchModel(id);
+                      }}
                     />
                   </div>
                 )}
@@ -1194,15 +1649,31 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           );
         })()}
 
-        <section className="w-1/2 flex flex-col min-w-0">
-          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-            <PdfPreview
-              pdfUrl={pdfUrl}
-              onCompile={handleCompile}
-              isCompiling={isCompiling}
-              latexReady={compilerReady}
-              lastCompileMs={lastCompileMs}
-            />
+        <ResizableDivider direction="horizontal" onResize={(d) => {
+          const main = document.querySelector('main');
+          if (!main) return;
+          const totalW = main.clientWidth;
+          if (totalW <= 0) return;
+          setEditorFraction((f) => Math.max(0.25, Math.min(0.75, f + d / totalW)));
+        }} />
+        <section style={{ flex: `${1 - editorFraction} 1 0%` }} className="flex flex-col min-w-0 min-h-0">
+          <div className="flex-1 relative overflow-hidden min-h-0">
+            {toolsPanelOpen ? (
+              <ToolsPanel
+                isOpen={true}
+                onClose={() => setToolsPanelOpen(false)}
+                summaryContent={summaryContent}
+                logsContent={logsContent}
+              />
+            ) : (
+              <PdfPreview
+                pdfUrl={pdfUrl}
+                onCompile={handleCompile}
+                isCompiling={isCompiling}
+                latexReady={compilerReady}
+                lastCompileMs={lastCompileMs}
+              />
+            )}
           </div>
         </section>
       </main>

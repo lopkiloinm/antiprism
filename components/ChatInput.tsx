@@ -2,17 +2,17 @@
 
 import { useEffect, useRef } from "react";
 import { IconSend } from "@/components/Icons";
-import { AIModelDownloadProgress } from "@/components/AIModelDownloadProgress";
+import { ModelDropdown } from "@/components/ModelDropdown";
 
 interface ChatInputProps {
   chatInput: string;
   setChatInput: (v: string) => void;
   chatMode: "ask" | "agent";
   setChatMode: (m: "ask" | "agent") => void;
-  modelReady: boolean;
   isGenerating: boolean;
-  onModelReady: (ready: boolean) => void;
   onSend: () => void;
+  selectedModelId?: string;
+  onModelChange?: (id: string) => void;
 }
 
 export function ChatInput({
@@ -20,10 +20,10 @@ export function ChatInput({
   setChatInput,
   chatMode,
   setChatMode,
-  modelReady,
   isGenerating,
-  onModelReady,
   onSend,
+  selectedModelId,
+  onModelChange,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -55,7 +55,7 @@ export function ChatInput({
         rows={1}
       />
       <div className="flex items-center justify-between gap-2 px-2 py-1.5 shrink-0">
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           <div className="flex rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] overflow-hidden">
             <button
               onClick={() => setChatMode("ask")}
@@ -72,12 +72,17 @@ export function ChatInput({
               Agent
             </button>
           </div>
-          <AIModelDownloadProgress onModelReady={onModelReady} compact />
+          {selectedModelId && onModelChange && (
+            <ModelDropdown
+              selectedModelId={selectedModelId}
+              onModelChange={onModelChange}
+            />
+          )}
         </div>
         <button
           className="w-8 h-8 rounded flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-50 transition-colors shrink-0"
           onClick={onSend}
-          disabled={!modelReady || isGenerating}
+          disabled={isGenerating}
           title="Send"
         >
           <IconSend />

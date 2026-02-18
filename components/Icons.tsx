@@ -46,6 +46,24 @@ import {
   CheckSquare,
   Square,
   X,
+  Wrench,
+  GitBranch,
+  GitCommit,
+  Code2,
+  ToggleLeft,
+  ToggleRight,
+  AlignLeft,
+  BookOpen,
+  Hash,
+  Type,
+  GripVertical,
+  Map,
+  FileType,
+  FileJson,
+  FileCog,
+  Braces,
+  Palette,
+  MessageSquare,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -94,3 +112,21 @@ export const IconArrowRight = () => <ArrowRight {...iconProps} />;
 export const IconCheckSquare = () => <CheckSquare {...iconProps} />;
 export const IconSquare = () => <Square {...iconProps} />;
 export const IconX = () => <X {...iconProps} />;
+export const IconTool = () => <Wrench {...iconProps} />;
+export const IconGitBranch = () => <GitBranch {...iconProps} />;
+export const IconGitCommit = () => <GitCommit {...iconProps} />;
+export const IconCode2 = () => <Code2 {...iconProps} />;
+export const IconToggleLeft = () => <ToggleLeft {...iconProps} />;
+export const IconToggleRight = () => <ToggleRight {...iconProps} />;
+export const IconAlignLeft = () => <AlignLeft {...iconProps} />;
+export const IconBookOpen = () => <BookOpen {...iconProps} />;
+export const IconHash = () => <Hash {...iconProps} />;
+export const IconType = () => <Type {...iconProps} />;
+export const IconGripVertical = () => <GripVertical {...iconProps} />;
+export const IconMap = () => <Map {...iconProps} />;
+export const IconFileType = () => <FileType {...iconProps} />;
+export const IconFileJson = () => <FileJson {...iconProps} />;
+export const IconFileCog = () => <FileCog {...iconProps} />;
+export const IconBraces = () => <Braces {...iconProps} />;
+export const IconPalette = () => <Palette {...iconProps} />;
+export const IconMessageSquare = () => <MessageSquare {...iconProps} />;

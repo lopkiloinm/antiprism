@@ -74,6 +74,8 @@ jobs:
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
       - name: Download LaTeX assets
         run: ${{ steps.detect-package-manager.outputs.manager }} run download-latex-assets
+      - name: Download WASM LaTeX tools assets
+        run: ${{ steps.detect-package-manager.outputs.manager }} run download-wasm-assets
       - name: Build with Next.js
         env:
           NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}

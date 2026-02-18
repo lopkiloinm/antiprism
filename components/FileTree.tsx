@@ -3,7 +3,35 @@
 import { useState, useEffect, useRef } from "react";
 import JSZip from "jszip";
 import { NameModal } from "./NameModal";
-import { IconFileText, IconFolder, IconFolderOpen, IconImage, IconLoader, IconPencil, IconDownload, IconTrash2 } from "./Icons";
+import { IconFileText, IconFolder, IconFolderOpen, IconImage, IconLoader, IconPencil, IconDownload, IconTrash2, IconFileCode, IconFileJson, IconFileCog, IconBraces, IconPalette, IconFile } from "./Icons";
+
+function getFileIcon(path: string) {
+  const name = path.split("/").pop()?.toLowerCase() ?? "";
+  const ext = name.split(".").pop() ?? "";
+
+  // Images
+  if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|ico)$/i.test(name)) return <IconImage />;
+  // LaTeX files
+  if (ext === "tex" || ext === "ltx" || ext === "latex") return <IconFileText />;
+  // Typst files
+  if (ext === "typ") return <IconFileText />;
+  // Bibliography
+  if (ext === "bib") return <IconBraces />;
+  // Style/class files
+  if (ext === "cls" || ext === "sty" || ext === "dtx" || ext === "ins") return <IconFileCog />;
+  // Config/metadata
+  if (ext === "json" || ext === "jsonc") return <IconFileJson />;
+  // Code files
+  if (ext === "js" || ext === "ts" || ext === "jsx" || ext === "tsx" || ext === "py" || ext === "lua") return <IconFileCode />;
+  // CSS / styling
+  if (ext === "css" || ext === "scss" || ext === "less") return <IconPalette />;
+  // PDF
+  if (ext === "pdf") return <IconFile />;
+  // Markdown / text
+  if (ext === "md" || ext === "txt" || ext === "rst") return <IconFileText />;
+  // Default
+  return <IconFile />;
+}
 
 type IdbfsFs = Awaited<ReturnType<typeof import("@wwog/idbfs").mount>>;
 
@@ -237,7 +265,7 @@ function TreeNodeComponent({
           onContextMenu={handleContextMenu}
         >
           <span className="shrink-0 flex items-center">
-            {/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(node.path) ? <IconImage /> : <IconFileText />}
+            {getFileIcon(node.path)}
           </span>
           <span className="truncate min-w-0">{node.name}</span>
         </div>

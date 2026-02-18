@@ -14,6 +14,7 @@ import { latex } from "codemirror-lang-latex";
 import type { Theme } from "@/lib/settings";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
+import { showMinimap } from "@replit/codemirror-minimap";
 
 const DEFAULT_LATEX = `\\documentclass{article}
 \\usepackage{amsmath}
@@ -30,6 +31,7 @@ E = mc^2
 
 export interface EditorPanelHandle {
   insertAtCursor: (text: string) => void;
+  gotoLine: (line: number) => void;
 }
 
 interface EditorPanelProps {
@@ -59,7 +61,7 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
     tabSize = DEFAULT_TAB_SIZE,
     lineWrapping = true,
     theme = "dark",
-  },
+  }: EditorPanelProps,
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -88,6 +90,17 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
       if (!view || !y) return;
       const pos = view.state.selection.main.head;
       y.insert(pos, text);
+    },
+    gotoLine(line: number) {
+      const view = viewRef.current;
+      if (!view) return;
+      const clampedLine = Math.max(1, Math.min(line, view.state.doc.lines));
+      const lineInfo = view.state.doc.line(clampedLine);
+      view.dispatch({
+        selection: { anchor: lineInfo.from },
+        scrollIntoView: true,
+      });
+      view.focus();
     },
   }), []);
 
@@ -203,6 +216,20 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
       yCollab(ytext, provider.awareness, { undoManager }),
     ];
     if (lineWrapping) extensions.push(EditorView.lineWrapping);
+
+    // Minimap
+    extensions.push(
+      showMinimap.compute(["doc"], () => ({
+        create: () => {
+          const dom = document.createElement("div");
+          dom.style.cssText = "background: var(--background); opacity: 0.85;";
+          return { dom };
+        },
+        displayText: "blocks",
+        showOverlay: "always",
+        gutters: [{ 1: "#888" }],
+      }))
+    );
 
     const state = EditorState.create({
       doc: ytext.toString(),

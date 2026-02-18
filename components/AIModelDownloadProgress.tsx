@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { initializeModel, setProgressCallback, checkWebGPUSupport } from "@/lib/localModel";
+import { initializeModel, setProgressCallback, checkWebGPUSupport, getActiveModelDef } from "@/lib/localModel";
 
 interface AIModelDownloadProgressProps {
   onModelReady: (ready: boolean) => void;
@@ -49,7 +49,7 @@ export function AIModelDownloadProgress({ onModelReady, compact }: AIModelDownlo
   if (compact) {
     return (
       <div className="flex items-center gap-2 text-xs text-[var(--muted)] shrink-0">
-        <span>LFM2.5-1.2B</span>
+        <span>{getActiveModelDef().label}</span>
         {modelReady ? (
           <span className="text-[var(--accent)]">Ready</span>
         ) : (
