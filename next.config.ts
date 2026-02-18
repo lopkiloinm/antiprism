@@ -19,20 +19,25 @@ const nextConfig: NextConfig = {
     // Enable async WebAssembly so wasm-pack modules (e.g. codemirror-lang-typst) get proper named exports
     config.experiments = { ...config.experiments, asyncWebAssembly: true };
     
-    // For static export, treat WASM files as assets to ensure they're included
+    // Handle WASM files properly for static export
     config.module = config.module || {};
     config.module.rules = config.module.rules || [];
+    
+    // For static export, treat most WASM files as assets but exclude codemirror-lang-typst
     config.module.rules.unshift({
       test: /\.wasm$/,
       type: "asset/resource",
-      include: [
-        /node_modules[\\/]pandoc-wasm[\\/]/,
-        /node_modules[\\/]wasm-latex-tools[\\/]/,
-        /node_modules[\\/]texlyre-busytex[\\/]/,
-      ],
+      exclude: [/node_modules[\\/]codemirror-lang-typst[\\/]/],
       generator: {
         filename: "static/wasm/[name].[hash][ext]",
       },
+    });
+    
+    // Handle codemirror-lang-typst WASM files as WebAssembly modules
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: "webassembly/async",
+      include: [/node_modules[\\/]codemirror-lang-typst[\\/]/],
     });
     
     // Fix pdfjs-dist "Object.defineProperty called on non-object" in dev mode.
