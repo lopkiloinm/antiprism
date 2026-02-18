@@ -270,11 +270,11 @@ export function ToolsPanel({
                   <div className="text-sm text-[var(--muted)] italic">No summary available</div>
                 )
               ) : parsedSummary.length > 0 ? (
-                <div className="space-y-4">
-                  {parsedSummary.map((section, i) => (
-                    <div key={i} className="border-b border-[var(--border)] pb-2">
-                      <div className="font-medium text-[var(--foreground)] mb-1">{section.label}</div>
-                      <div className="text-sm text-[var(--muted)]">{section.value}</div>
+                <div className="space-y-1">
+                  {parsedSummary.map((s, i) => (
+                    <div key={i} className="flex gap-2 text-sm">
+                      <span className="text-[var(--muted)] shrink-0 w-32 truncate" title={s.label}>{s.label}</span>
+                      <span className="text-[var(--foreground)] font-medium break-words flex-1">{s.value}</span>
                     </div>
                   ))}
                 </div>
