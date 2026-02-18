@@ -74,17 +74,17 @@ export function DashboardHeader({
       <div className="flex items-center gap-3">
         {selectedCount > 0 && (
           <div
-            className="flex items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_92%,white)] shadow-sm overflow-hidden"
+            className="flex items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--background))] shadow-sm overflow-hidden"
             role="toolbar"
             aria-label="Bulk actions"
           >
             <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)]">
-              <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)] px-2 py-0.5 font-medium">
+              <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] text-[var(--foreground)] px-2 py-0.5 font-medium">
                 {selectedCount} selected
               </span>
               <button
                 onClick={onClearSelection}
-                className="p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                className="p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
                 title="Clear selection"
               >
                 <IconX />
@@ -97,7 +97,7 @@ export function DashboardHeader({
               {onBulkDownload && (
                 <button
                   onClick={onBulkDownload}
-                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors flex items-center gap-2"
+                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors flex items-center gap-2"
                   title="Download selected"
                 >
                   <IconDownload />
@@ -107,7 +107,7 @@ export function DashboardHeader({
               {onBulkRestore && activeNav === "trash" && (
                 <button
                   onClick={onBulkRestore}
-                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors flex items-center gap-2 border-l border-[var(--border)]"
+                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors flex items-center gap-2 border-l border-[var(--border)]"
                   title="Restore selected"
                 >
                   <IconRotateCcw />
