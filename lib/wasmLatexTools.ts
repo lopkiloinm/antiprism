@@ -83,15 +83,34 @@ export async function formatLaTeX(
   content: string,
   options: FormatOptions = {}
 ): Promise<string> {
-  const texFmt = new TexFmt();
+  const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
+  const baseNorm = base && !base.startsWith("/") ? `/${base}` : base;
   
-  const result = await texFmt.format({
-    input: content,
-    wrap: options.wrap ?? true,
-    wraplen: options.wraplen ?? 80,
-    tabsize: options.tabsize ?? 2,
-    usetabs: options.usetabs ?? false,
-  });
+  try {
+    // Verify texfmt WASM file is accessible before initializing
+    const texfmtWasmUrl = `${baseNorm}/core/texfmt/tex_fmt_bg.wasm`;
+    const response = await fetch(texfmtWasmUrl, { method: 'HEAD' });
+    if (!response.ok) {
+      throw new Error(`TexFmt WASM file not accessible: ${texfmtWasmUrl} (${response.status})`);
+    }
+    
+    latexLogger.info("TexFmt WASM file accessible, initializing formatter...");
+    
+    // Initialize TexFmt with correct WASM path for Rust-based formatter
+    const texFmt = new TexFmt(false, `${baseNorm}/core/texfmt`);
+    
+    const result = await texFmt.format({
+      input: content,
+      wrap: options.wrap ?? true,
+      wraplen: options.wraplen ?? 80,
+      tabsize: options.tabsize ?? 2,
+      usetabs: options.usetabs ?? false,
+    });
 
-  return result.output;
+    latexLogger.info("LaTeX formatting completed successfully");
+    return result.output;
+  } catch (e) {
+    latexLogger.error("LaTeX formatting failed", e);
+    throw new Error(`LaTeX formatting failed: ${e}`);
+  }
 }
