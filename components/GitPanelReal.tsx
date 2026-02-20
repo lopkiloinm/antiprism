@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NameModal } from "./NameModal";
-import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconCheckSquare, IconSquare } from "./Icons";
+import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconCheckSquare, IconSquare, IconChevronDown, IconChevronUp } from "./Icons";
 import { gitStore } from "@/lib/gitStore";
 import type { EditorBufferManager } from "@/lib/editorBufferManager";
 
@@ -173,9 +173,24 @@ export function GitPanelReal({
     }
   }, []);
 
+  // Handle click outside for branch dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(e.target as Node)) {
+        setShowBranchDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const [repo, setRepo] = useState<GitRepository | null>(null);
 
+  const branchDropdownRef = useRef<HTMLDivElement>(null);
+
   const [branch, setBranch] = useState("main");
+  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [changes, setChanges] = useState<FileChange[]>([]);
   const [commits, setCommits] = useState<any[]>([]);
   const [commitMessage, setCommitMessage] = useState("");
@@ -574,17 +589,55 @@ export function GitPanelReal({
     <div className="flex flex-col h-full bg-[var(--background)]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--border)] shrink-0">
-        <div className="flex items-center gap-2">
+        <div className="relative flex items-center gap-2" ref={branchDropdownRef}>
           <IconGitBranch />
-          <select
-            value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-            className="text-xs bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-2 py-1 rounded"
+          <button
+            type="button"
+            onClick={() => setShowBranchDropdown(!showBranchDropdown)}
+            className="flex items-center gap-1 text-xs bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-2 py-1 rounded hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors"
           >
-            <option value="main">main</option>
-            <option value="feature">feature</option>
-            <option value="develop">develop</option>
-          </select>
+            {branch}
+            <span className="w-3 h-3 flex items-center">
+              {showBranchDropdown ? <IconChevronUp /> : <IconChevronDown />}
+            </span>
+          </button>
+          {showBranchDropdown && (
+            <div className="absolute left-0 top-full mt-1 z-50 min-w-[120px] rounded border border-[var(--border)] bg-[var(--background)] py-1">
+              <button
+                onClick={() => {
+                  setBranch("main");
+                  setShowBranchDropdown(false);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-xs text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
+                  branch === "main" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                }`}
+              >
+                main
+              </button>
+              <button
+                onClick={() => {
+                  setBranch("feature");
+                  setShowBranchDropdown(false);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-xs text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
+                  branch === "feature" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                }`}
+              >
+                feature
+              </button>
+              <button
+                onClick={() => {
+                  setBranch("develop");
+                  setShowBranchDropdown(false);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-xs text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
+                  branch === "develop" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                }`}
+              >
+                develop
+              </button>
+            </div>
+          )}
         </div>
         <button
           onClick={() => setShowHistory(!showHistory)}
