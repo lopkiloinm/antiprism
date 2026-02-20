@@ -115,6 +115,16 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
     ytextRef.current = ytext;
     const undoManager = new Y.UndoManager(ytext);
 
+    // Add logging for Yjs updates from editor
+    ytext.observe((update: any, origin: any) => {
+      console.log(`⌨️ Editor update: ${currentPath}`, { 
+        origin, 
+        updateLength: update.changes.length,
+        contentLength: ytext.toString().length,
+        timestamp: new Date().toISOString()
+      });
+    });
+
     provider.awareness.setLocalStateField("user", {
       name: "User " + Math.floor(Math.random() * 100),
       color: "#3b82f6",

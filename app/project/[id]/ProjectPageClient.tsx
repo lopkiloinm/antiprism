@@ -6,7 +6,6 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
-import { IndexeddbPersistence } from "y-indexeddb";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
 import { FileTree } from "@/components/FileTree";
@@ -18,6 +17,7 @@ import { EditorPanel, type EditorPanelHandle } from "@/components/EditorPanel";
 import { ChatInput } from "@/components/ChatInput";
 import { AIModelDownloadProgress } from "@/components/AIModelDownloadProgress";
 import { ChatTree, type ChatTreeProps } from "@/components/ChatTree";
+import { FileDocumentManager } from "@/lib/fileDocumentManager";
 import { BigChatMessage } from "@/components/BigChatMessage";
 import { SmallChatMessage } from "@/components/SmallChatMessage";
 import { ChatTelemetry } from "@/components/ChatTelemetry";
@@ -131,6 +131,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
   const [idbProvider, setIdbProvider] = useState<any>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [openTabs, setOpenTabs] = useState<Tab[]>([]);
   const [gitOpenTabs, setGitOpenTabs] = useState<Tab[]>([]);
   const [activeTabPath, _setActiveTabPath] = useState<string>("");
@@ -201,7 +202,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   } | null>(null);
   const initRef = useRef(false);
   const providerRef = useRef<WebrtcProvider | null>(null);
-  const ydocRef = useRef<Y.Doc | null>(null);
+  const fileDocManagerRef = useRef<FileDocumentManager | null>(null);
   const editorRef = useRef<EditorPanelHandle | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const lastMessageRef = useRef<HTMLPreElement | null>(null);
@@ -659,18 +660,25 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     setCurrentPath("");
     setAddTargetPath(basePath);
 
+    console.log('🚀 Init function called, id:', id);
     const init = async () => {
       try {
+        console.log('🚀 Starting initialization...');
+        
+        // Create WebRTC provider for collaboration (shared across all files)
         const doc = new Y.Doc();
         const prov = new WebrtcProvider(id, doc);
-        const idbProv = new IndexeddbPersistence(id, doc); // ✅ Add persistence!
         
         providerRef.current = prov;
-        ydocRef.current = doc;
-        const text = doc.getText("document");
+
+        // Create File document manager for per-file persistence
+        const fileDocManager = new FileDocumentManager(id, prov);
+        fileDocManagerRef.current = fileDocManager;
+        console.log('📂 File document manager created');
 
         const idbfs = await mount();
         fsRef.current = idbfs;
+        console.log('📂 File system mounted');
         if (cancelled) return;
 
         const mainPath = `${basePath}/main.tex`;
@@ -734,12 +742,15 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         }
 
         if (cancelled) return;
-        // Choose an initial file to open without assuming main.tex exists.
+        
+        // Helper function to find first text file
         async function findFirstTextFile(dir: string): Promise<string | null> {
           const { dirs, files } = await idbfs.readdir(dir);
           for (const f of files) {
             const full = dir === "/" ? `/${f.name}` : `${dir}/${f.name}`;
-            if (!isBinaryPath(full) && f.name !== ".antiprism_imported") return full;
+            if (!isBinaryPath(full)) {
+              return full;
+            }
           }
           for (const d of dirs) {
             const sub = dir === "/" ? `/${d.name}` : `${dir}/${d.name}`;
@@ -748,32 +759,99 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           }
           return null;
         }
-
+        
+        // Try to restore the last active file from localStorage first
+        const lastActiveFileKey = `lastActiveFile-${id}`;
+        const savedActivePath = typeof window !== 'undefined' ? localStorage.getItem(lastActiveFileKey) : null;
+        
         let initialPath: string | null = null;
-        if (await idbfs.exists(mainPath).catch(() => false)) initialPath = mainPath;
-        else if (await idbfs.exists(mainTypPath).catch(() => false)) initialPath = mainTypPath;
-        else initialPath = await findFirstTextFile(basePath).catch(() => null);
+        
+        // Priority 1: Use saved active file if it exists
+        if (savedActivePath && await idbfs.exists(savedActivePath).catch(() => false)) {
+          initialPath = savedActivePath;
+          console.log('📂 Restored last active file:', initialPath);
+        }
+        // Priority 2: Try main.tex
+        else if (await idbfs.exists(mainPath).catch(() => false)) {
+          initialPath = mainPath;
+          console.log('📂 Found main.tex:', mainPath);
+        }
+        // Priority 3: Try main.typ
+        else if (await idbfs.exists(mainTypPath).catch(() => false)) {
+          initialPath = mainTypPath;
+          console.log('📂 Found main.typ:', mainTypPath);
+        }
+        // Priority 4: Find first text file (fallback)
+        else {
+          initialPath = await findFirstTextFile(basePath).catch(() => null);
+          console.log('📂 Found first text file:', initialPath);
+        }
 
         if (initialPath) {
-          // Load initial file into the shared editor buffer
+          // Load initial file using the file document manager
           try {
-            const data = await idbfs.readFile(initialPath);
-            const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-            // Clear any IndexedDB content and load actual file content
-            text.delete(0, text.length);
-            text.insert(0, content || "");
-            textContentCacheRef.current.set(initialPath, content ?? "");
-            console.log(`📂 Loaded ${initialPath} from file system (${content.length} chars)`);
+            // 🎯 Get file-specific document from manager
+            const fileDoc = fileDocManagerRef.current!.getDocument(initialPath);
+            const text = fileDoc.text;
+            
+            // Wait for IndexedDB to load before deciding what to do
+            const waitForIndexedDb = () => {
+              return new Promise<void>((resolve) => {
+                const timeout = setTimeout(() => {
+                  console.log('⏰ IndexedDB load timeout, proceeding anyway');
+                  resolve();
+                }, 5000); // 5 second timeout
+                
+                const checkLoaded = () => {
+                  if ((fileDoc.doc as any)._indexedDbLoaded) {
+                    clearTimeout(timeout);
+                    console.log('✅ IndexedDB loaded successfully');
+                    resolve();
+                  } else {
+                    setTimeout(checkLoaded, 50); // Check every 50ms (slower)
+                  }
+                };
+                checkLoaded();
+              });
+            };
+            
+            console.log('⏳ Waiting for IndexedDB to load...');
+            await waitForIndexedDb();
+            
+            // Check if Yjs already has content (from persistence)
+            const existingContent = text.toString();
+            console.log('🔍 Existing Yjs content length after IndexedDB load:', existingContent.length);
+            
+            // Only read from filesystem if Yjs is empty (respect persistence!)
+            if (existingContent.length === 0) {
+              console.log('📝 Yjs was empty after IndexedDB load, loading from filesystem');
+              const data = await idbfs.readFile(initialPath);
+              const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
+              console.log('📂 File system content length:', content.length);
+              
+              text.delete(0, text.length);
+              text.insert(0, content || "");
+              
+              textContentCacheRef.current.set(initialPath, content ?? "");
+              console.log(`📂 Processed ${initialPath} (${content.length} chars)`);
+            } else {
+              console.log('💾 Keeping Yjs content (IndexedDB persistence worked!)');
+              console.log(`📂 Using persisted content for ${initialPath} (${existingContent.length} chars)`);
+              textContentCacheRef.current.set(initialPath, existingContent);
+            }
           } catch {
             // File doesn't exist, clear any IndexedDB content
-            text.delete(0, text.length);
+            const fileDoc = fileDocManagerRef.current!.getDocument(initialPath);
+            fileDoc.text.delete(0, fileDoc.text.length);
             console.log(`📂 ${initialPath} not found, cleared editor`);
           }
 
           setOpenTabs([{ path: initialPath, type: "text" }]);
           setActiveTabPath(initialPath);
           setCurrentPath(initialPath);
+          console.log('📂 Set active tab to:', initialPath);
         } else {
+          console.log('📂 No initial file found, creating empty project');
           setOpenTabs([]);
           setActiveTabPath("");
           setCurrentPath("");
@@ -781,10 +859,10 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
 
         if (cancelled) return;
         setYdoc(doc);
-        setYtext(text);
         setProvider(prov);
-        setIdbProvider(idbProv); // ✅ Set IndexedDB provider
         setFs(idbfs);
+        setIsInitialized(true); // ✅ Mark as fully initialized
+        console.log('🎉 Initialization complete, isInitialized set to true');
       } catch (e) {
         if (cancelled) return;
         // Don't surface "connection is closing" - happens when unmounting during init (e.g. Strict Mode)
@@ -805,9 +883,8 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       initRef.current = false;
       providerRef.current?.destroy();
       providerRef.current = null;
-      idbProvider?.destroy(); // ✅ Cleanup IndexedDB provider
-      ydocRef.current?.destroy();
-      ydocRef.current = null;
+      fileDocManagerRef.current?.destroy(); // ✅ Cleanup all file documents
+      fileDocManagerRef.current = null;
     };
   }, [id]);
 
@@ -822,8 +899,52 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
 
   const onYtextChangeNoop = useCallback(() => {}, []);
 
-  // Lazily create / recreate the buffer manager when ytext changes
+  // Get the current file's Y.Text from the file document manager
+  const getCurrentYText = useCallback((): Y.Text | null => {
+    const manager = fileDocManagerRef.current;
+    const path = activeTabPathRef.current; // ✅ Use ref instead of state
+    
+    if (!manager || !path) {
+      console.log('🔍 getCurrentYText: missing manager or path', { hasManager: !!manager, path });
+      return null;
+    }
+    
+    const ytext = manager.getText(path);
+    console.log('🔍 getCurrentYText: got ytext for', path, { hasText: !!ytext });
+    return ytext;
+  }, []);
+
+  // Save the active file to localStorage for persistence across sessions
+  const saveActiveFileToStorage = useCallback((path: string) => {
+    if (typeof window !== 'undefined' && id) {
+      const lastActiveFileKey = `lastActiveFile-${id}`;
+      localStorage.setItem(lastActiveFileKey, path);
+      console.log('💾 Saved active file to localStorage:', path);
+    }
+  }, [id]);
+
+  // Update localStorage when active tab changes
+  useEffect(() => {
+    if (activeTabPath) {
+      saveActiveFileToStorage(activeTabPath);
+    }
+  }, [activeTabPath, saveActiveFileToStorage]);
+
+  // Get the current file's WebRTC provider from the file document manager
+  const getCurrentWebrtcProvider = useCallback((): WebrtcProvider | null => {
+    const manager = fileDocManagerRef.current;
+    const path = activeTabPathRef.current;
+    
+    if (!manager || !path) {
+      return null;
+    }
+    
+    return manager.getWebrtcProvider(path);
+  }, []);
+
+  // Lazily create / recreate the buffer manager when active file changes
   const getBufferMgr = useCallback((): EditorBufferManager | null => {
+    const ytext = getCurrentYText();
     if (!ytext) return null;
     if (!bufferMgrRef.current) {
       bufferMgrRef.current = new EditorBufferManager(
@@ -1448,6 +1569,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       });
 
       // Update the buffer with formatted content
+      const ytext = getCurrentYText();
       if (ytext) {
         ytext.delete(0, ytext.length);
         ytext.insert(0, formattedContent);
@@ -1462,7 +1584,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     } finally {
       setIsFormatting(false);
     }
-  }, [openTabs, activeTabPath, getBufferMgr, ytext]);
+  }, [openTabs, activeTabPath, getBufferMgr, getCurrentYText]);
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -1496,12 +1618,20 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
   const loadTextIntoEditor = useCallback(
     async (path: string, content: string) => {
-      if (!ytext) return;
+      if (!fileDocManagerRef.current) return;
+      
+      // Get the document for this specific file
+      const fileDoc = fileDocManagerRef.current.getDocument(path);
+      const ytext = fileDoc.text;
+      
+      // Check if Yjs already has content (from persistence)
+      const existingContent = ytext.toString();
       
       // Save current content to file system before switching
       if (activeTabPath && activeTabPath !== path && fs) {
         try {
-          const currentContent = ytext.toString();
+          const currentDoc = fileDocManagerRef.current.getDocument(activeTabPath);
+          const currentContent = currentDoc.text.toString();
           if (currentContent.trim()) {
             // Remove and rewrite to save current file
             await fs.rm(activeTabPath).catch(() => {});
@@ -1510,18 +1640,27 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               new TextEncoder().encode(currentContent).buffer as ArrayBuffer,
               { mimeType: "text/x-tex" }
             );
-            console.log(`💾 Saved ${activeTabPath} before switching to ${path}`);
           }
-        } catch (error) {
-          console.error(`Failed to save ${activeTabPath} before switching:`, error);
+        } catch (e) {
+          console.error("Failed to save current file before switching:", e);
         }
       }
       
-      // Load new content
-      ytext.delete(0, ytext.length);
-      ytext.insert(0, content || "");
+      // Load new content - but be smart about it
+      if (existingContent.length === 0 && content.length > 0) {
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, content);
+      } else if (existingContent.length > 0 && content.length === 0) {
+        // Don't overwrite good content with empty content
+      } else if (existingContent.length === 0 && content.length === 0) {
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, content);
+      } else {
+        ytext.delete(0, ytext.length);
+        ytext.insert(0, content);
+      }
     },
-    [ytext, activeTabPath, fs]
+    [activeTabPath, fs]
   );
 
   /** Resolve the text content for a file from cache or filesystem. */
@@ -1543,7 +1682,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
   const handleFileSelect = useCallback(
     async (path: string) => {
-      if (!fs || !ytext) return;
+      if (!fs) return;
       const mgr = getBufferMgr();
 
       const stat = await fs.stat(path).catch(() => null);
@@ -1565,7 +1704,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           else saveActiveTextToCache();
         } else {
           const content = await resolveFileContent(path);
-          if (mgr) { mgr.switchTo(path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(path, content); }
+          if (mgr) { 
+            mgr.switchTo(path, content); 
+          } else { 
+            saveActiveTextToCache(); 
+            loadTextIntoEditor(path, content); 
+          }
         }
         setActiveTabPath(path);
         setCurrentPath(path);
@@ -1589,13 +1733,15 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       } else {
         const content = await resolveFileContent(path);
-        if (mgr) { mgr.switchTo(path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(path, content); }
+        // Always use loadTextIntoEditor for new tabs to ensure proper content loading
+        saveActiveTextToCache(); 
+        loadTextIntoEditor(path, content);
         setOpenTabs((t) => [...t, { path, type: "text" }]);
         setActiveTabPath(path);
         setCurrentPath(path);
       }
     },
-    [fs, ytext, openTabs, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
+    [fs, openTabs, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   // Handle tab reordering
@@ -1615,7 +1761,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         return;
       }
 
-      if (!fs || !ytext) return;
+      if (!fs) return;
       const mgr = getBufferMgr();
 
       setCurrentPath(path);
@@ -1627,11 +1773,16 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         setActiveTabPath(path);
       } else {
         const content = await resolveFileContent(path);
-        if (mgr) { mgr.switchTo(path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(path, content); }
+        if (mgr) { 
+          mgr.switchTo(path, content); 
+        } else { 
+          saveActiveTextToCache(); 
+          loadTextIntoEditor(path, content); 
+        }
         setActiveTabPath(path);
       }
     },
-    [fs, ytext, openTabs, activeTabPath, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
+    [fs, openTabs, activeTabPath, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   const handleTabClose = useCallback(
@@ -1648,7 +1799,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           if (nextActive.type === "settings" || nextActive.type === "chat") {
             setActiveTabPath(nextActive.path);
             setOpenTabs(remaining);
-          } else if (nextActive.type === "text" && ytext && fs) {
+          } else if (nextActive.type === "text" && fs) {
             const content = await resolveFileContent(nextActive.path);
             if (mgr) { mgr.switchTo(nextActive.path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(nextActive.path, content); }
             setActiveTabPath(nextActive.path);
@@ -1683,7 +1834,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       }
     },
-    [openTabs, activeTabPath, ytext, fs, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
+    [openTabs, activeTabPath, fs, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   const handleFileDeleted = useCallback(
@@ -1735,11 +1886,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       });
     },
-    [openTabs, activeTabPath, currentPath, basePath, fs, ytext, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
+    [openTabs, activeTabPath, currentPath, basePath, fs, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
   const handleCompile = async () => {
-    if (!compilerReady || !ytext || !fs) return;
+    const currentYText = getCurrentYText();
+    if (!compilerReady || !currentYText || !fs) return;
     const fsInstance = fs;
     const currentActivePath = activeTabPathRef.current;
 
@@ -1757,7 +1909,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         await fsInstance.rm(currentActivePath).catch(() => {});
         await fsInstance.writeFile(
           currentActivePath,
-          new TextEncoder().encode(ytext.toString()).buffer as ArrayBuffer,
+          new TextEncoder().encode(currentYText.toString()).buffer as ArrayBuffer,
           { mimeType: "text/x-tex" }
         );
       } catch (e) {
@@ -1769,8 +1921,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     const start = performance.now();
     try {
       // Compile the active source buffer (no implicit "main.tex" fallback).
-      const latex = activeIsTex ? ytext.toString() : "";
-      const typSourceActive = activeIsTypst ? ytext.toString() : "";
+      const latex = activeIsTex ? currentYText.toString() : "";
+      const typSourceActive = activeIsTypst ? currentYText.toString() : "";
       if (activeIsTex && !latex.trim()) return;
       if (activeIsTypst && !typSourceActive.trim()) return;
 
@@ -1821,7 +1973,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         if (mainTypTab)
           mainTypContent =
             currentActivePath === mainTypTab.path
-              ? ytext.toString()
+              ? currentYText.toString()
               : textContentCacheRef.current.get(mainTypTab.path) ?? "";
       }
 
@@ -1870,19 +2022,23 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   }, [handleCompile]);
 
   useEffect(() => {
-    if (compilerReady && ytext && fs && !autoCompileDoneRef.current && !isCompiling) {
+    const currentYText = getCurrentYText();
+    if (compilerReady && currentYText && fs && !autoCompileDoneRef.current && !isCompiling) {
       autoCompileDoneRef.current = true;
       void handleCompile();
     }
-  }, [compilerReady, ytext, fs, isCompiling, handleCompile]);
+  }, [compilerReady, fs, isCompiling, handleCompile, activeTabPath]); // ✅ Add activeTabPath to trigger when switching files
 
   useEffect(() => {
     isCompilingRef.current = isCompiling;
   }, [isCompiling]);
 
   useEffect(() => {
-    if (!autoCompileOnChange || !ytext || !compilerReady || !fs) return;
+    if (!autoCompileOnChange || !compilerReady || !fs) return;
+    
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let currentYText: Y.Text | null = null;
+    
     const observer = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
@@ -1890,12 +2046,20 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         if (!isCompilingRef.current) handleCompileRef.current?.();
       }, autoCompileDebounceMs);
     };
-    ytext.observe(observer);
+    
+    // Get current ytext and observe it
+    currentYText = getCurrentYText();
+    if (currentYText) {
+      currentYText.observe(observer);
+    }
+    
     return () => {
-      ytext.unobserve(observer);
+      if (currentYText) {
+        currentYText.unobserve(observer);
+      }
       if (timer) clearTimeout(timer);
     };
-  }, [autoCompileOnChange, autoCompileDebounceMs, ytext, compilerReady, fs]);
+  }, [autoCompileOnChange, autoCompileDebounceMs, compilerReady, fs, activeTabPath]); // ✅ Add activeTabPath to re-observe when switching files
 
   const getCurrentChatContext = () => {
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
@@ -2576,7 +2740,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       </div>
                     );
                   }
-                  if (activeTab?.type === "text" && ydoc && ytext && provider) {
+                  if (activeTab?.type === "text" && ydoc && provider) {
                     // Check if this is a diff tab
                     const isDiffTab = activeTabPath?.endsWith(':diff');
                     const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
@@ -2595,18 +2759,56 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                             className="h-full"
                           />
                         ) : (
-                          <EditorPanel
-                            ref={editorRef}
-                            ydoc={ydoc}
-                            ytext={ytext}
-                            provider={provider}
-                            currentPath={activeTabPath}
-                            onYtextChange={onYtextChangeNoop}
-                            fontSize={editorFontSize}
-                            tabSize={editorTabSize}
-                            lineWrapping={editorLineWrapping}
-                            theme={theme}
-                          />
+                          (() => {
+                            // Debug: Check what's happening
+                            console.log('🔍 Editor render check:', { 
+                              activeTabPath, 
+                              isDiffTab: activeTabPath?.endsWith(':diff'), 
+                              hasDiffData: !!diffData, 
+                              isInitialized, 
+                              activeTab 
+                            });
+                            
+                            // Don't render until fully initialized
+                            if (!isInitialized) {
+                              return (
+                                <div className="flex items-center justify-center h-full text-[var(--muted)]">
+                                  Initializing...
+                                </div>
+                              );
+                            }
+                            
+                            const currentYText = getCurrentYText();
+                            console.log('🎯 EditorPanel ytext:', { 
+                              activeTabPath, 
+                              hasYText: !!currentYText,
+                              yTextLength: currentYText?.length || 0
+                            });
+                            
+                            // Only render EditorPanel when we have a valid ytext
+                            if (!currentYText) {
+                              return (
+                                <div className="flex items-center justify-center h-full text-[var(--muted)]">
+                                  Loading editor...
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <EditorPanel
+                                ref={editorRef}
+                                ydoc={ydoc}
+                                ytext={currentYText}
+                                provider={getCurrentWebrtcProvider()}
+                                currentPath={activeTabPath}
+                                onYtextChange={onYtextChangeNoop}
+                                fontSize={editorFontSize}
+                                tabSize={editorTabSize}
+                                lineWrapping={editorLineWrapping}
+                                theme={theme}
+                              />
+                            );
+                          })()
                         )}
                         {/* Floating format button for LaTeX files */}
                         {handleFormatDocument && activeTabPath.endsWith('.tex') && (
