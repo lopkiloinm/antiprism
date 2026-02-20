@@ -1759,11 +1759,18 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         const isPdf = path.endsWith('.pdf');
         const fileType = isImage ? "image" : isPdf ? "image" : "text";
         
-        // Cache PDF files for the PDF viewer
-        if (isPdf && content && content instanceof ArrayBuffer) {
-          const blob = new Blob([content], { type: 'application/pdf' });
-          const url = URL.createObjectURL(blob);
-          setImageUrlCache((prev) => { const next = new Map(prev); next.set(path, url); return next; });
+        // Cache PDF files for the PDF viewer (read binary data directly)
+        if (isPdf && fs) {
+          try {
+            const data = await fs.readFile(path);
+            if (data && typeof data !== 'string') {
+              const blob = new Blob([data], { type: 'application/pdf' });
+              const url = URL.createObjectURL(blob);
+              setImageUrlCache((prev) => { const next = new Map(prev); next.set(path, url); return next; });
+            }
+          } catch (e) {
+            console.warn('Failed to cache PDF for viewer:', e);
+          }
         }
         
         // Always use loadTextIntoEditor for new tabs to ensure proper content loading
