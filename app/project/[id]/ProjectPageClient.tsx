@@ -349,13 +349,40 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 // Select a file to see changes`;
         }
         
-        // Get actual file content from IDBFS (source of truth)
+        // Get actual file content from Yjs (most up-to-date source)
         let currentContent = "";
         try {
-          const { mount } = await import("@wwog/idbfs");
-          const fs = await mount();
-          const contentBuffer = await fs.readFile(activeGitTabPath);
-          currentContent = new TextDecoder().decode(contentBuffer);
+          // For text files, try to get content from Yjs document manager first
+          if (activeGitTabPath.endsWith('.tex') || activeGitTabPath.endsWith('.typ') || activeGitTabPath.endsWith('.md') || activeGitTabPath.endsWith('.txt')) {
+            if (fileDocManagerRef.current) {
+              const doc = fileDocManagerRef.current.getDocument(activeGitTabPath, true); // silent=true
+              if (doc && doc.text && doc.text.toString().length > 0) {
+                currentContent = doc.text.toString();
+                console.log(`🔍 DIFF DEBUG - got content from Yjs for ${activeGitTabPath}, length ${currentContent.length}`);
+              } else {
+                // Fallback to IDBFS if Yjs is empty
+                const { mount } = await import("@wwog/idbfs");
+                const fs = await mount();
+                const contentBuffer = await fs.readFile(activeGitTabPath);
+                currentContent = new TextDecoder().decode(contentBuffer);
+                console.log(`🔍 DIFF DEBUG - got content from IDBFS (Yjs empty) for ${activeGitTabPath}, length ${currentContent.length}`);
+              }
+            } else {
+              // Fallback to IDBFS if manager not available
+              const { mount } = await import("@wwog/idbfs");
+              const fs = await mount();
+              const contentBuffer = await fs.readFile(activeGitTabPath);
+              currentContent = new TextDecoder().decode(contentBuffer);
+              console.log(`🔍 DIFF DEBUG - got content from IDBFS (no manager) for ${activeGitTabPath}, length ${currentContent.length}`);
+            }
+          } else {
+            // For binary files, read from IDBFS
+            const { mount } = await import("@wwog/idbfs");
+            const fs = await mount();
+            const contentBuffer = await fs.readFile(activeGitTabPath);
+            currentContent = new TextDecoder().decode(contentBuffer);
+            console.log(`🔍 DIFF DEBUG - binary file from IDBFS for ${activeGitTabPath}, length ${currentContent.length}`);
+          }
         } catch (error) {
           console.log(`🔍 DIFF DEBUG - Could not read ${activeGitTabPath} from IDBFS`, error);
           return `// Git View\n// Could not read file content`;

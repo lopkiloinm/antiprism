@@ -214,7 +214,7 @@ export function GitPanelReal({
   // Check if git is already initialized
   useEffect(() => {
     checkGitInitialization();
-  }, [projectId, loadCommitHistory]);
+  }, [projectId]);
 
   // Detect file changes by comparing with last commit
   useEffect(() => {
@@ -243,7 +243,17 @@ export function GitPanelReal({
   };
 
   const initializeGitRepository = async () => {
-    if (!stableRepoName || !projectId) return;
+    console.log('🔍 INIT DEBUG - Checking values:', { stableRepoName, projectId });
+    if (!stableRepoName || !projectId) {
+      console.log('🔍 INIT DEBUG - Missing values, returning early');
+      return;
+    }
+    
+    // Prevent multiple concurrent initializations
+    if (isLoading) {
+      console.log('🔍 INIT DEBUG - Already initializing, skipping');
+      return;
+    }
     
     setIsLoading(true);
     try {
@@ -517,15 +527,42 @@ export function GitPanelReal({
     const fileName = filePath.split("/").pop() || filePath;
     
     if (fullPath && onFileSelect) {
-      // Get current content
+      // Get current content from Yjs first (most up-to-date source)
       let currentContent = "";
       try {
-        const { mount } = await import("@wwog/idbfs");
-        const fs = await mount();
-        const contentBuffer = await fs.readFile(fullPath);
-        currentContent = new TextDecoder().decode(contentBuffer);
+        // For text files, try to get content from Yjs document manager first
+        if (fullPath.endsWith('.tex') || fullPath.endsWith('.typ') || fullPath.endsWith('.md') || fullPath.endsWith('.txt')) {
+          if (fileDocManager) {
+            const doc = fileDocManager.getDocument(fullPath, true); // silent=true
+            if (doc && doc.text && doc.text.toString().length > 0) {
+              currentContent = doc.text.toString();
+              console.log(`🔍 handleFileClick - got content from Yjs for ${fullPath}, length ${currentContent.length}`);
+            } else {
+              // Fallback to IDBFS if Yjs is empty
+              const { mount } = await import("@wwog/idbfs");
+              const fs = await mount();
+              const contentBuffer = await fs.readFile(fullPath);
+              currentContent = new TextDecoder().decode(contentBuffer);
+              console.log(`🔍 handleFileClick - got content from IDBFS (Yjs empty) for ${fullPath}, length ${currentContent.length}`);
+            }
+          } else {
+            // Fallback to IDBFS if manager not available
+            const { mount } = await import("@wwog/idbfs");
+            const fs = await mount();
+            const contentBuffer = await fs.readFile(fullPath);
+            currentContent = new TextDecoder().decode(contentBuffer);
+            console.log(`🔍 handleFileClick - got content from IDBFS (no manager) for ${fullPath}, length ${currentContent.length}`);
+          }
+        } else {
+          // For binary files, read from IDBFS
+          const { mount } = await import("@wwog/idbfs");
+          const fs = await mount();
+          const contentBuffer = await fs.readFile(fullPath);
+          currentContent = new TextDecoder().decode(contentBuffer);
+          console.log(`🔍 handleFileClick - binary file from IDBFS for ${fullPath}, length ${currentContent.length}`);
+        }
       } catch (error) {
-        console.log(`Could not get content for ${fullPath} from IDBFS:`, error);
+        console.log(`Could not get content for ${fullPath}:`, error);
       }
 
       // Get original content from last commit
@@ -549,7 +586,7 @@ export function GitPanelReal({
             files: lastCommit.files?.map(f => ({ path: f.path, hasContent: !!f.content, contentLength: f.content?.length || 0 }))
           });
           
-          const fileInCommit = lastCommit.files.find((f: any) => f.path === fileName);
+          const fileInCommit = lastCommit.files.find((f: any) => f.path === fullPath);
           if (fileInCommit) {
             originalContent = fileInCommit.content;
             console.log('🔍 Debug - Found file in commit:', {
