@@ -4,12 +4,13 @@ import * as Y from "yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { WebrtcProvider } from "y-webrtc";
 
-interface FileDocument {
+export interface FileDocument {
   doc: Y.Doc;
   text: Y.Text;
   persistence: IndexeddbPersistence;
   webrtcProvider?: WebrtcProvider;
   lastAccessed: number;
+  whenLoaded: Promise<void>;
 }
 
 export class FileDocumentManager {
@@ -54,27 +55,35 @@ export class FileDocumentManager {
     // Create WebRTC provider for this specific file
     const webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc);
     
-    // Debug logging
-    persistence.on('synced', () => {
-      console.log(`🔄 File persistence synced: ${filePath}`);
-      console.log(`✅ IndexedDB persistence confirmed for: ${filePath}`);
-      console.log(`📊 Current content length: ${text.toString().length} chars`);
-    });
-    
-    persistence.on('load', () => {
-      console.log(`📂 File persistence loaded: ${filePath}`);
-      const loadedContent = text.toString();
-      console.log(`📖 Loaded ${loadedContent.length} characters from IndexedDB: ${filePath}`);
-      console.log(`🔍 Content preview: ${loadedContent.substring(0, 100)}...`);
-      
-      // 🚨 CRITICAL: Check for content corruption
-      if (loadedContent.length > 10000) {
-        console.warn(`⚠️ SUSPICIOUS: Very large content loaded for ${filePath}: ${loadedContent.length} chars`);
-        console.warn(`🚨 Possible concatenation corruption detected!`);
-      }
-      
-      // Signal that IndexedDB has loaded
-      (doc as any)._indexedDbLoaded = true;
+    // Create a promise that resolves when the IndexedDB has finished loading
+    let loaded = false;
+    const whenLoaded = new Promise<void>((resolve) => {
+      const done = () => {
+        if (loaded) return;
+        loaded = true;
+        (doc as any)._indexedDbLoaded = true;
+        resolve();
+      };
+
+      // Resolve on 'synced' — the 'load' event is unreliable and often never fires
+      persistence.on('synced', () => {
+        console.log(`🔄 File persistence synced: ${filePath}`);
+        console.log(`📊 Current content length: ${text.toString().length} chars`);
+        done();
+      });
+
+      persistence.on('load', () => {
+        console.log(`📂 File persistence loaded: ${filePath}`);
+        done();
+      });
+
+      // Timeout fallback — never hang forever
+      setTimeout(() => {
+        if (!loaded) {
+          console.warn(`⏰ IndexedDB load timeout for ${filePath}, proceeding`);
+          done();
+        }
+      }, 3000);
     });
     
     // Log WebRTC connection status
@@ -113,7 +122,8 @@ export class FileDocumentManager {
       text,
       persistence,
       webrtcProvider,
-      lastAccessed: Date.now()
+      lastAccessed: Date.now(),
+      whenLoaded
     };
   }
 

@@ -945,18 +945,24 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       return null;
     }
     
-    // ✅ Use per-tab refs that are always consistent
-    const fileDoc = manager.getDocument(path);
-    const ytext = fileDoc.text;
+    // 🚨 CRITICAL FIX: Do NOT create Yjs documents for binary/image files!
+    // This prevents the logs showing "Creating document for .pdf/.jpeg"
+    if (isBinaryPath(path)) {
+      console.log('🔍 getCurrentYText: skipping Y.Text for binary file', path);
+      return null;
+    }
     
-    // 🎯 CRITICAL: Update current refs to maintain consistency
-    currentYDocRef.current = fileDoc.doc;
+    const doc = manager.getDocument(path);
+    const ytext = doc.text;
+    
+    // 🎯 Update per-tab refs so rendering conditions (currentYDocRef.current) pass
+    currentYDocRef.current = doc.doc;
     currentYTextRef.current = ytext;
     currentProviderRef.current = manager.getWebrtcProvider(path);
     
     console.log('🔍 getCurrentYText: got ytext for', path, { 
       hasText: !!ytext,
-      docId: fileDoc.doc.guid,
+      docId: doc.doc.guid,
       textLength: ytext?.length || 0
     });
     
@@ -987,13 +993,22 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
 
   // Lazily create / recreate the buffer manager when active file changes
   const getBufferMgr = useCallback((): EditorBufferManager | null => {
-    const ytext = getCurrentYText();
-    if (!ytext) return null;
     if (!bufferMgrRef.current) {
       bufferMgrRef.current = new EditorBufferManager(
         {
-          get: () => ytext.toString(),
-          set: (c: string) => { ytext.delete(0, ytext.length); ytext.insert(0, c || ""); },
+          // 🚨 CRITICAL FIX: The buffer manager MUST fetch the text dynamically from the CURRENT active tab
+          // Otherwise it forms a closure over the old ytext and overwrites the wrong document when switching!
+          get: () => {
+            const ytext = getCurrentYText();
+            return ytext ? ytext.toString() : "";
+          },
+          set: (c: string) => { 
+            const ytext = getCurrentYText();
+            if (ytext) {
+              ytext.delete(0, ytext.length); 
+              ytext.insert(0, c || ""); 
+            }
+          },
         },
         activeTabPathRef.current
       );
@@ -1674,6 +1689,10 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       const fileDoc = fileDocManagerRef.current.getDocument(path);
       const ytext = fileDoc.text;
       
+      // Wait for Yjs persistence to finish loading before we do any content comparisons!
+      // This prevents race conditions where Yjs is empty because IndexedDB hasn't loaded yet.
+      await fileDoc.whenLoaded;
+      
       // 🎯 REFACTORED: No more global state updates - use per-tab refs
       // getCurrentYText() will update the refs consistently when needed
       console.log('🔄 Loading tab content:', path, { 
@@ -1717,8 +1736,32 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         ytext.delete(0, ytext.length);
         ytext.insert(0, content);
       } else {
-        ytext.delete(0, ytext.length);
-        ytext.insert(0, content);
+        // 🚨 CRITICAL FIX: Only update the text if the existing content is DIFFERENT from what we're loading
+        // And more importantly, DO NOT overwrite existing content from Yjs just because we fetched an old string from the file system.
+        // The Yjs document is the source of truth for existing files!
+        if (existingContent !== content) {
+           console.log(`⚠️ Existing Yjs content differs from fs content for ${path}.`);
+           
+           // If the file was just imported from a ZIP, its Yjs document might have been initialized 
+           // with some default empty state or stale persistence, but the file system has the REAL imported content.
+           // We need a way to detect this. If the user explicitly clicked on a file in the tree, we should trust the FS.
+           // But if it's an automated tab switch, we trust Yjs.
+           // For now, if the file is imported from zip, the existingContent might be "" or " " while content is huge.
+           // Since we don't have a reliable flag for "just imported", we must be extremely careful.
+           
+           // If Yjs is completely empty or just whitespace, but FS has real content, trust the FS!
+           // Only overwrite when Yjs is truly empty — never overwrite non-empty Yjs content
+           // as the user may have edited the file to be short.
+           if (
+             (existingContent.trim().length === 0 && content.trim().length > 0)
+           ) {
+             console.log(`📥 Yjs is basically empty, loading real content from fs (${content.length} chars)`);
+             ytext.delete(0, ytext.length);
+             ytext.insert(0, content);
+           } else {
+             console.log(`🛡️ Keeping existing Yjs content (${existingContent.length} chars) instead of fs content (${content.length} chars)`);
+           }
+        }
       }
     },
     [activeTabPath, fs]
@@ -1760,18 +1803,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       const existingIdx = openTabs.findIndex((t) => t.path === path);
 
       if (existingIdx >= 0) {
-        if (isBinary) {
-          if (mgr) mgr.switchToImage(path);
-          else saveActiveTextToCache();
-        } else {
-          const content = await resolveFileContent(path);
-          if (mgr) { 
-            mgr.switchTo(path, content); 
-          } else { 
-            saveActiveTextToCache(); 
-            loadTextIntoEditor(path, content); 
-          }
-        }
+        // 🎯 FIX: Each file has its own Yjs document via FileDocumentManager.
+        // Just switch the active path — getCurrentYText() returns the correct doc.
+        // Do NOT use buffer manager switchTo() — it writes into the OLD tab's Yjs doc.
         setActiveTabPath(path);
         setCurrentPath(path);
         return;
@@ -1779,8 +1813,6 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
       // New tab
       if (isBinary) {
-        if (mgr) mgr.switchToImage(path);
-        else saveActiveTextToCache();
         try {
           const data = await fs.readFile(path);
           const blob = data instanceof ArrayBuffer ? new Blob([data]) : new Blob([data]);
@@ -1813,8 +1845,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           }
         }
         
-        // Always use loadTextIntoEditor for new tabs to ensure proper content loading
-        saveActiveTextToCache(); 
+        // Load content into the new file's Yjs document
         loadTextIntoEditor(path, content);
         setOpenTabs((t) => [...t, { path, type: fileType }]);
         setActiveTabPath(path);
@@ -1850,18 +1881,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       const parentDir = path.substring(0, path.lastIndexOf("/")) || "/";
       setAddTargetPath(parentDir.startsWith(basePath) ? parentDir : basePath);
       
-      // Always use loadTextIntoEditor for consistent Yjs document management
-      if (tab.type === "image") {
-        if (mgr) mgr.switchToImage(path);
-        else saveActiveTextToCache();
-        setActiveTabPath(path);
-      } else {
-        const content = await resolveFileContent(path);
-        // 🎯 FIXED: Always use loadTextIntoEditor for Yjs consistency
-        saveActiveTextToCache(); 
-        loadTextIntoEditor(path, content);
-        setActiveTabPath(path);
-      }
+      // 🎯 FIX: Each file has its own Yjs document — just switch activeTabPath.
+      // Do NOT use buffer manager switchTo() — it writes into the OLD tab's Yjs doc.
+      setActiveTabPath(path);
     },
     [fs, openTabs, activeTabPath, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
@@ -1880,15 +1902,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           if (nextActive.type === "settings" || nextActive.type === "chat") {
             setActiveTabPath(nextActive.path);
             setOpenTabs(remaining);
-          } else if (nextActive.type === "text" && fs) {
-            const content = await resolveFileContent(nextActive.path);
-            if (mgr) { mgr.switchTo(nextActive.path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(nextActive.path, content); }
-            setActiveTabPath(nextActive.path);
-            setCurrentPath(nextActive.path);
-            setOpenTabs(remaining);
           } else {
-            if (mgr) mgr.switchToImage(nextActive.path);
-            else saveActiveTextToCache();
+            // Each file has its own Yjs doc — just switch the active path
             setActiveTabPath(nextActive.path);
             setCurrentPath(nextActive.path);
             setOpenTabs(remaining);
@@ -1933,13 +1948,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       if (activeWasClosed) {
         const nextActive = remaining[0] ?? null;
         if (nextActive) {
-          if (nextActive.type === "text") {
-            const content = await resolveFileContent(nextActive.path);
-            if (mgr) { mgr.switchTo(nextActive.path, content); } else { saveActiveTextToCache(); loadTextIntoEditor(nextActive.path, content); }
-          } else {
-            if (mgr) mgr.switchToImage(nextActive.path);
-            else saveActiveTextToCache();
-          }
+          // Each file has its own Yjs doc — just switch the active path
           setActiveTabPath(nextActive.path);
           setCurrentPath(nextActive.path);
         } else {
@@ -1986,8 +1995,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     const activeTab = openTabs.find((t) => t.path === currentActivePath);
     if (activeTab?.type === "text" && currentActivePath) {
       try {
-        // idbfs writeFile is create-only; remove first so we can overwrite
-        await fsInstance.rm(currentActivePath).catch(() => {});
+        // idbfs writeFile is create-only; remove first then recreate
+        const fileExists = await fsInstance.exists(currentActivePath);
+        if (fileExists) {
+          await fsInstance.rm(currentActivePath, false);
+        }
+        
         await fsInstance.writeFile(
           currentActivePath,
           new TextEncoder().encode(currentYText.toString()).buffer as ArrayBuffer,
