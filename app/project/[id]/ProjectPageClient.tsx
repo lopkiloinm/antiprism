@@ -1684,19 +1684,26 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       // Check if Yjs already has content (from persistence)
       const existingContent = ytext.toString();
       
-      // Save current content to file system before switching
-      if (activeTabPath && activeTabPath !== path && fs) {
+      // 🚨 CRITICAL FIX: Don't overwrite inactive tabs during tab switching
+      // Skip filesystem writes for now - Yjs persistence handles content saving
+      if (activeTabPath && activeTabPath !== path) {
         try {
+          // Get the CURRENT tab's content from its own document, not from the target tab
           const currentDoc = fileDocManagerRef.current.getDocument(activeTabPath);
           const currentContent = currentDoc.text.toString();
+          
           if (currentContent.trim()) {
-            // Save current content to file system before switching
-            // Note: idbfs writeFile is create-only, but we don't need to overwrite
-            // since the content is already stored in Yjs persistence
-            console.log('💾 Content saved to Yjs persistence, skipping filesystem write');
+            console.log('💾 Current tab content tracked by Yjs persistence:', {
+              from: activeTabPath,
+              to: path,
+              contentLength: currentContent.length
+            });
+            
+            // 🎯 Yjs persistence automatically saves content, no need for manual fs writes
+            // This prevents the mimeType error and relies on the working Yjs system
           }
         } catch (e) {
-          console.error("Failed to save current file before switching:", e);
+          console.error('Failed to track current tab content:', e);
         }
       }
       
@@ -1835,23 +1842,24 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       }
 
       if (!fs) return;
+      // 🚨 CRITICAL FIX: Use same Yjs-based approach for all tab switches
+      // This prevents buffer/Yjs desync that causes corruption
       const mgr = getBufferMgr();
-
+      
       setCurrentPath(path);
       const parentDir = path.substring(0, path.lastIndexOf("/")) || "/";
       setAddTargetPath(parentDir.startsWith(basePath) ? parentDir : basePath);
+      
+      // Always use loadTextIntoEditor for consistent Yjs document management
       if (tab.type === "image") {
         if (mgr) mgr.switchToImage(path);
         else saveActiveTextToCache();
         setActiveTabPath(path);
       } else {
         const content = await resolveFileContent(path);
-        if (mgr) { 
-          mgr.switchTo(path, content); 
-        } else { 
-          saveActiveTextToCache(); 
-          loadTextIntoEditor(path, content); 
-        }
+        // 🎯 FIXED: Always use loadTextIntoEditor for Yjs consistency
+        saveActiveTextToCache(); 
+        loadTextIntoEditor(path, content);
         setActiveTabPath(path);
       }
     },

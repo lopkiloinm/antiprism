@@ -44,6 +44,9 @@ export class FileDocumentManager {
     // Create unique document name based on project and file path
     const docName = `${this.projectId}-${filePath}`;
     
+    console.log(`🆕 Creating document for: ${filePath}`);
+    console.log(`📝 Document name: ${docName}`);
+    
     const doc = new Y.Doc();
     const text = doc.getText("content");
     const persistence = new IndexeddbPersistence(docName, doc);
@@ -55,12 +58,20 @@ export class FileDocumentManager {
     persistence.on('synced', () => {
       console.log(`🔄 File persistence synced: ${filePath}`);
       console.log(`✅ IndexedDB persistence confirmed for: ${filePath}`);
+      console.log(`📊 Current content length: ${text.toString().length} chars`);
     });
     
     persistence.on('load', () => {
       console.log(`📂 File persistence loaded: ${filePath}`);
       const loadedContent = text.toString();
       console.log(`📖 Loaded ${loadedContent.length} characters from IndexedDB: ${filePath}`);
+      console.log(`🔍 Content preview: ${loadedContent.substring(0, 100)}...`);
+      
+      // 🚨 CRITICAL: Check for content corruption
+      if (loadedContent.length > 10000) {
+        console.warn(`⚠️ SUSPICIOUS: Very large content loaded for ${filePath}: ${loadedContent.length} chars`);
+        console.warn(`🚨 Possible concatenation corruption detected!`);
+      }
       
       // Signal that IndexedDB has loaded
       (doc as any)._indexedDbLoaded = true;
