@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NameModal } from "./NameModal";
 import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconCheckSquare, IconSquare, IconChevronDown, IconChevronUp } from "./Icons";
-import { gitStore, GitStore } from "@/lib/gitStore";
+import { gitStore, GitStore, type GitChange } from "@/lib/gitStore";
 import type { EditorBufferManager } from "@/lib/editorBufferManager";
 
 // CSS styles for dashboard-like appearance
@@ -260,7 +260,7 @@ export function GitPanelReal({
       console.log('🚀 Creating initial commit with all current files...');
       
       // Create repository first
-      await gitStore.createRepository(stableRepoName, "main");
+      await gitStore.createRepository(stableRepoName);
       
       // Get ALL project files for initial commit, not just open tabs
       const allProjectFiles = await getAllProjectFiles(projectId);

@@ -464,3 +464,6 @@ export const gitStore = new GitStore();
 
 // Export the class for static methods
 export { GitStore };
+
+// Export types
+export type { GitChange, GitRepository, GitCommit, GitFileSnapshot };

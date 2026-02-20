@@ -473,7 +473,7 @@ async function downloadFileWithProgress(
     onProgress(loaded, total, speedBytesPerSecond);
   }
 
-  const blob = new Blob(chunks);
+  const blob = new Blob(chunks as BlobPart[]);
   return new Response(blob, {
     headers: response.headers,
     status: response.status,

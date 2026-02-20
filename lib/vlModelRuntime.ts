@@ -142,7 +142,7 @@ async function downloadFile(url: string, onProg: (l: number, s: number) => void)
       lastTime = now; lastLoaded = loaded;
     }
   }
-  return new Response(new Blob(chunks), { headers: r.headers, status: r.status, statusText: r.statusText });
+  return new Response(new Blob(chunks as BlobPart[]), { headers: r.headers, status: r.status, statusText: r.statusText });
 }
 
 async function ensureCached(files: string[]) {
