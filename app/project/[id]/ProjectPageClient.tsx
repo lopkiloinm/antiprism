@@ -1633,7 +1633,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           const currentDoc = fileDocManagerRef.current.getDocument(activeTabPath);
           const currentContent = currentDoc.text.toString();
           if (currentContent.trim()) {
-            // Remove and rewrite to save current file
+            // idbfs writeFile is create-only; remove first so we can overwrite
             await fs.rm(activeTabPath).catch(() => {});
             await fs.writeFile(
               activeTabPath,
@@ -2266,6 +2266,21 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     }
   }, [openTabs]);
 
+  // Chatbox visibility - show for text files when ydoc is available
+  const isGitTab = sidebarTab === "git";
+  const activeTab = isGitTab ? gitOpenTabs.find((t) => t.path === activeGitTabPath) : openTabs.find((t) => t.path === activeTabPath);
+  const showAIPanel = !!(activeTab?.type === "text" && ydoc);
+  
+  // Debug chatbox visibility
+  console.log('🤖 Chatbox:', { 
+    showAIPanel, 
+    activeTabType: activeTab?.type,
+    hasYDoc: !!ydoc,
+    hasYText: !!ytext,
+    activeTabPath: isGitTab ? activeGitTabPath : activeTabPath,
+    sidebarTab
+  });
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       <aside style={{ width: sidebarWidth, minWidth: sidebarWidth > 0 ? 180 : 0, maxWidth: 480, transition: "width 0.15s ease-out" }} className="border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden">
@@ -2605,11 +2620,6 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           }
 
           // Regular editor panel for files/chats tabs
-          const isGitTab = (sidebarTab as "files" | "chats" | "git") === "git";
-          const activeTab = (isGitTab ? gitOpenTabs : openTabs).find((t) => t.path === (isGitTab ? activeGitTabPath : activeTabPath));
-          const showAIPanel = activeTab?.type === "text" && ydoc && ytext && provider;
-          
-          // Filter tabs based on sidebar context
           const displayTabs = isGitTab 
             ? gitOpenTabs.filter(t => t.type === "text") // Show git tabs when in git context
             : openTabs;
@@ -2831,7 +2841,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       </div>
                     );
                   }
-                  if (!ydoc || !ytext || !provider) {
+                  if (!ydoc || !getCurrentYText()) {
                     return (
                       <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
                         Loading editor…
