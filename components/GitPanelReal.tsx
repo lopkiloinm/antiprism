@@ -67,9 +67,11 @@ interface FileChange {
 }
 
 interface GitRepository {
-  id: string;
-  branch: string;
+  name: string;
   commits: any[];
+  currentBranch: string;
+  branches: string[];
+  headCommitId?: string;
 }
 
 // Simple hash function for file content
@@ -174,6 +176,7 @@ export function GitPanelReal({
   const checkGitInitialization = async () => {
     setIsLoading(true);
     try {
+      if (!projectId) return;
       const repo = await gitStore.getRepository(projectId);
       const wasInitialized = !!repo;
       setIsGitInitialized(wasInitialized);
@@ -191,6 +194,7 @@ export function GitPanelReal({
   };
 
   const initializeGitRepository = async () => {
+    if (!projectId) return;
     setIsLoading(true);
     try {
       await gitStore.createRepository(projectId);
@@ -276,6 +280,7 @@ export function GitPanelReal({
   };
 
   const detectFileChanges = async () => {
+    if (!projectId) return;
     try {
       const currentRepo = await gitStore.getRepository(projectId);
       setRepo(currentRepo); // Store repo in state
@@ -387,7 +392,7 @@ export function GitPanelReal({
       });
 
       const commitId = await gitStore.createCommit(
-        projectId,
+        projectId!,
         commitMessage.trim(),
         gitChanges,
         "User"
@@ -415,6 +420,7 @@ export function GitPanelReal({
   }, [commitMessage, changes, projectId, filePaths, onCloseFile]);
 
   const handleFileClick = useCallback(async (fileName: string) => {
+    if (!projectId) return;
     // Find the exact file path by matching the full filename (including extension)
     const fullPath = filePaths.find((p) => {
       const pathFileName = p.split("/").pop() || p;
