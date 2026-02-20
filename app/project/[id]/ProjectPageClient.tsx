@@ -126,20 +126,31 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
   const [projectName, setProjectName] = useState<string>("Project");
   const [isRoom, setIsRoom] = useState(false);
-  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
-  const [ytext, setYtext] = useState<Y.Text | null>(null);
+  // 🎯 REFACTORED: Per-tab state management to eliminate Yjs contradictions
+  const [activeTabPath, _setActiveTabPath] = useState<string>("");
+  const activeTabPathRef = useRef<string>("");
+  
+  // 🚨 REMOVED: Global ydoc/ytext state that caused contradictions
+  // const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
+  // const [ytext, setYtext] = useState<Y.Text | null>(null);
+  
+  // ✅ NEW: Per-tab state refs that are always consistent
+  const currentYDocRef = useRef<Y.Doc | null>(null);
+  const currentYTextRef = useRef<Y.Text | null>(null);
+  const currentProviderRef = useRef<WebrtcProvider | null>(null);
+  
+  const setActiveTabPath = useCallback((p: string) => {
+    activeTabPathRef.current = p;
+    _setActiveTabPath(p);
+  }, []);
+  
+  // ✅ Keep other state variables
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
   const [idbProvider, setIdbProvider] = useState<any>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [openTabs, setOpenTabs] = useState<Tab[]>([]);
   const [gitOpenTabs, setGitOpenTabs] = useState<Tab[]>([]);
-  const [activeTabPath, _setActiveTabPath] = useState<string>("");
-  const activeTabPathRef = useRef<string>("");
-  const setActiveTabPath = useCallback((p: string) => {
-    activeTabPathRef.current = p;
-    _setActiveTabPath(p);
-  }, []);
   const [activeGitTabPath, setActiveGitTabPath] = useState<string>("");
   const [currentPath, setCurrentPath] = useState<string>("");
   const [addTargetPath, setAddTargetPath] = useState<string>(basePath);
@@ -650,8 +661,12 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     // Reset state when switching projects so we don't show stale content
     autoCompileDoneRef.current = false;
     bufferMgrRef.current = null;
-    setYdoc(null);
-    setYtext(null);
+    
+    // 🎯 REFACTORED: Reset per-tab refs instead of global state
+    currentYDocRef.current = null;
+    currentYTextRef.current = null;
+    currentProviderRef.current = null;
+    
     setProvider(null);
     setIdbProvider(null); // ✅ Reset IndexedDB provider
     setFs(null);
@@ -877,7 +892,9 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         }
 
         if (cancelled) return;
-        setYdoc(doc);
+        
+        // 🎯 REFACTORED: No more global state setting - use per-tab refs
+        // getCurrentYText() will set refs when needed
         setProvider(prov);
         setFs(idbfs);
         setIsInitialized(true); // ✅ Mark as fully initialized
@@ -918,18 +935,31 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
 
   const onYtextChangeNoop = useCallback(() => {}, []);
 
-  // Get the current file's Y.Text from the file document manager
+  // 🎯 REFACTORED: Get current tab's Y.Text using consistent per-tab state
   const getCurrentYText = useCallback((): Y.Text | null => {
     const manager = fileDocManagerRef.current;
-    const path = activeTabPathRef.current; // ✅ Use ref instead of state
+    const path = activeTabPathRef.current;
     
     if (!manager || !path) {
       console.log('🔍 getCurrentYText: missing manager or path', { hasManager: !!manager, path });
       return null;
     }
     
-    const ytext = manager.getText(path);
-    console.log('🔍 getCurrentYText: got ytext for', path, { hasText: !!ytext });
+    // ✅ Use per-tab refs that are always consistent
+    const fileDoc = manager.getDocument(path);
+    const ytext = fileDoc.text;
+    
+    // 🎯 CRITICAL: Update current refs to maintain consistency
+    currentYDocRef.current = fileDoc.doc;
+    currentYTextRef.current = ytext;
+    currentProviderRef.current = manager.getWebrtcProvider(path);
+    
+    console.log('🔍 getCurrentYText: got ytext for', path, { 
+      hasText: !!ytext,
+      docId: fileDoc.doc.guid,
+      textLength: ytext?.length || 0
+    });
+    
     return ytext;
   }, []);
 
@@ -949,16 +979,10 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     }
   }, [activeTabPath, saveActiveFileToStorage]);
 
-  // Get the current file's WebRTC provider from the file document manager
+  // 🎯 REFACTORED: Get current tab's WebRTC provider using consistent per-tab state
   const getCurrentWebrtcProvider = useCallback((): WebrtcProvider | null => {
-    const manager = fileDocManagerRef.current;
-    const path = activeTabPathRef.current;
-    
-    if (!manager || !path) {
-      return null;
-    }
-    
-    return manager.getWebrtcProvider(path);
+    // ✅ Use the consistent ref that's updated by getCurrentYText
+    return currentProviderRef.current;
   }, []);
 
   // Lazily create / recreate the buffer manager when active file changes
@@ -975,7 +999,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       );
     }
     return bufferMgrRef.current;
-  }, [ytext]);
+  }, [getCurrentYText]); // ✅ Use function dependency instead of ytext variable
 
   // Generate summary content from current document
   const generateSummary = useCallback(async () => {
@@ -1552,9 +1576,9 @@ Active tab: ${activeTab?.type || 'none'}
 Path: ${activeTabPath || 'none'}
 Available tabs: ${openTabs.map(t => `${t.path} (${t.type})`).join(', ')}
 
-YText exists: ${!!ytext}
+YText exists: ${!!getCurrentYText()}
 Buffer manager exists: ${!!getBufferMgr()}`;
-  }, [openTabs, activeTabPath, getBufferMgr, ytext]);
+  }, [openTabs, activeTabPath, getBufferMgr, getCurrentYText]);
 
   // Handle document formatting
   const handleFormatDocument = useCallback(async () => {
@@ -1580,12 +1604,19 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       }
 
       // Format the document
-      const formattedContent = await formatLaTeX(content, {
-        wrap: true,
-        wraplen: 80,
-        tabsize: editorTabSize,
-        usetabs: false,
-      });
+      let formattedContent: string;
+      try {
+        formattedContent = await formatLaTeX(content, {
+          wrap: true,
+          wraplen: 80,
+          tabsize: editorTabSize,
+          usetabs: false,
+        });
+      } catch (formatError) {
+        console.error('⚠️ LaTeX formatting failed, using original content:', formatError);
+        // Fallback: use original content if formatting fails
+        formattedContent = content;
+      }
 
       // Update the buffer with formatted content
       const ytext = getCurrentYText();
@@ -1643,17 +1674,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       const fileDoc = fileDocManagerRef.current.getDocument(path);
       const ytext = fileDoc.text;
       
-      // 🎯 CRITICAL: Only update global state if document actually changed
-      // This prevents Yjs Text corruption during tab switching
-      if (ydoc !== fileDoc.doc) {
-        console.log('🔄 Switching to new document:', path);
-        setYdoc(fileDoc.doc);
-        setYtext(ytext);
-      } else {
-        console.log('📝 Same document, updating content:', path);
-        // Same document but content might have changed, just ensure ytext is correct
-        setYtext(ytext);
-      }
+      // 🎯 REFACTORED: No more global state updates - use per-tab refs
+      // getCurrentYText() will update the refs consistently when needed
+      console.log('🔄 Loading tab content:', path, { 
+        docId: fileDoc.doc.guid,
+        textLength: ytext?.length || 0
+      });
       
       // Check if Yjs already has content (from persistence)
       const existingContent = ytext.toString();
@@ -2153,7 +2179,45 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     let lastUpdate = 0;
 
     try {
-      const context = ytext?.toString() ?? "";
+      // 🎯 CRITICAL: Get current tab's content, not stale global ytext
+      const currentYText = getCurrentYText();
+      const context = currentYText?.toString() ?? "";
+      console.log('🤖 AI Context:', { 
+        activeTabPath: activeTabPathRef.current, 
+        contextLength: context.length,
+        hasContent: !!context.trim()
+      });
+      
+      // 🧪 DEBUG MODE: Show prompt instead of sending to AI
+      if (userMessage.includes("debugprompt") || userMessage.includes("testprompt")) {
+        console.log('🧪 DEBUG MODE - Full Prompt Preview:');
+        console.log('--- USER MESSAGE ---');
+        console.log(userMessage);
+        console.log('--- CONTEXT ---');
+        console.log(context.length > 1000 ? context.substring(0, 1000) + "... (truncated)" : context);
+        console.log('--- MODE ---');
+        console.log(chatMode);
+        console.log('--- FULL PROMPT WOULD BE ---');
+        const fullPrompt = isAsk ? `Context:\n${context}\n\nUser: ${userMessage}` : userMessage;
+        console.log(fullPrompt.length > 2000 ? fullPrompt.substring(0, 2000) + "... (truncated)" : fullPrompt);
+        
+        // Add debug response to chat
+        const debugResponse = `🧪 DEBUG: Prompt preview logged to console.\n\nContext length: ${context.length} chars\nMode: ${chatMode}\nFull prompt length: ${fullPrompt.length} chars\n\nCheck console for full preview.`;
+        
+        const chatContext = getCurrentChatContext();
+        const setMessages = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
+        setMessages((msgs: any) => {
+          const next = [...msgs];
+          const lastIdx = next.length - 1;
+          if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
+            next[lastIdx] = { role: "assistant", content: debugResponse, responseType: "ask" };
+          }
+          return next;
+        });
+        setIsGenerating(false);
+        setChatInput("");
+        return;
+      }
       const reply = await generateChatResponse(
         userMessage,
         isAsk ? context : undefined,
@@ -2313,17 +2377,17 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     }
   }, [openTabs]);
 
-  // Chatbox visibility - show for text files when ydoc is available
+  // Chatbox visibility - show for text files when current tab has Yjs document
   const isGitTab = sidebarTab === "git";
   const activeTab = isGitTab ? gitOpenTabs.find((t) => t.path === activeGitTabPath) : openTabs.find((t) => t.path === activeTabPath);
-  const showAIPanel = !!(activeTab?.type === "text" && ydoc);
+  const showAIPanel = !!(activeTab?.type === "text" && currentYDocRef.current);
   
   // Debug chatbox visibility
   console.log('🤖 Chatbox:', { 
     showAIPanel, 
     activeTabType: activeTab?.type,
-    hasYDoc: !!ydoc,
-    hasYText: !!ytext,
+    hasYDoc: !!currentYDocRef.current,
+    hasYText: !!currentYTextRef.current,
     activeTabPath: isGitTab ? activeGitTabPath : activeTabPath,
     sidebarTab
   });
@@ -2797,7 +2861,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       </div>
                     );
                   }
-                  if (activeTab?.type === "text" && ydoc && provider) {
+                  if (activeTab?.type === "text" && currentYDocRef.current && provider) {
                     // Check if this is a diff tab
                     const isDiffTab = activeTabPath?.endsWith(':diff');
                     const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
@@ -2863,7 +2927,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                             return (
                               <EditorPanel
                                 ref={editorRef}
-                                ydoc={ydoc}
+                                ydoc={currentYDocRef.current}
                                 ytext={currentYText}
                                 provider={getCurrentWebrtcProvider()}
                                 currentPath={activeTabPath}
