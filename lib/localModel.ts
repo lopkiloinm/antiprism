@@ -8,14 +8,16 @@ import {
   getDownloadProgress,
   getDownloadStats,
   setProgressCallback,
-  isDownloading,
-  isModelLoading,
+  fireProgressCallback,
+  isDownloading as _isTextDownloading,
+  isModelLoading as _isTextLoading,
   checkWebGPUSupport as _checkWebGPUSupport,
   switchModel as _switchModel,
   getActiveModelId as _getActiveModelId,
   getActiveModelDef as _getActiveModelDef,
   listModelFiles,
 } from "./localModelRuntime";
+import { isVLModelLoading } from "./vlModelRuntime";
 import {
   buildMessages,
   parseAskResponse,
@@ -28,6 +30,14 @@ import { LFM25_12B } from "./modelConfig";
 
 export function checkWebGPUSupport(): boolean {
   return _checkWebGPUSupport();
+}
+
+export function isDownloading(): boolean {
+  return _isTextDownloading() || isVLModelLoading();
+}
+
+export function isModelLoading(): boolean {
+  return _isTextLoading() || isVLModelLoading();
 }
 
 
@@ -100,6 +110,5 @@ export {
   getDownloadProgress,
   getDownloadStats,
   setProgressCallback,
-  isDownloading,
-  isModelLoading,
+  fireProgressCallback,
 };

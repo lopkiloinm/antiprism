@@ -42,8 +42,13 @@ function getTypst(): Promise<TypstSnippet> {
 
 /** Preload the Typst WASM compiler. Call on app init or before first compile. */
 export async function ensureTypstReady(): Promise<void> {
+  const t0 = performance.now();
+  typstLogger.info("ensureTypstReady start");
   const $typst = await getTypst();
   await $typst.pdf({ mainContent: " " });
+  typstLogger.info("ensureTypstReady complete", {
+    elapsedMs: Math.round(performance.now() - t0),
+  });
 }
 
 export interface AdditionalFile {
@@ -58,27 +63,62 @@ export async function compileTypstToPdf(
   mainContent: string,
   additionalFiles?: AdditionalFile[]
 ): Promise<Blob> {
+  const t0 = performance.now();
+  typstLogger.info("compileTypstToPdf start", {
+    mainChars: mainContent.length,
+    additionalFileCount: additionalFiles?.length ?? 0,
+  });
+
   const $typst = await getTypst();
+  typstLogger.info("Typst engine resolved");
   await $typst.resetShadow();
+  typstLogger.info("Typst shadow reset");
 
   // Main file at /main.typ so project root is "/" and #image("diagram.jpg") etc. resolve to /diagram.jpg
   await $typst.addSource(MAIN_TYP_PATH, mainContent);
+  typstLogger.info("Typst main source added", {
+    path: MAIN_TYP_PATH,
+    chars: mainContent.length,
+  });
 
   if (additionalFiles?.length) {
     for (const f of additionalFiles) {
       const path = f.path.startsWith("/") ? f.path : `/${f.path}`;
       if (typeof f.content === "string") {
         await $typst.addSource(path, f.content);
+        typstLogger.info("Typst additional text source added", {
+          path,
+          chars: f.content.length,
+        });
       } else {
-        await $typst.mapShadow(path, f.content instanceof Uint8Array ? f.content : new Uint8Array(f.content));
+        const bytes = f.content instanceof Uint8Array ? f.content : new Uint8Array(f.content);
+        await $typst.mapShadow(path, bytes);
+        typstLogger.info("Typst additional binary source mapped", {
+          path,
+          bytes: bytes.byteLength,
+        });
       }
     }
   }
 
+  typstLogger.info("Typst pdf render start", {
+    mainFilePath: MAIN_TYP_PATH,
+    root: TYPST_ROOT,
+  });
   const pdfData = await $typst.pdf({
     mainFilePath: MAIN_TYP_PATH,
     root: TYPST_ROOT,
   });
-  if (pdfData == null) throw new Error("Typst compile failed: no PDF output");
-  return new Blob([pdfData as BlobPart], { type: "application/pdf" });
+  if (pdfData == null) {
+    typstLogger.error("Typst compile failed: no PDF output", {
+      elapsedMs: Math.round(performance.now() - t0),
+    });
+    throw new Error("Typst compile failed: no PDF output");
+  }
+  const blob = new Blob([pdfData as BlobPart], { type: "application/pdf" });
+  typstLogger.info("Typst compile success", {
+    pdfBytes: blob.size,
+    elapsedMs: Math.round(performance.now() - t0),
+  });
+  return blob;
 }

@@ -1,5 +1,6 @@
 // Real Git Storage using IndexedDB
 // Stores commits, file snapshots, and change history
+import { gitLogger } from "@/lib/logger";
 
 interface GitCommit {
   id: string;
@@ -39,12 +40,20 @@ class GitStore {
   private db: IDBDatabase | null = null;
 
   async init(): Promise<void> {
+    gitLogger.info("GitStore init start", { dbName: this.dbName, storeName: this.storeName });
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, 1);
       
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        gitLogger.error("GitStore init failed", { error: String(request.error) });
+        reject(request.error);
+      };
       request.onsuccess = () => {
         this.db = request.result;
+        gitLogger.info("GitStore init success", {
+          dbName: this.dbName,
+          objectStores: Array.from(this.db.objectStoreNames),
+        });
         resolve();
       };
       
@@ -60,6 +69,7 @@ class GitStore {
 
   async createRepository(name: string): Promise<void> {
     console.log(`🔍 GitStore.createRepository called with name: "${name}"`);
+    gitLogger.info("createRepository called", { name });
     if (!this.db) await this.init();
     
     // Check if repository already exists
@@ -67,6 +77,7 @@ class GitStore {
     console.log(`🔍 GitStore.createRepository - existing repo:`, existingRepo ? 'found' : 'not found');
     if (existingRepo) {
       console.log(`Repository ${name} already exists, skipping creation`);
+      gitLogger.info("createRepository skipped; already exists", { name });
       return;
     }
     
@@ -83,8 +94,14 @@ class GitStore {
       const store = tx.objectStore(this.storeName);
       const request = store.put(repository);
       
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve();
+      request.onerror = () => {
+        gitLogger.error("createRepository put failed", { name, error: String(request.error) });
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        gitLogger.info("createRepository success", { name });
+        resolve();
+      };
       
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
@@ -93,28 +110,46 @@ class GitStore {
 
   async getAllRepositories(): Promise<GitRepository[]> {
     if (!this.db) await this.init();
+    gitLogger.info("getAllRepositories called");
     
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([this.storeName], 'readonly');
       const store = transaction.objectStore(this.storeName);
       const request = store.getAll();
       
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => {
+        gitLogger.error("getAllRepositories failed", { error: String(request.error) });
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        gitLogger.info("getAllRepositories success", { count: request.result?.length ?? 0 });
+        resolve(request.result || []);
+      };
     });
   }
 
   async getRepository(name: string): Promise<GitRepository | null> {
     if (!this.db) await this.init();
+    gitLogger.info("getRepository called", { name });
     
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction([this.storeName], 'readonly');
       const store = tx.objectStore(this.storeName);
       const request = store.get(name);
       
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        gitLogger.error("getRepository failed", { name, error: String(request.error) });
+        reject(request.error);
+      };
       request.onsuccess = () => {
         const result = request.result;
+        gitLogger.info("getRepository success", {
+          name,
+          found: !!result,
+          commitCount: result?.commits?.length ?? 0,
+          branchCount: result?.branches?.length ?? 0,
+          currentBranch: result?.currentBranch,
+        });
         resolve(result || null);
       };
       
@@ -128,17 +163,47 @@ class GitStore {
 
   async saveRepository(repository: GitRepository): Promise<void> {
     if (!this.db) await this.init();
+    gitLogger.info("saveRepository called", {
+      name: repository.name,
+      commits: repository.commits.length,
+      currentBranch: repository.currentBranch,
+      headCommitId: repository.headCommitId,
+    });
     
     return new Promise((resolve, reject) => {
       const tx = this.db!.transaction([this.storeName], 'readwrite');
       const store = tx.objectStore(this.storeName);
       const request = store.put(repository);
       
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve();
+      request.onerror = () => {
+        gitLogger.error("saveRepository put failed", {
+          name: repository.name,
+          error: String(request.error),
+        });
+        reject(request.error);
+      };
+      request.onsuccess = () => {
+        gitLogger.info("saveRepository put success", {
+          name: repository.name,
+          commits: repository.commits.length,
+        });
+        resolve();
+      };
       
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => {
+        gitLogger.info("saveRepository transaction complete", {
+          name: repository.name,
+          commits: repository.commits.length,
+        });
+        resolve();
+      };
+      tx.onerror = () => {
+        gitLogger.error("saveRepository transaction failed", {
+          name: repository.name,
+          error: String(tx.error),
+        });
+        reject(tx.error);
+      };
     });
   }
 
@@ -149,6 +214,13 @@ class GitStore {
     author?: string
   ): Promise<string> {
     console.log(`🔍 GitStore.createCommit called for repo: "${repoName}" with ${changes.length} changes`);
+    gitLogger.info("createCommit start", {
+      repoName,
+      message,
+      changeCount: changes.length,
+      changes: changes.map((c) => ({ path: c.path, status: c.status, oldPath: c.oldPath })),
+      author,
+    });
     const repo = await this.getRepository(repoName);
     if (!repo) throw new Error(`Repository ${repoName} not found`);
     
@@ -207,27 +279,40 @@ class GitStore {
     repo.headCommitId = commit.id;
     
     await this.saveRepository(repo);
+    gitLogger.info("createCommit success", {
+      repoName,
+      commitId: commit.id,
+      parentIds: commit.parentIds,
+      snapshotFileCount: commit.files.length,
+      totalCommits: repo.commits.length,
+      headCommitId: repo.headCommitId,
+    });
     
     return commit.id;
   }
 
   async getCommitHistory(repoName: string, limit = 50): Promise<GitCommit[]> {
+    gitLogger.info("getCommitHistory called", { repoName, limit });
     const repo = await this.getRepository(repoName);
     if (!repo) return [];
-    
-    return repo.commits.slice(0, limit);
+    const commits = repo.commits.slice(0, limit);
+    gitLogger.info("getCommitHistory success", { repoName, returned: commits.length });
+    return commits;
   }
 
   async getFileHistory(repoName: string, filePath: string): Promise<GitCommit[]> {
+    gitLogger.info("getFileHistory called", { repoName, filePath });
     const repo = await this.getRepository(repoName);
     if (!repo) return [];
-    
-    return repo.commits.filter(commit => 
+    const history = repo.commits.filter(commit => 
       commit.files.some(file => file.path === filePath)
     );
+    gitLogger.info("getFileHistory success", { repoName, filePath, returned: history.length });
+    return history;
   }
 
   async getFileAtCommit(repoName: string, filePath: string, commitId: string): Promise<string | null> {
+    gitLogger.info("getFileAtCommit called", { repoName, filePath, commitId });
     const repo = await this.getRepository(repoName);
     if (!repo) return null;
     
@@ -237,10 +322,18 @@ class GitStore {
     
     // Find the file snapshot
     const snapshot = commit.files.find(f => f.path === filePath);
+    gitLogger.info("getFileAtCommit resolved", {
+      repoName,
+      filePath,
+      commitId,
+      found: !!snapshot,
+      contentLength: snapshot?.content?.length ?? 0,
+    });
     return snapshot?.content || null;
   }
 
   async getDiff(repoName: string, filePath: string, fromCommitId?: string, toCommitId?: string): Promise<GitChange[]> {
+    gitLogger.info("getDiff called", { repoName, filePath, fromCommitId, toCommitId });
     const repo = await this.getRepository(repoName);
     if (!repo) return [];
     
@@ -287,25 +380,41 @@ class GitStore {
       }
     }
     
+    gitLogger.info("getDiff success", {
+      repoName,
+      filePath,
+      changeCount: changes.length,
+      statuses: changes.map((c) => c.status),
+    });
     return changes;
   }
 
   async getBranches(repoName: string): Promise<string[]> {
+    gitLogger.info("getBranches called", { repoName });
     const repo = await this.getRepository(repoName);
-    return repo?.branches || [];
+    const branches = repo?.branches || [];
+    gitLogger.info("getBranches success", { repoName, branches, count: branches.length });
+    return branches;
   }
 
   async createBranch(repoName: string, branchName: string, fromCommitId?: string): Promise<void> {
+    gitLogger.info("createBranch called", { repoName, branchName, fromCommitId });
     const repo = await this.getRepository(repoName);
     if (!repo) throw new Error(`Repository ${repoName} not found`);
     
     if (!repo.branches.includes(branchName)) {
       repo.branches.push(branchName);
       await this.saveRepository(repo);
+      gitLogger.info("createBranch success", {
+        repoName,
+        branchName,
+        branchCount: repo.branches.length,
+      });
     }
   }
 
   async switchBranch(repoName: string, branchName: string): Promise<void> {
+    gitLogger.info("switchBranch called", { repoName, branchName });
     const repo = await this.getRepository(repoName);
     if (!repo) throw new Error(`Repository ${repoName} not found`);
     
@@ -316,6 +425,11 @@ class GitStore {
     repo.currentBranch = branchName;
     repo.headCommitId = undefined; // Reset head for new branch
     await this.saveRepository(repo);
+    gitLogger.info("switchBranch success", {
+      repoName,
+      branchName,
+      headCommitId: repo.headCommitId,
+    });
   }
 
   private generateCommitId(): string {
@@ -347,3 +461,6 @@ class GitStore {
 
 // Export singleton instance
 export const gitStore = new GitStore();
+
+// Export the class for static methods
+export { GitStore };

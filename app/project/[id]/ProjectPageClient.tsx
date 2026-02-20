@@ -46,13 +46,14 @@ const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => (
 });
 import ReactMarkdown from "react-markdown";
 import { generateChatResponse, switchModel, getActiveModelId, initializeModel, isModelLoading } from "@/lib/localModel";
+import { generateVLResponse, initializeVLModel, isVLModelLoaded, isVLModelLoading, type VLMessage, type VLStreamCallbacks } from "@/lib/vlModelRuntime";
 import { createChat, getChatMessages, saveChatMessages } from "@/lib/chatStore";
-import { AVAILABLE_MODELS, DEFAULT_MODEL_ID } from "@/lib/modelConfig";
+import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, getModelById } from "@/lib/modelConfig";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { compileTypstToPdf, ensureTypstReady } from "@/lib/typstCompiler";
 import { documentParser } from "@/lib/document-parser";
 import { formatLaTeX } from "@/lib/wasmLatexTools";
-import { aiLogger, latexLogger, typstLogger } from "@/lib/logger";
+import { aiLogger, latexLogger, typstLogger, yjsLogger } from "@/lib/logger";
 import {
   getLatexEngine,
   type LaTeXEngine,
@@ -188,6 +189,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [editorFraction, setEditorFraction] = useState(0.5);
   const [outlineHeight, setOutlineHeight] = useState(400); // Default to maximum height
   const [selectedModelId, setSelectedModelId] = useState<string>(DEFAULT_MODEL_ID);
+  const [chatImageDataUrl, setChatImageDataUrl] = useState<string | null>(null);
 
   
   const [chatMode, setChatMode] = useState<"ask" | "agent">("ask");
@@ -222,6 +224,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const isCompilingRef = useRef(false);
   const gitDiffRef = useRef<HTMLDivElement>(null);
   const gitDiffViewRef = useRef<EditorView | null>(null);
+  const yjsLastMutationLogRef = useRef(0);
+  const yjsLastLengthRef = useRef(0);
 
   // Initialize git diff viewer when git tab is selected
   useEffect(() => {
@@ -345,23 +349,20 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 // Select a file to see changes`;
         }
         
-        // Get actual file content from buffer manager
-        const bufferMgr = getBufferMgr();
-        if (!bufferMgr) {
-          return `// Git Diff View
-// Unable to load file content`;
-        }
-
-        bufferMgr.saveActiveToCache();
-        let currentContent = bufferMgr.getCachedContent(activeGitTabPath);
-        
-        if (!currentContent || currentContent.trim() === '') {
-          currentContent = bufferMgr.getBufferContent();
+        // Get actual file content from IDBFS (source of truth)
+        let currentContent = "";
+        try {
+          const { mount } = await import("@wwog/idbfs");
+          const fs = await mount();
+          const contentBuffer = await fs.readFile(activeGitTabPath);
+          currentContent = new TextDecoder().decode(contentBuffer);
+        } catch (error) {
+          console.log(`🔍 DIFF DEBUG - Could not read ${activeGitTabPath} from IDBFS`, error);
+          return `// Git View\n// Could not read file content`;
         }
 
         if (!currentContent || currentContent.trim() === '') {
-          return `// Git View
-// No content found`;
+          return `// Git View\n// No content found`;
         }
 
         // Get original content from the last commit
@@ -382,8 +383,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           if (repo && repo.commits.length > 0) {
             previousCommit = repo.commits[0];
             // Use the active tab path directly (no suffix to remove)
-            const fileName = activeGitTabPath.split('/').pop() || activeGitTabPath;
-            const fileInCommit = previousCommit.files.find((f: any) => f.path === fileName);
+            const fileInCommit = previousCommit.files.find((f: any) => f.path === activeGitTabPath);
             
             console.log('🔍 DIFF DEBUG - Previous commit details:', {
               commitId: previousCommit.id,
@@ -400,9 +400,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             });
             
             console.log('🔍 DIFF DEBUG - File lookup:', {
-              fileName,
+              fileName: activeGitTabPath,
               fileInCommit: !!fileInCommit,
-              fileInCommitPath: fileInCommit?.path
+              fileInCommitPath: fileInCommit?.path,
+              allCommitFiles: previousCommit.files.map(f => f.path),
+              pathMatch: previousCommit.files.some((f: any) => f.path === activeGitTabPath)
             });
             
             if (fileInCommit) {
@@ -683,6 +685,32 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         // Create WebRTC provider for collaboration (shared across all files)
         const doc = new Y.Doc();
         const prov = new WebrtcProvider(id, doc);
+        yjsLogger.info("Created WebRTC provider", { roomId: id, docGuid: doc.guid });
+        prov.on("status", (event: any) => {
+          yjsLogger.info("Global WebRTC provider status", {
+            roomId: id,
+            docGuid: doc.guid,
+            status: event?.status,
+          });
+        });
+        prov.on("peers", (event: any) => {
+          yjsLogger.info("Global WebRTC provider peers", {
+            roomId: id,
+            peersConnected: event?.peers?.length ?? 0,
+            peers: event?.peers ?? [],
+            webrtcPeers: event?.webrtcPeers ?? [],
+            bcPeers: event?.bcPeers ?? [],
+          });
+        });
+        doc.on("update", (update: Uint8Array, origin: any) => {
+          yjsLogger.info("Global Y.Doc update", {
+            roomId: id,
+            docGuid: doc.guid,
+            updateBytes: update?.length ?? 0,
+            originType: typeof origin,
+            origin: typeof origin === "string" ? origin : origin?.constructor?.name ?? "unknown",
+          });
+        });
         
         providerRef.current = prov;
 
@@ -936,23 +964,37 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
   const onYtextChangeNoop = useCallback(() => {}, []);
 
   // 🎯 REFACTORED: Get current tab's Y.Text using consistent per-tab state
-  const getCurrentYText = useCallback((): Y.Text | null => {
+  const getCurrentYText = useCallback((silent = false): Y.Text | null => {
     const manager = fileDocManagerRef.current;
     const path = activeTabPathRef.current;
     
     if (!manager || !path) {
-      console.log('🔍 getCurrentYText: missing manager or path', { hasManager: !!manager, path });
+      if (!silent) {
+        console.log('🔍 getCurrentYText: missing manager or path', { hasManager: !!manager, path });
+        yjsLogger.warn("getCurrentYText missing manager/path", {
+          hasManager: !!manager,
+          path,
+          activeTabPathState: activeTabPath,
+          openTabCount: openTabs.length,
+        });
+      }
       return null;
     }
     
     // 🚨 CRITICAL FIX: Do NOT create Yjs documents for binary/image files!
     // This prevents the logs showing "Creating document for .pdf/.jpeg"
     if (isBinaryPath(path)) {
-      console.log('🔍 getCurrentYText: skipping Y.Text for binary file', path);
+      if (!silent) {
+        console.log('🔍 getCurrentYText: skipping Y.Text for binary file', path);
+        yjsLogger.info("getCurrentYText skipped binary path", {
+          path,
+          openTabCount: openTabs.length,
+        });
+      }
       return null;
     }
     
-    const doc = manager.getDocument(path);
+    const doc = manager.getDocument(path, silent);
     const ytext = doc.text;
     
     // 🎯 Update per-tab refs so rendering conditions (currentYDocRef.current) pass
@@ -960,14 +1002,25 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     currentYTextRef.current = ytext;
     currentProviderRef.current = manager.getWebrtcProvider(path);
     
-    console.log('🔍 getCurrentYText: got ytext for', path, { 
-      hasText: !!ytext,
-      docId: doc.doc.guid,
-      textLength: ytext?.length || 0
-    });
+    if (!silent) {
+      console.log('🔍 getCurrentYText: got ytext for', path, { 
+        hasText: !!ytext,
+        docId: doc.doc.guid,
+        textLength: ytext?.length || 0
+      });
+      yjsLogger.info("getCurrentYText resolved", {
+        path,
+        hasText: !!ytext,
+        docGuid: doc.doc.guid,
+        textLength: ytext?.length || 0,
+        totalOpenYDocs: manager.getDocumentPaths().length,
+        knownPaths: manager.getDocumentPaths(),
+        hasProviderForPath: !!currentProviderRef.current,
+      });
+    }
     
     return ytext;
-  }, []);
+  }, [activeTabPath, openTabs]);
 
   // Save the active file to localStorage for persistence across sessions
   const saveActiveFileToStorage = useCallback((path: string) => {
@@ -999,11 +1052,11 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           // 🚨 CRITICAL FIX: The buffer manager MUST fetch the text dynamically from the CURRENT active tab
           // Otherwise it forms a closure over the old ytext and overwrites the wrong document when switching!
           get: () => {
-            const ytext = getCurrentYText();
+            const ytext = getCurrentYText(true); // silent=true to prevent render-phase logging loops
             return ytext ? ytext.toString() : "";
           },
           set: (c: string) => { 
-            const ytext = getCurrentYText();
+            const ytext = getCurrentYText(true);
             if (ytext) {
               ytext.delete(0, ytext.length); 
               ytext.insert(0, c || ""); 
@@ -1984,13 +2037,28 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     if (!compilerReady || !currentYText || !fs) return;
     const fsInstance = fs;
     const currentActivePath = activeTabPathRef.current;
+    const compileEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    typstLogger.info("handleCompile start", {
+      compileEventId,
+      currentActivePath,
+      currentYTextLength: currentYText.length,
+      compilerReady,
+    });
 
     // Only compile when the active tab is an actual LaTeX or Typst source file.
     // Avoid falling back to LaTeX when there is no active file (or a non-document tab is active).
     const activeLower = currentActivePath.toLowerCase();
     const activeIsTypst = activeLower.endsWith(".typ");
     const activeIsTex = activeLower.endsWith(".tex");
-    if (!currentActivePath || (!activeIsTypst && !activeIsTex)) return;
+    if (!currentActivePath || (!activeIsTypst && !activeIsTex)) {
+      typstLogger.warn("handleCompile skipped: active tab is not TeX/Typst", {
+        compileEventId,
+        currentActivePath,
+        activeIsTex,
+        activeIsTypst,
+      });
+      return;
+    }
 
     const activeTab = openTabs.find((t) => t.path === currentActivePath);
     if (activeTab?.type === "text" && currentActivePath) {
@@ -2061,6 +2129,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       }
       await gatherFiles(basePath);
+      typstLogger.info("handleCompile gathered files", {
+        compileEventId,
+        additionalFileCount: additionalFiles.length,
+        hasMainTypContent: mainTypContent != null,
+        activeIsTypst,
+        activeIsTex,
+      });
 
       if (mainTypContent == null) {
         const mainTypTab = openTabs.find((t) => t.type === "text" && t.path.endsWith("main.typ"));
@@ -2074,6 +2149,14 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       // Choose compiler by active tab: .typ → Typst, .tex → LaTeX
       const typSource = activeIsTypst ? typSourceActive : mainTypContent;
       const useTypst = activeIsTypst && (typSource != null && typSource.trim() !== "");
+      typstLogger.info("handleCompile compiler selection", {
+        compileEventId,
+        useTypst,
+        activeIsTypst,
+        activeIsTex,
+        typSourceChars: typSource?.length ?? 0,
+        latexChars: latex.length,
+      });
 
       async function compileLatexWithFallback() {
         // Try the user's selected engine first, then fall back to the others on ANY failure.
@@ -2096,6 +2179,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         ? await compileTypstToPdf(typSource!, additionalFiles)
         : await compileLatexWithFallback();
       setLastCompileMs(Math.round(performance.now() - start));
+      typstLogger.info("handleCompile success", {
+        compileEventId,
+        useTypst,
+        elapsedMs: Math.round(performance.now() - start),
+        pdfBytes: pdfBlob.size,
+      });
       const url = URL.createObjectURL(pdfBlob);
       setPdfUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -2103,8 +2192,17 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       });
     } catch (e) {
       console.error("Compile failed", e);
+      typstLogger.error("handleCompile failed", {
+        compileEventId,
+        error: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+      });
     } finally {
       setIsCompiling(false);
+      typstLogger.info("handleCompile finally", {
+        compileEventId,
+        isCompiling: false,
+      });
     }
   };
 
@@ -2133,7 +2231,23 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let currentYText: Y.Text | null = null;
     
-    const observer = () => {
+    const observer = (evt: any) => {
+      const totalChars = currentYText?.length ?? 0;
+      const prevChars = yjsLastLengthRef.current;
+      const deltaChars = totalChars - prevChars;
+      yjsLastLengthRef.current = totalChars;
+
+      const now = Date.now();
+      if (now - yjsLastMutationLogRef.current > 2000 || deltaChars !== 0) {
+        yjsLastMutationLogRef.current = now;
+        yjsLogger.info("Observed Yjs text change", {
+          path: activeTabPathRef.current,
+          totalChars,
+          deltaChars,
+          deltaOps: Array.isArray(evt?.changes?.delta) ? evt.changes.delta.length : undefined,
+          local: evt?.transaction?.local,
+        });
+      }
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;
@@ -2144,12 +2258,20 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     // Get current ytext and observe it
     currentYText = getCurrentYText();
     if (currentYText) {
+      yjsLastLengthRef.current = currentYText.length;
       currentYText.observe(observer);
+      yjsLogger.info("Attached Yjs observer", {
+        path: activeTabPathRef.current,
+        length: currentYText.length,
+      });
     }
     
     return () => {
       if (currentYText) {
         currentYText.unobserve(observer);
+        yjsLogger.info("Detached Yjs observer", {
+          path: activeTabPathRef.current,
+        });
       }
       if (timer) clearTimeout(timer);
     };
@@ -2161,20 +2283,50 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   };
 
   const handleSendChat = async () => {
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() && !chatImageDataUrl) return;
     const userMessage = chatInput.trim();
     const chatContext = getCurrentChatContext();
+    const currentModelDef = getModelById(selectedModelId);
+    const isVision = !!currentModelDef.vision;
+    const capturedImage = chatImageDataUrl;
+    const aiEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    aiLogger.info("handleSendChat start", {
+      aiEventId,
+      chatContext,
+      modelId: selectedModelId,
+      isVision,
+      userChars: userMessage.length,
+      hasImage: !!capturedImage,
+      imageChars: capturedImage?.length ?? 0,
+      chatMode,
+      bigChatCount: bigChatMessages.length,
+      smallChatCount: smallChatMessages.length,
+    });
     
     // Check if model is loaded, if not, load it first
-    if (!modelReady || isModelLoading()) {
-      aiLogger.info("Model not ready, loading before sending message...");
+    if (isVision) {
+      if (!isVLModelLoaded() && !isVLModelLoading()) {
+        aiLogger.info("VL model not ready, loading...", { aiEventId, modelId: selectedModelId });
+        try {
+          await initializeVLModel();
+          aiLogger.info("VL model loaded", { aiEventId, modelId: selectedModelId });
+        } catch (error) {
+          aiLogger.error("Failed to load VL model", { aiEventId, modelId: selectedModelId, error: String(error) });
+          const errorMessage = { role: "assistant" as const, content: "Error: Failed to load VL model. WebGPU required." };
+          const setMsgs = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
+          setMsgs((msgs) => [...msgs, { role: "user", content: userMessage, ...(capturedImage && { image: capturedImage }) }, errorMessage]);
+          setChatInput(""); setChatImageDataUrl(null);
+          return;
+        }
+      }
+    } else if (!modelReady || isModelLoading()) {
+      aiLogger.info("Text model not ready, loading before sending message...", { aiEventId, modelId: selectedModelId });
       try {
         await initializeModel();
         setModelReady(true);
-        aiLogger.info("Model loaded successfully");
+        aiLogger.info("Text model loaded successfully", { aiEventId, modelId: selectedModelId });
       } catch (error) {
-        aiLogger.error("Failed to load model", error);
-        // Add error message to chat
+        aiLogger.error("Failed to load text model", { aiEventId, modelId: selectedModelId, error: String(error) });
         const errorMessage = { role: "assistant" as const, content: "Error: Failed to load model. Please try again." };
         if (chatContext === "big") {
           setBigChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, errorMessage]);
@@ -2186,13 +2338,15 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       }
     }
     
+    const userMsg = { role: "user" as const, content: userMessage, ...(capturedImage && { image: capturedImage }) };
     if (chatContext === "big") {
-      setBigChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, { role: "assistant", content: "Thinking..." }]);
+      setBigChatMessages((msgs) => [...msgs, userMsg, { role: "assistant", content: "Thinking..." }]);
     } else {
-      setSmallChatMessages((msgs) => [...msgs, { role: "user", content: userMessage }, { role: "assistant", content: "Thinking..." }]);
+      setSmallChatMessages((msgs) => [...msgs, userMsg, { role: "assistant", content: "Thinking..." }]);
     }
     
     setChatInput("");
+    setChatImageDataUrl(null);
     setChatExpanded(true);
     setIsGenerating(true);
 
@@ -2203,6 +2357,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       // 🎯 CRITICAL: Get current tab's content, not stale global ytext
       const currentYText = getCurrentYText();
       const context = currentYText?.toString() ?? "";
+      aiLogger.info("AI context prepared", {
+        aiEventId,
+        activeTabPath: activeTabPathRef.current,
+        contextChars: context.length,
+        hasContext: !!context.trim(),
+        currentYTextLength: currentYText?.length ?? 0,
+      });
       console.log('🤖 AI Context:', { 
         activeTabPath: activeTabPathRef.current, 
         contextLength: context.length,
@@ -2239,53 +2400,119 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         setChatInput("");
         return;
       }
-      const reply = await generateChatResponse(
-        userMessage,
-        isAsk ? context : undefined,
-        chatMode,
-        {
-          onChunk: (text) => {
-            const chatContext = getCurrentChatContext();
-            const setMessages = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
-            setMessages((msgs: any) => {
-              const next = [...msgs];
-              const lastIdx = next.length - 1;
-              if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
-                const prev = next[lastIdx].content === "Thinking..." ? "" : next[lastIdx].content;
-                next[lastIdx] = { role: "assistant", content: prev + text, responseType: chatMode };
-              }
-              return next;
-            });
-          },
-          onTokensPerSec: (tokensPerSec, totalTokens, elapsedSeconds, inputTokens) => {
+      // Streaming chunk handler shared by both paths
+      let streamedChars = 0;
+      let streamedChunks = 0;
+      const onChunk = (text: string) => {
+        streamedChunks += 1;
+        streamedChars += text.length;
+        aiLogger.info("AI stream chunk", {
+          aiEventId,
+          chunkIndex: streamedChunks,
+          chunkChars: text.length,
+          totalStreamedChars: streamedChars,
+          chatContext: getCurrentChatContext(),
+        });
+        const ctx = getCurrentChatContext();
+        const setMsgs = ctx === "big" ? setBigChatMessages : setSmallChatMessages;
+        setMsgs((msgs: any) => {
+          const next = [...msgs];
+          const li = next.length - 1;
+          if (li >= 0 && next[li].role === "assistant") {
+            const prev = next[li].content === "Thinking..." ? "" : next[li].content;
+            next[li] = { role: "assistant", content: prev + text, responseType: chatMode };
+          }
+          return next;
+        });
+      };
+
+      let reply: { type: string; content: string; title?: string; markdown?: string };
+
+      if (isVision) {
+        // VL model path: no document context, only user text + images
+        const vlMsgs: VLMessage[] = (getCurrentChatContext() === "big" ? bigChatMessages : smallChatMessages)
+          .filter((m: any) => m.content !== "Thinking...")
+          .map((m: any) => ({ role: m.role, content: m.content, ...(m.image && { image: m.image }) }));
+        vlMsgs.push({ role: "user", content: userMessage, ...(capturedImage && { image: capturedImage }) });
+        aiLogger.info("VL generation request", {
+          aiEventId,
+          messages: vlMsgs.length,
+          messageRoles: vlMsgs.map((m) => m.role),
+          messageImageCount: vlMsgs.filter((m) => !!m.image).length,
+          maxTok: undefined,
+        });
+
+        const vlText = await generateVLResponse(vlMsgs, {
+          onChunk,
+          onTokensPerSec: (tps, total, elapsed) => {
             const now = Date.now();
             if (now - lastUpdate >= 300) {
               lastUpdate = now;
-              setStreamingStats({
-                tokensPerSec: Math.round(tokensPerSec * 10) / 10,
-                totalTokens,
-                elapsedSeconds: Math.round(elapsedSeconds * 10) / 10,
-                inputTokens,
-                contextUsed: inputTokens + totalTokens,
-              });
+              setStreamingStats({ tokensPerSec: Math.round(tps * 10) / 10, totalTokens: total, elapsedSeconds: Math.round(elapsed * 10) / 10, inputTokens: 0, contextUsed: total });
             }
           },
-          onComplete: (outputTokens, elapsedSeconds, inputTokens) => {
-            const contextUsed = inputTokens + outputTokens;
-            setStreamingStats({
-              tokensPerSec: Math.round((outputTokens / elapsedSeconds) * 10) / 10,
-              totalTokens: outputTokens,
-              elapsedSeconds: Math.round(elapsedSeconds * 10) / 10,
-              inputTokens,
-              contextUsed,
-            });
+          onComplete: (tokens, elapsed) => {
+            setStreamingStats({ tokensPerSec: Math.round((tokens / elapsed) * 10) / 10, totalTokens: tokens, elapsedSeconds: Math.round(elapsed * 10) / 10, inputTokens: 0, contextUsed: tokens });
           },
-        },
-        (getCurrentChatContext() === "big" ? bigChatMessages : smallChatMessages).map((m: any) => ({
-          role: m.role,
-          content: m.role === "assistant" && m.responseType === "agent" && m.markdown ? m.markdown : m.content,
-        }))
-      );
+        });
+        aiLogger.info("VL generation complete", {
+          aiEventId,
+          outputChars: vlText.length,
+          streamedChunks,
+          streamedChars,
+        });
+        reply = { type: "ask", content: vlText };
+      } else {
+        // Standard text model path
+        aiLogger.info("Text generation request", {
+          aiEventId,
+          mode: chatMode,
+          contextChars: isAsk ? context.length : 0,
+          priorMessages: (getCurrentChatContext() === "big" ? bigChatMessages : smallChatMessages).length,
+        });
+        reply = await generateChatResponse(
+          userMessage,
+          isAsk ? context : undefined,
+          chatMode,
+          {
+            onChunk,
+            onTokensPerSec: (tokensPerSec, totalTokens, elapsedSeconds, inputTokens) => {
+              const now = Date.now();
+              if (now - lastUpdate >= 300) {
+                lastUpdate = now;
+                setStreamingStats({
+                  tokensPerSec: Math.round(tokensPerSec * 10) / 10,
+                  totalTokens,
+                  elapsedSeconds: Math.round(elapsedSeconds * 10) / 10,
+                  inputTokens,
+                  contextUsed: inputTokens + totalTokens,
+                });
+              }
+            },
+            onComplete: (outputTokens, elapsedSeconds, inputTokens) => {
+              const contextUsed = inputTokens + outputTokens;
+              setStreamingStats({
+                tokensPerSec: Math.round((outputTokens / elapsedSeconds) * 10) / 10,
+                totalTokens: outputTokens,
+                elapsedSeconds: Math.round(elapsedSeconds * 10) / 10,
+                inputTokens,
+                contextUsed,
+              });
+            },
+          },
+          (getCurrentChatContext() === "big" ? bigChatMessages : smallChatMessages).map((m: any) => ({
+            role: m.role,
+            content: m.role === "assistant" && m.responseType === "agent" && m.markdown ? m.markdown : m.content,
+          }))
+        );
+        aiLogger.info("Text generation complete", {
+          aiEventId,
+          responseType: reply.type,
+          outputChars: reply.content.length,
+          streamedChunks,
+          streamedChars,
+        });
+      }
 
       let createdPath: string | undefined;
       if (reply.type === "agent" && fs && reply.content) {
@@ -2333,21 +2560,38 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
         return next;
       });
+      aiLogger.info("handleSendChat success", {
+        aiEventId,
+        replyType: reply.type,
+        replyChars: reply.content.length,
+        createdPath,
+      });
     } catch (e) {
-      console.error(e);
+      console.error("Chat Generation Error:", e);
+      aiLogger.error("handleSendChat error", {
+        aiEventId,
+        error: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+      });
       const chatContext = getCurrentChatContext();
       const setMessages = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
       setMessages((msgs: any) => {
         const next = [...msgs];
         const lastIdx = next.length - 1;
+        const errStr = e instanceof Error ? e.message : String(e);
         if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
-          next[lastIdx] = { role: "assistant", content: "Error generating response. WebGPU may be required." };
+          next[lastIdx] = { role: "assistant", content: `Error generating response: ${errStr}` };
         } else {
-          next.push({ role: "assistant", content: "Error generating response. WebGPU may be required." });
+          next.push({ role: "assistant", content: `Error generating response: ${errStr}` });
         }
         return next;
       });
     } finally {
+      aiLogger.info("handleSendChat finally", {
+        aiEventId,
+        chatContext: getCurrentChatContext(),
+        activeTabPath,
+      });
       setIsGenerating(false);
       // Persist chat messages to localStorage
       const activeTab = openTabs.find((t) => t.path === activeTabPath);
@@ -2600,7 +2844,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               projectName={projectName}
               currentPath={activeGitTabPath}
               bufferManager={getBufferMgr()}
+              fileDocManager={fileDocManagerRef.current}
               filePaths={openTabs.filter(t => t.type === "text").map(t => t.path)}
+              refreshTrigger={refreshTrigger}
               // TODO: Get all project files, not just open tabs, for proper git initialization
               // For now, we'll use open tabs but this should be fixed to get all files
               onFileSelect={async (filePath, options) => {
@@ -2877,6 +3123,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                               setModelReady(false);
                               await switchModel(id);
                             }}
+                            imageDataUrl={chatImageDataUrl}
+                            onImageChange={setChatImageDataUrl}
+                            isVisionModel={!!getModelById(selectedModelId).vision}
                           />
                         </div>
                       </div>
@@ -3048,6 +3297,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                         setModelReady(false);
                         await switchModel(id);
                       }}
+                      imageDataUrl={chatImageDataUrl}
+                      onImageChange={setChatImageDataUrl}
+                      isVisionModel={!!getModelById(selectedModelId).vision}
                     />
                   </div>
                 )}

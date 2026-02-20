@@ -13,7 +13,8 @@ import {
   isDownloading,
   listModelFiles
 } from "@/lib/localModel";
-import { AVAILABLE_MODELS } from "@/lib/modelConfig";
+import { initializeVLModel, isVLModelLoading, listVLModelFiles } from "@/lib/vlModelRuntime";
+import { AVAILABLE_MODELS, getModelById } from "@/lib/modelConfig";
 
 interface ModelDropdownProps {
   selectedModelId: string;
@@ -69,7 +70,9 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
         const cache = await caches.open(cacheName);
         if (cache) {
           // Check if model files are cached
-          const requiredFiles = await listModelFiles(def.dtype);
+          const requiredFiles = def.vision
+            ? await listVLModelFiles()
+            : await listModelFiles(def.dtype);
           let allFilesCached = true;
           
           for (const file of requiredFiles) {
@@ -174,7 +177,12 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
     await switchModel(modelId);
     
     try {
-      await initializeModel(); // Normal download flow
+      const modelDef = getModelById(modelId);
+      if (modelDef?.vision) {
+        await initializeVLModel(); // VL model path
+      } else {
+        await initializeModel(); // Normal text model path
+      }
     } catch (error) {
       console.error("Model initialization failed:", error);
       // Reset status on error

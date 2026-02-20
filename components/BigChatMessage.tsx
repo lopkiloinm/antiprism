@@ -7,6 +7,7 @@ interface ChatMessage {
   responseType?: "ask" | "agent";
   createdPath?: string;
   markdown?: string;
+  image?: string;
 }
 
 interface BigChatMessageProps {
@@ -28,6 +29,11 @@ export function BigChatMessage({ message, isLast, lastMessageRef }: BigChatMessa
         }`}>
         {message.content === "Thinking..." ? (
           <span className="text-[var(--muted)] italic">Thinking…</span>
+        ) : message.image ? (
+          <div>
+            <img src={message.image} alt="Uploaded" className="max-h-48 rounded mb-2" />
+            {message.content && <span className="whitespace-pre-wrap">{message.content}</span>}
+          </div>
         ) : message.role === "assistant" && message.responseType === "agent" ? (
           <pre
             ref={isLast && message.role === "assistant" ? lastMessageRef : undefined}

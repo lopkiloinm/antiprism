@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NameModal } from "./NameModal";
 import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconCheckSquare, IconSquare, IconChevronDown, IconChevronUp } from "./Icons";
-import { gitStore } from "@/lib/gitStore";
+import { gitStore, GitStore } from "@/lib/gitStore";
 import type { EditorBufferManager } from "@/lib/editorBufferManager";
 
 // CSS styles for dashboard-like appearance
@@ -74,32 +74,30 @@ interface GitRepository {
   headCommitId?: string;
 }
 
-// Simple hash function for file content
-const calculateFileHash = (content: string): string => {
-  let hash = 0;
-  for (let i = 0; i < content.length; i++) {
-    const char = content.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36);
-};
-
-// Helper function to get all project files from IDBFS
+// Helper function to get all project files from IDBFS recursively
 const getAllProjectFiles = async (projectId: string): Promise<string[]> => {
   try {
     const { mount } = await import("@wwog/idbfs");
     const fs = await mount();
-    const { buildFileManagerData } = await import("@/lib/idbfsAdapter");
     
     const projectPath = `/projects/${projectId}`;
-    const items = await buildFileManagerData(fs, projectPath);
-    
-    // Include ALL files (both text and binary)
-    const allFiles = items
-      .filter(item => item.type === 'file')
-      .map(item => item.id);
-    
+    const allFiles: string[] = [];
+
+    async function walk(dirPath: string) {
+      try {
+        const { dirs, files } = await fs.readdir(dirPath);
+        for (const f of files) {
+          allFiles.push(`${dirPath}/${f.name}`);
+        }
+        for (const d of dirs) {
+          await walk(`${dirPath}/${d.name}`);
+        }
+      } catch (err) {
+        console.warn(`Could not read dir ${dirPath}`, err);
+      }
+    }
+
+    await walk(projectPath);
     console.log('🔍 PROJECT FILES DEBUG - Found all files:', allFiles);
     return allFiles;
   } catch (error) {
@@ -122,6 +120,8 @@ interface GitPanelProps {
   onCloseFile?: (filePath: string) => void;
   projectId?: string;
   bufferManager?: any; // Buffer manager instance for file content access
+  refreshTrigger?: number;
+  fileDocManager?: any; // FileDocumentManager instance for direct Yjs access
 }
 
 export function GitPanelReal({
@@ -129,9 +129,11 @@ export function GitPanelReal({
   currentPath,
   projectName,
   bufferManager,
+  fileDocManager,
   filePaths = [],
   onFileSelect,
   onCloseFile,
+  refreshTrigger = 0,
 }: GitPanelProps) {
   // Create a stable repository name based on the project name (most stable)
   const getStableRepoName = () => {
@@ -216,9 +218,9 @@ export function GitPanelReal({
 
   // Detect file changes by comparing with last commit
   useEffect(() => {
-    if (filePaths.length === 0 || !isGitInitialized) return;
+    if (!isGitInitialized) return;
     detectFileChanges();
-  }, [filePaths, projectId, isGitInitialized]);
+  }, [projectId, isGitInitialized, refreshTrigger]);
 
   const checkGitInitialization = async () => {
     setIsLoading(true);
@@ -241,64 +243,65 @@ export function GitPanelReal({
   };
 
   const initializeGitRepository = async () => {
-    if (!stableRepoName) return;
+    if (!stableRepoName || !projectId) return;
+    
     setIsLoading(true);
     try {
-      await gitStore.createRepository(stableRepoName);
-      setIsGitInitialized(true);
-      
-      // Automatically create initial commit with all current files
+      // Check if git repository already exists
+      const existingRepo = await gitStore.getRepository(stableRepoName);
+      if (existingRepo) {
+        console.log('🔍 Git repository already exists, skipping initialization');
+        setIsGitInitialized(true);
+        await loadCommitHistory();
+        await detectFileChanges();
+        return;
+      }
+
       console.log('🚀 Creating initial commit with all current files...');
       
-      // Get all current file contents from the actual file system
-      const initialChanges = [];
-      console.log('� Creating initial commit with all current files...');
+      // Create repository first
+      await gitStore.createRepository(stableRepoName, "main");
       
-      // Get all project files from IDBFS
-      const allProjectFiles = await getAllProjectFiles(projectId!);
-      console.log('� INITIAL COMMIT DEBUG - All project files:', allProjectFiles);
-      console.log('🔍 INITIAL COMMIT DEBUG - Buffer manager available:', !!bufferManager);
+      // Get ALL project files for initial commit, not just open tabs
+      const allProjectFiles = await getAllProjectFiles(projectId);
+      console.log('🔍 INITIAL COMMIT DEBUG - All project files:', allProjectFiles);
       
-      // Process all project files
+      const initialChanges: GitChange[] = [];
+      
       for (const filePath of allProjectFiles) {
-        const fileName = filePath.split("/").pop() || filePath;
-        let actualContent = "";
-        
-        console.log(`🔍 INITIAL COMMIT DEBUG - Processing file: ${fileName} (path: ${filePath})`);
-        
         try {
-          // Read file content directly from IDBFS
-          const { mount } = await import("@wwog/idbfs");
-          const fs = await mount();
-          const contentBuffer = await fs.readFile(filePath);
-          actualContent = new TextDecoder().decode(contentBuffer);
-          console.log(`🔍 INITIAL COMMIT DEBUG - Content length for ${fileName}: ${actualContent.length}`);
-        } catch (error) {
-          console.log(`Could not read ${fileName} from IDBFS, trying buffer manager:`, error);
+          let actualContent = "";
           
-          // Fallback to buffer manager
-          try {
-            if (bufferManager) {
-              bufferManager.saveActiveToCache();
-              actualContent = bufferManager.getCachedContent(filePath) || bufferManager.getBufferContent() || "";
-              console.log(`🔍 INITIAL COMMIT DEBUG - Buffer manager content length for ${fileName}: ${actualContent.length}`);
+          // Use fileDocManager for current content, fallback to IDBFS
+          if (fileDocManager) {
+            const doc = fileDocManager.getDocument(filePath, true);
+            if (doc && doc.text) {
+              actualContent = doc.text.toString();
             }
-          } catch (bufferError) {
-            console.log(`Could not get content for ${fileName} from buffer manager:`, bufferError);
-            actualContent = `// Error getting content for ${fileName}`;
           }
-        }
-        
-        // Only include files that have content
-        if (actualContent.trim() !== '') {
-          console.log(`🔍 INITIAL COMMIT DEBUG - Adding file to commit: ${fileName}`);
-          initialChanges.push({
-            path: fileName, // Store full filename with extension
-            status: "added" as const,
-            newContent: actualContent
-          });
-        } else {
-          console.log(`🔍 INITIAL COMMIT DEBUG - Skipping empty file: ${fileName}`);
+          
+          // Fallback to IDBFS if needed
+          if (!actualContent) {
+            const { mount } = await import("@wwog/idbfs");
+            const fs = await mount();
+            const contentBuffer = await fs.readFile(filePath);
+            actualContent = new TextDecoder().decode(contentBuffer);
+          }
+          
+          console.log(`🔍 INITIAL COMMIT DEBUG - Content length for ${filePath}: ${actualContent.length}`);
+          
+          if (actualContent.length > 0) {
+            console.log(`🔍 INITIAL COMMIT DEBUG - Adding file to commit: ${filePath}`);
+            initialChanges.push({
+              path: filePath,
+              status: "added" as const,
+              newContent: actualContent
+            });
+          } else {
+            console.log(`🔍 INITIAL COMMIT DEBUG - Skipping empty file: ${filePath}`);
+          }
+        } catch (error) {
+          console.error(`Failed to read file ${filePath} for initial commit:`, error);
         }
       }
       
@@ -333,78 +336,106 @@ export function GitPanelReal({
   const detectFileChanges = async () => {
     if (!stableRepoName) return;
     try {
+      console.log('🔍 detectFileChanges called for repo:', stableRepoName);
       const currentRepo = await gitStore.getRepository(stableRepoName);
       setRepo(currentRepo); // Store repo in state
       
       if (!currentRepo || currentRepo.commits.length === 0) {
+        console.log('🔍 No commits found, showing all files as new');
         // No commits yet, show all files as new
-        const newChanges: FileChange[] = filePaths.slice(0, 10).map((p) => ({
-          path: p.split("/").pop() || p, // Use full filename with extension
+        const allProjectFiles = await getAllProjectFiles(projectId!);
+        console.log('🔍 All project files:', allProjectFiles);
+        const newChanges: FileChange[] = allProjectFiles.map((p) => ({
+          path: p,
           status: "added" as const,
           staged: false,
         }));
         setChanges(newChanges);
+        console.log('🔍 Set changes (no commits):', newChanges);
         return; // Don't return early - repo is already set
       }
 
       const headCommit = currentRepo.commits[0];
+      console.log('🔍 Head commit found with files:', headCommit.files.map((f: any) => ({ path: f.path, hash: f.hash })));
       const detectedChanges: FileChange[] = [];
 
-      for (const filePath of filePaths.slice(0, 10)) {
-        const fileName = filePath.split("/").pop() || filePath; // Use full filename with extension
-        
+      const allFilesToScan = await getAllProjectFiles(projectId!);
+      console.log('🔍 Scanning files for changes:', allFilesToScan);
+
+      for (const filePath of allFilesToScan) {
         try {
-          // Get file content from buffer manager (if available)
+          // Read current file content from Yjs document manager (most up-to-date source)
           let currentContent = "";
           try {
-            // Try to get actual file content
-            if (bufferManager) {
-              bufferManager.saveActiveToCache();
-              currentContent = bufferManager.getCachedContent(filePath) || bufferManager.getBufferContent() || "";
+            // For text files, try to get content from Yjs document manager
+            if (filePath.endsWith('.tex') || filePath.endsWith('.typ') || filePath.endsWith('.md') || filePath.endsWith('.txt')) {
+              // Use the passed fileDocManager for direct Yjs content access
+              if (fileDocManager) {
+                const doc = fileDocManager.getDocument(filePath, true); // silent=true
+                if (doc && doc.text && doc.text.toString().length > 0) {
+                  // Only use Yjs content if it actually has content
+                  currentContent = doc.text.toString();
+                  console.log(`🔍 File ${filePath}: got content from Yjs, length ${currentContent.length}`);
+                } else {
+                  // If Yjs document is empty or doesn't exist, fall back to IDBFS
+                  const { mount } = await import("@wwog/idbfs");
+                  const fs = await mount();
+                  const contentBuffer = await fs.readFile(filePath);
+                  currentContent = new TextDecoder().decode(contentBuffer);
+                  console.log(`🔍 File ${filePath}: got content from IDBFS (Yjs empty), length ${currentContent.length}`);
+                }
+              } else {
+                // Fallback to IDBFS if manager not available
+                const { mount } = await import("@wwog/idbfs");
+                const fs = await mount();
+                const contentBuffer = await fs.readFile(filePath);
+                currentContent = new TextDecoder().decode(contentBuffer);
+                console.log(`🔍 File ${filePath}: got content from IDBFS (no manager), length ${currentContent.length}`);
+              }
+            } else {
+              // For binary files, read from IDBFS
+              const { mount } = await import("@wwog/idbfs");
+              const fs = await mount();
+              const contentBuffer = await fs.readFile(filePath);
+              currentContent = new TextDecoder().decode(contentBuffer);
+              console.log(`🔍 File ${filePath}: binary file from IDBFS, length ${currentContent.length}`);
             }
           } catch (error) {
-            console.log(`Could not get content for ${fileName}:`, error);
+            console.log(`Could not get content for ${filePath}:`, error);
           }
 
           // Check if file exists in last commit
           const lastCommit = currentRepo.commits[0];
-          const fileInCommit = lastCommit.files.find((f: any) => f.path === fileName);
-          
-          console.log(`🔍 CHANGE DETECTION DEBUG - File: ${fileName}`);
-          console.log(`🔍 CHANGE DETECTION DEBUG - In commit: ${!!fileInCommit}`);
-          console.log(`🔍 CHANGE DETECTION DEBUG - Current content length: ${currentContent.length}`);
-          if (fileInCommit) {
-            console.log(`🔍 CHANGE DETECTION DEBUG - Committed content length: ${fileInCommit.content.length}`);
-            console.log(`🔍 CHANGE DETECTION DEBUG - Content matches: ${currentContent === fileInCommit.content}`);
-          }
+          const fileInCommit = lastCommit.files.find((f: any) => f.path === filePath);
           
           if (!fileInCommit) {
-            // File doesn't exist in last commit - it's new
-            console.log(`🔍 CHANGE DETECTION DEBUG - Status: NEW (not in commit)`);
+            console.log(`🔍 File ${filePath} not in commit, marking as added`);
             detectedChanges.push({
-              path: fileName, // Use full filename with extension
+              path: filePath,
               status: "added" as const,
               staged: false,
             });
           } else {
             // File exists - check if content changed
-            const contentHash = calculateFileHash(currentContent);
+            const contentHash = GitStore.calculateFileHash(currentContent);
+            console.log(`🔍 File ${filePath}: current hash ${contentHash}, commit hash ${fileInCommit.hash}`);
             if (contentHash !== fileInCommit.hash) {
-              console.log(`🔍 CHANGE DETECTION DEBUG - Status: MODIFIED (hash mismatch)`);
+              console.log(`🔍 File ${filePath} changed, marking as modified`);
               detectedChanges.push({
-                path: fileName, // Use full filename with extension
+                path: filePath,
                 status: "modified" as const,
                 staged: false,
               });
             } else {
-              console.log(`🔍 CHANGE DETECTION DEBUG - Status: UNCHANGED (hash matches)`);
+              console.log(`🔍 File ${filePath} unchanged`);
             }
           }
         } catch (error) {
-          console.error(`Failed to check file changes for ${fileName}:`, error);
+          console.error(`Failed to check file changes for ${filePath}:`, error);
         }
       }
 
+      console.log('🔍 Final detected changes:', detectedChanges);
       setChanges(detectedChanges);
     } catch (error) {
       console.error("Failed to detect file changes:", error);
@@ -435,10 +466,9 @@ export function GitPanelReal({
       // Get actual file content for each staged change
       const gitChanges = staged.map((change) => {
         let actualContent = "";
+        const fullPath = change.path;
         try {
-          // Match by full filename including extension
-          const fullPath = filePaths.find((p) => p.split("/").pop() === change.path);
-          if (fullPath && bufferManager) {
+          if (bufferManager) {
             bufferManager.saveActiveToCache();
             actualContent = bufferManager.getCachedContent(fullPath) || bufferManager.getBufferContent() || "";
           }
@@ -468,9 +498,8 @@ export function GitPanelReal({
       
       // Auto-close file tabs for committed files
       staged.forEach((change) => {
-        const fullPath = filePaths.find((p) => p.split("/").pop() === change.path);
-        if (fullPath && onCloseFile) {
-          onCloseFile(fullPath);
+        if (onCloseFile) {
+          onCloseFile(change.path);
         }
       });
       
@@ -482,24 +511,21 @@ export function GitPanelReal({
     }
   }, [commitMessage, changes, projectId, filePaths, onCloseFile]);
 
-  const handleFileClick = useCallback(async (fileName: string) => {
+  const handleFileClick = useCallback(async (filePath: string) => {
     if (!stableRepoName) return;
-    // Find the exact file path by matching the full filename (including extension)
-    const fullPath = filePaths.find((p) => {
-      const pathFileName = p.split("/").pop() || p;
-      return pathFileName === fileName; // Match full filename with extension
-    });
+    const fullPath = filePath;
+    const fileName = filePath.split("/").pop() || filePath;
     
     if (fullPath && onFileSelect) {
       // Get current content
       let currentContent = "";
       try {
-        if (bufferManager) {
-          bufferManager.saveActiveToCache();
-          currentContent = bufferManager.getCachedContent(fullPath) || bufferManager.getBufferContent() || "";
-        }
+        const { mount } = await import("@wwog/idbfs");
+        const fs = await mount();
+        const contentBuffer = await fs.readFile(fullPath);
+        currentContent = new TextDecoder().decode(contentBuffer);
       } catch (error) {
-        console.log(`Could not get content for ${fileName}:`, error);
+        console.log(`Could not get content for ${fullPath} from IDBFS:`, error);
       }
 
       // Get original content from last commit
@@ -565,12 +591,6 @@ export function GitPanelReal({
     console.log('🔍 GIT PANEL DEBUG - currentPath:', currentPath);
     console.log('🔍 GIT PANEL DEBUG - changes:', changes.map(c => ({ path: c.path, isActive: currentPath === c.path })));
   }, [currentPath, changes]);
-
-  // Extract just the filename from currentPath for comparison
-  const getCurrentFileName = () => {
-    if (!currentPath) return null;
-    return currentPath.split('/').pop() || currentPath;
-  };
 
   const statusIcon = (status: FileChange["status"]) => {
     switch (status) {
@@ -764,7 +784,7 @@ export function GitPanelReal({
               ) : (
                 changes.map((change, i) => (
                   <div key={i} className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-2 min-w-0 transition-colors ${
-                    getCurrentFileName() === change.path
+                    currentPath === change.path
                       ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
                       : "hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
                   }`}
@@ -779,7 +799,7 @@ export function GitPanelReal({
                   >
                     {change.staged ? <IconCheckSquare /> : <IconSquare />}
                   </button>
-                  <span className="truncate min-w-0 flex-1">{change.path}</span>
+                  <span className="truncate min-w-0 flex-1" title={change.path}>{change.path.split('/').pop() || change.path}</span>
                   <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}>{statusIcon(change.status)}</span>
                 </div>
                 ))

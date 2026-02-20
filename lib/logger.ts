@@ -1,5 +1,5 @@
 type LogLevel = 'info' | 'warn' | 'error';
-type LogCategory = 'ai' | 'latex' | 'typst' | 'system';
+type LogCategory = 'ai' | 'latex' | 'typst' | 'system' | 'yjs' | 'git';
 
 export interface LogEntry {
   timestamp: string;
@@ -14,10 +14,12 @@ class Logger {
     ['ai', []],
     ['latex', []], 
     ['typst', []],
-    ['system', []]
+    ['system', []],
+    ['yjs', []],
+    ['git', []]
   ]);
   
-  private maxLogsPerCategory = 100;
+  private maxLogsPerCategory = 500;
   private listeners: Set<(category: LogCategory, logs: LogEntry[]) => void> = new Set();
 
   private addEntry(category: LogCategory, level: LogLevel, message: string, data?: any) {
@@ -84,7 +86,7 @@ class Logger {
     } else {
       this.logs.forEach((_, cat) => this.logs.set(cat, []));
       this.listeners.forEach(listener => {
-        ['ai', 'latex', 'typst', 'system'].forEach(cat => 
+        ['ai', 'latex', 'typst', 'system', 'yjs', 'git'].forEach(cat => 
           listener(cat as LogCategory, [])
         );
       });
@@ -121,4 +123,18 @@ export const systemLogger = {
   warn: (message: string, data?: any) => logger.warn('system', message, data),
   error: (message: string, data?: any) => logger.error('system', message, data),
   getLogs: () => logger.getLogs('system')
+};
+
+export const yjsLogger = {
+  info: (message: string, data?: any) => logger.info('yjs', message, data),
+  warn: (message: string, data?: any) => logger.warn('yjs', message, data),
+  error: (message: string, data?: any) => logger.error('yjs', message, data),
+  getLogs: () => logger.getLogs('yjs')
+};
+
+export const gitLogger = {
+  info: (message: string, data?: any) => logger.info('git', message, data),
+  warn: (message: string, data?: any) => logger.warn('git', message, data),
+  error: (message: string, data?: any) => logger.error('git', message, data),
+  getLogs: () => logger.getLogs('git')
 };

@@ -13,6 +13,7 @@ export interface ChatMessage {
   responseType?: "ask" | "agent";
   createdPath?: string;
   markdown?: string;
+  image?: string;
 }
 
 const CHAT_LIST_KEY = "antiprism_chats";
@@ -92,10 +93,42 @@ export function getChatMessages(id: string, origin: ChatOrigin = "big"): ChatMes
   }
 }
 
+const MAX_CHAT_STORAGE_BYTES = 2_000_000;
+const MAX_MESSAGE_CONTENT_CHARS = 20_000;
+const MAX_IMAGE_DATA_URL_CHARS = 200_000;
+
+function compactMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((m) => ({
+    ...m,
+    content:
+      m.content.length > MAX_MESSAGE_CONTENT_CHARS
+        ? `${m.content.slice(0, MAX_MESSAGE_CONTENT_CHARS)}\n\n[truncated]`
+        : m.content,
+    image:
+      m.image && m.image.length > MAX_IMAGE_DATA_URL_CHARS
+        ? undefined
+        : m.image,
+  }));
+}
+
+function fitMessagesToQuota(messages: ChatMessage[]): ChatMessage[] {
+  let next = compactMessages(messages);
+  let payload = JSON.stringify(next);
+
+  // Keep recent context first when over quota.
+  while (payload.length > MAX_CHAT_STORAGE_BYTES && next.length > 8) {
+    next = next.slice(Math.floor(next.length / 4));
+    payload = JSON.stringify(next);
+  }
+
+  return next;
+}
+
 export function saveChatMessages(id: string, messages: ChatMessage[], origin: ChatOrigin = "big"): void {
   const key = getChatKey(origin, id);
   try {
-    localStorage.setItem(key, JSON.stringify(messages));
+    const fitted = fitMessagesToQuota(messages);
+    localStorage.setItem(key, JSON.stringify(fitted));
     // Auto-title from first assistant response (AI-generated name) or fallback to user message
     if (messages.length >= 2) {
       const firstAssistant = messages.find((m) => m.role === "assistant");
@@ -118,6 +151,12 @@ export function saveChatMessages(id: string, messages: ChatMessage[], origin: Ch
       }
     }
   } catch (e) {
-    console.error("Failed to save chat messages:", e);
+    // Last chance: keep only latest messages if storage is tight.
+    try {
+      const minimal = fitMessagesToQuota(messages.slice(-8));
+      localStorage.setItem(key, JSON.stringify(minimal));
+    } catch (e2) {
+      console.error("Failed to save chat messages:", e, e2);
+    }
   }
 }

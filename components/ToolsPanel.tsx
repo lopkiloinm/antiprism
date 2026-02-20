@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { logger, type LogEntry } from "@/lib/logger";
 import { SummaryView } from "./SummaryView";
-import { gitStore } from "@/lib/gitStore";
 
 interface ToolsPanelProps {
   isOpen: boolean;
@@ -14,7 +13,70 @@ interface ToolsPanelProps {
   summaryRaw?: string;
 }
 
-type ToolsTab = "summary" | "ai-logs" | "latex-logs" | "typst-logs" | "git-logs";
+/* ── Yjs Log Display component ── */
+
+function YjsLogDisplay({ logs, category }: { logs: LogEntry[]; category: string }) {
+  if (logs.length === 0) {
+    return (
+      <div className="text-sm text-[var(--muted)] italic">
+        No {category} logs available
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {logs.map((entry: LogEntry, i: number) => (
+        <div
+          key={i}
+          className={`text-sm font-mono p-3 rounded border ${
+            entry.level === "error"
+              ? "bg-red-500/10 text-red-400 border-red-500/20"
+              : entry.level === "warn"
+                ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                : "bg-[color-mix(in_srgb,var(--border)_10%,transparent)] text-[var(--muted)] border-[var(--border)]"
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <span className="text-[var(--muted)] text-xs min-w-[80px]">
+              {new Date(entry.timestamp).toLocaleTimeString()}
+            </span>
+            <div className="flex-1">
+              <div className="font-medium mb-1">{entry.message}</div>
+              <div className="text-xs mb-1">Level: {entry.level.toUpperCase()}</div>
+              {entry.data && (
+                <>
+                  <div className="text-xs space-y-0.5">
+                    {entry.data.path && <div>Path: {entry.data.path}</div>}
+                    {typeof entry.data.totalChars === "number" && <div>Total chars: {entry.data.totalChars}</div>}
+                    {typeof entry.data.deltaChars === "number" && (
+                      <div>
+                        Delta chars: {entry.data.deltaChars > 0 ? `+${entry.data.deltaChars}` : entry.data.deltaChars}
+                      </div>
+                    )}
+                    {typeof entry.data.deltaOps === "number" && <div>Delta ops: {entry.data.deltaOps}</div>}
+                    {typeof entry.data.local === "boolean" && <div>Local: {entry.data.local ? "yes" : "no"}</div>}
+                    {entry.data.docGuid && <div>Doc GUID: {entry.data.docGuid}</div>}
+                    {entry.data.roomId && <div>Room ID: {entry.data.roomId}</div>}
+                    {typeof entry.data.updateBytes === "number" && <div>Update bytes: {entry.data.updateBytes}</div>}
+                  </div>
+                  <details className="text-xs mt-2">
+                    <summary className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)]">Raw payload</summary>
+                    <pre className="mt-1 text-[var(--muted)] whitespace-pre-wrap break-all">
+                      {JSON.stringify(entry.data, null, 2)}
+                    </pre>
+                  </details>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type ToolsTab = "summary" | "ai-logs" | "latex-logs" | "typst-logs" | "yjs-logs" | "git-logs";
 
 /* ── Tab button ── */
 
@@ -58,7 +120,7 @@ function ViewToggle({ isRaw, onToggle }: { isRaw: boolean; onToggle: () => void 
 
 /* ── Log Display component ── */
 
-function LogDisplay({ logs, category }: { logs: LogEntry[]; category: string }) {
+function DetailedLogDisplay({ logs, category }: { logs: LogEntry[]; category: string }) {
   if (logs.length === 0) {
     return (
       <div className="text-sm text-[var(--muted)] italic">
@@ -68,31 +130,34 @@ function LogDisplay({ logs, category }: { logs: LogEntry[]; category: string }) 
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       {logs.map((entry: LogEntry, i: number) => (
         <div
           key={i}
-          className={`text-sm font-mono p-2 rounded ${
+          className={`text-sm font-mono p-3 rounded border ${
             entry.level === "error"
-              ? "bg-red-500/10 text-red-400"
+              ? "bg-red-500/10 text-red-400 border-red-500/20"
               : entry.level === "warn"
-                ? "bg-yellow-500/10 text-yellow-400"
-                : "bg-[color-mix(in_srgb,var(--border)_10%,transparent)] text-[var(--muted)]"
+                ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                : "bg-[color-mix(in_srgb,var(--border)_10%,transparent)] text-[var(--muted)] border-[var(--border)]"
           }`}
         >
           <div className="flex items-start gap-2">
             <span className="text-[var(--muted)] text-xs min-w-[80px]">
               {new Date(entry.timestamp).toLocaleTimeString()}
             </span>
-            <span className="flex-1">{entry.message}</span>
-            {entry.data && (
-              <details className="text-xs">
-                <summary className="cursor-pointer text-[var(--muted)]">Data</summary>
-                <pre className="mt-1 text-[var(--muted)] whitespace-pre-wrap">
-                  {JSON.stringify(entry.data, null, 2)}
-                </pre>
-              </details>
-            )}
+            <div className="flex-1">
+              <div className="font-medium mb-1">{entry.message}</div>
+              <div className="text-xs mb-1">Level: {entry.level.toUpperCase()}</div>
+              {entry.data && (
+                <details className="text-xs mt-1">
+                  <summary className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)]">Raw payload</summary>
+                  <pre className="mt-1 text-[var(--muted)] whitespace-pre-wrap break-all">
+                    {JSON.stringify(entry.data, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
           </div>
         </div>
       ))}
@@ -193,59 +258,6 @@ function LatexLogDisplay({ logs, category }: { logs: LogEntry[]; category: strin
   );
 }
 
-/* ── Git Log Display component ── */
-
-function GitLogDisplay({ logs }: { logs: any[] }) {
-  if (logs.length === 0) {
-    return (
-      <div className="text-sm text-[var(--muted)] italic">
-        No git commits available
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      {logs.map((commit: any, i: number) => (
-        <div
-          key={i}
-          className="text-sm p-3 rounded border bg-[color-mix(in_srgb,var(--border)_10%,transparent)] border-[var(--border)]"
-        >
-          <div className="flex items-start gap-2">
-            <div className="flex-1">
-              <div className="font-medium mb-1 text-[var(--foreground)]">
-                {commit.message}
-              </div>
-              <div className="text-xs text-[var(--muted)] mb-2">
-                <div>Repository: <span className="text-blue-400">{commit.repositoryName}</span></div>
-                <div>Author: {commit.author || 'Unknown'}</div>
-                <div>Date: {new Date(commit.timestamp).toLocaleString()}</div>
-                <div>Commit ID: <span className="font-mono text-xs">{commit.id}</span></div>
-                <div>Files: {commit.files?.length || 0} changed</div>
-              </div>
-              
-              {commit.files && commit.files.length > 0 && (
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)]">
-                    View changed files
-                  </summary>
-                  <div className="mt-2 space-y-1">
-                    {commit.files.map((file: any, idx: number) => (
-                      <div key={idx} className="text-[var(--muted)] font-mono text-xs">
-                        {file.path}
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ── Main component ── */
 
 export function ToolsPanel({
@@ -260,44 +272,26 @@ export function ToolsPanel({
   const [aiLogs, setAiLogs] = useState<LogEntry[]>([]);
   const [latexLogs, setLatexLogs] = useState<LogEntry[]>([]);
   const [typstLogs, setTypstLogs] = useState<LogEntry[]>([]);
-  const [gitLogs, setGitLogs] = useState<any[]>([]);
+  const [yjsLogs, setYjsLogs] = useState<LogEntry[]>([]);
+  const [gitLogs, setGitLogs] = useState<LogEntry[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize logs when panel opens
   useEffect(() => {
     if (isOpen && !isInitialized) {
       // Load logs
-      const aiEntries = logger.getLogs("ai").slice(-50);
+      const aiEntries = logger.getLogs("ai").slice(-200);
       const latexEntries = logger.getLogs("latex").slice(-50);
-      const typstEntries = logger.getLogs("typst").slice(-50);
+      const typstEntries = logger.getLogs("typst").slice(-200);
+      const yjsEntries = logger.getLogs("yjs").slice(-200);
       
-      // Load git logs (get all repositories and their commit history)
-      const loadGitLogs = async () => {
-        try {
-          const repos = await gitStore.getAllRepositories();
-          const allCommits: any[] = [];
-          
-          for (const repo of repos) {
-            const commits = await gitStore.getCommitHistory(repo.name, 50);
-            allCommits.push(...commits.map(commit => ({
-              ...commit,
-              repositoryName: repo.name
-            })));
-          }
-          
-          // Sort by timestamp (newest first)
-          allCommits.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-          setGitLogs(allCommits);
-        } catch (error) {
-          console.error("Failed to load git logs:", error);
-        }
-      };
-      
-      loadGitLogs();
-      
+      const gitEntries = logger.getLogs("git").slice(-200);
+
       setAiLogs(aiEntries);
       setLatexLogs(latexEntries);
       setTypstLogs(typstEntries);
+      setYjsLogs(yjsEntries);
+      setGitLogs(gitEntries);
       setIsInitialized(true);
     }
   }, [isOpen, isInitialized]);
@@ -306,11 +300,15 @@ export function ToolsPanel({
   useEffect(() => {
     const unsubscribe = logger.subscribe((category, logs) => {
       if (category === 'ai') {
-        setAiLogs(logs.slice(-50));
+        setAiLogs(logs.slice(-200));
       } else if (category === 'latex') {
         setLatexLogs(logs.slice(-50));
       } else if (category === 'typst') {
-        setTypstLogs(logs.slice(-50));
+        setTypstLogs(logs.slice(-200));
+      } else if (category === 'yjs') {
+        setYjsLogs(logs.slice(-200));
+      } else if (category === 'git') {
+        setGitLogs(logs.slice(-200));
       }
     });
     
@@ -383,6 +381,16 @@ export function ToolsPanel({
           </div>
           <div
             className={`group relative flex items-center px-3 py-2 cursor-pointer shrink-0 h-full ${
+              activeTab === "yjs-logs"
+                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
+            }`}
+            onClick={() => setActiveTab("yjs-logs")}
+          >
+            <span className="text-sm">Yjs</span>
+          </div>
+          <div
+            className={`group relative flex items-center px-3 py-2 cursor-pointer shrink-0 h-full ${
               activeTab === "git-logs"
                 ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
@@ -439,7 +447,7 @@ export function ToolsPanel({
             !isInitialized ? (
               <div className="text-sm text-[var(--muted)] italic">Loading logs...</div>
             ) : (
-              <LogDisplay logs={aiLogs} category="AI" />
+              <DetailedLogDisplay logs={aiLogs} category="AI" />
             )
           )}
 
@@ -457,7 +465,16 @@ export function ToolsPanel({
             !isInitialized ? (
               <div className="text-sm text-[var(--muted)] italic">Loading logs...</div>
             ) : (
-              <LogDisplay logs={typstLogs} category="Typst" />
+              <DetailedLogDisplay logs={typstLogs} category="Typst" />
+            )
+          )}
+
+          {/* ── Yjs Logs tab ── */}
+          {activeTab === "yjs-logs" && (
+            !isInitialized ? (
+              <div className="text-sm text-[var(--muted)] italic">Loading logs...</div>
+            ) : (
+              <YjsLogDisplay logs={yjsLogs} category="Yjs" />
             )
           )}
 
@@ -466,7 +483,7 @@ export function ToolsPanel({
             !isInitialized ? (
               <div className="text-sm text-[var(--muted)] italic">Loading git logs...</div>
             ) : (
-              <GitLogDisplay logs={gitLogs} />
+              <DetailedLogDisplay logs={gitLogs} category="Git" />
             )
           )}
         </div>

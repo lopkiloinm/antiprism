@@ -7,6 +7,7 @@ interface ChatMessage {
   responseType?: "ask" | "agent";
   createdPath?: string;
   markdown?: string;
+  image?: string;
 }
 
 interface SmallChatMessageProps {
@@ -27,7 +28,12 @@ export function SmallChatMessage({ message, isLast, lastMessageRef }: SmallChatM
             : "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)] rounded-bl-sm"
         }`}
       >
-        {message.role === "assistant" && message.responseType === "agent" ? (
+        {message.image ? (
+          <div>
+            <img src={message.image} alt="Uploaded" className="max-h-32 rounded mb-2" />
+            {message.content && <span className="whitespace-pre-wrap">{message.content}</span>}
+          </div>
+        ) : message.role === "assistant" && message.responseType === "agent" ? (
           <pre
             ref={isLast && message.role === "assistant" ? lastMessageRef : undefined}
             className="text-sm overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded p-3 max-h-64"

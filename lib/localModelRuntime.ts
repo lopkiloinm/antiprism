@@ -414,6 +414,16 @@ export function setProgressCallback(callback: (progress: number, stats?: Downloa
   progressCallback = callback;
 }
 
+export function fireProgressCallback(progress: number, stats?: DownloadStats) {
+  downloadProgress = Math.max(0, Math.min(100, progress));
+  if (stats) {
+    currentStats = { ...currentStats, ...stats };
+  }
+  if (progressCallback) {
+    progressCallback(downloadProgress, currentStats);
+  }
+}
+
 export function getDownloadProgress(): number {
   return downloadProgress;
 }
