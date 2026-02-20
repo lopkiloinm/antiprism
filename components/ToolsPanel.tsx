@@ -99,6 +99,99 @@ function LogDisplay({ logs, category }: { logs: LogEntry[]; category: string }) 
   );
 }
 
+/* ── LaTeX Log Display component ── */
+
+function LatexLogDisplay({ logs, category }: { logs: LogEntry[]; category: string }) {
+  if (logs.length === 0) {
+    return (
+      <div className="text-sm text-[var(--muted)] italic">
+        No {category} logs available
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {logs.map((entry: LogEntry, i: number) => (
+        <div
+          key={i}
+          className={`text-sm font-mono p-3 rounded border ${
+            entry.level === "error"
+              ? "bg-red-500/10 text-red-400 border-red-500/20"
+              : entry.level === "warn"
+                ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                : "bg-[color-mix(in_srgb,var(--border)_10%,transparent)] text-[var(--muted)] border-[var(--border)]"
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <span className="text-[var(--muted)] text-xs min-w-[80px]">
+              {new Date(entry.timestamp).toLocaleTimeString()}
+            </span>
+            <div className="flex-1">
+              <div className="font-medium mb-1">{entry.message}</div>
+              
+              {/* 🎯 Better LaTeX log parsing */}
+              {entry.data && entry.data.log && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)] mb-2">
+                    LaTeX Output ({entry.data.success ? '✅ Success' : '❌ Error'})
+                  </summary>
+                  <div className="bg-[var(--background)] border border-[var(--border)] rounded p-2 max-h-96 overflow-x-auto overflow-y-auto">
+                    <div className="font-mono text-xs text-[var(--foreground)] min-w-0">
+                      {entry.data.log.split('\n').map((line: string, idx: number) => {
+                        // Truncate very long paths to prevent overflow
+                        const truncatedLine = line.length > 200 ? line.substring(0, 200) + '...' : line;
+                        
+                        // Color-code different types of lines
+                        if (line.includes('EXITCODE: 0')) {
+                          return <div key={idx} className="text-green-400 break-all">{truncatedLine}</div>;
+                        } else if (line.includes('EXITCODE:')) {
+                          return <div key={idx} className="text-red-400 break-all">{truncatedLine}</div>;
+                        } else if (line.includes('Warning:')) {
+                          return <div key={idx} className="text-yellow-400 break-all">{truncatedLine}</div>;
+                        } else if (line.includes('Error:')) {
+                          return <div key={idx} className="text-red-400 break-all">{truncatedLine}</div>;
+                        } else if (line.includes('Package:')) {
+                          return <div key={idx} className="text-blue-400 break-all">{truncatedLine}</div>;
+                        } else if (line.includes('[') && line.includes(']')) {
+                          return <div key={idx} className="text-green-300 break-all">{truncatedLine}</div>;
+                        } else if (line.includes('kdebug:')) {
+                          return <div key={idx} className="text-gray-500 break-all">{truncatedLine}</div>;
+                        } else {
+                          return <div key={idx} className="break-all">{truncatedLine}</div>;
+                        }
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* Show compilation stats */}
+                  {entry.data.engine && (
+                    <div className="mt-2 text-xs text-[var(--muted)]">
+                      Engine: {entry.data.engine} | 
+                      Success: {entry.data.success ? 'Yes' : 'No'} |
+                      Lines: {entry.data.log.split('\n').length}
+                    </div>
+                  )}
+                </details>
+              )}
+              
+              {/* Fallback for other data */}
+              {entry.data && !entry.data.log && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-[var(--muted)]">Data</summary>
+                  <pre className="mt-1 text-[var(--muted)] whitespace-pre-wrap">
+                    {JSON.stringify(entry.data, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Main component ── */
 
 export function ToolsPanel({
@@ -266,7 +359,7 @@ export function ToolsPanel({
             !isInitialized ? (
               <div className="text-sm text-[var(--muted)] italic">Loading logs...</div>
             ) : (
-              <LogDisplay logs={latexLogs} category="LaTeX" />
+              <LatexLogDisplay logs={latexLogs} category="LaTeX" />
             )
           )}
 

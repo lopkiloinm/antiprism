@@ -31,7 +31,7 @@ async function getRunner(): Promise<BusyTexRunner> {
       latexLogger.info("WASM files accessible, initializing BusyTex runner...");
       const r = new BusyTexRunner({
         busytexBasePath: `${baseNorm}/core/busytex`,
-        verbose: false,
+        verbose: true,  // ✅ Enable verbose logging
       });
       await r.initialize(true);
       runner = r;
@@ -83,16 +83,32 @@ export async function compileLatexToPdf(
 ): Promise<Blob> {
   const eng = await getEngine(engine);
   const files: { path: string; content: string | Uint8Array }[] = additionalFiles || [];
+  
+  latexLogger.info(`Starting LaTeX compilation with ${engine || getLatexEngine()} engine`);
+  
   const result = await eng.compile({
     input: source,
     bibtex: false,
-    verbose: "silent",
+    verbose: "debug",  // ✅ Get full logs (correct type)
     additionalFiles: files as { path: string; content: string }[],
   });
 
+  // 🎯 Log ALL BusyTeX output regardless of success/failure
+  latexLogger.info("BusyTeX compilation output", {
+    success: result.success,
+    log: result.log,
+    engine: engine || getLatexEngine(),
+    hasPdf: !!result.pdf
+  });
+
   if (!result.success || !result.pdf) {
+    latexLogger.error("LaTeX compilation failed", { log: result.log, engine: engine || getLatexEngine() });
     throw new Error(result.log || "LaTeX compile failed");
   }
+
+  latexLogger.info("LaTeX compilation successful", { 
+    engine: engine || getLatexEngine() 
+  });
 
   return new Blob([result.pdf as BlobPart], { type: "application/pdf" });
 }
