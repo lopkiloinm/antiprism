@@ -115,8 +115,9 @@ interface FileChange {
 }
 
 interface GitPanelProps {
-  filePaths?: string[];
+  filePaths: string[];
   currentPath?: string;
+  projectName?: string;
   onFileSelect?: (filePath: string, options?: { currentContent?: string; originalContent?: string; showDiff?: boolean }) => void;
   onCloseFile?: (filePath: string) => void;
   projectId?: string;
@@ -125,12 +126,42 @@ interface GitPanelProps {
 
 export function GitPanelReal({
   projectId,
+  currentPath,
+  projectName,
   bufferManager,
   filePaths = [],
-  currentPath,
   onFileSelect,
   onCloseFile,
 }: GitPanelProps) {
+  // Create a stable repository name based on the project name (most stable)
+  const getStableRepoName = () => {
+    // Priority 1: Use project name (most stable)
+    if (projectName) {
+      // Sanitize project name for use as repository name
+      const sanitizedName = projectName
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      return `git-${sanitizedName}`;
+    }
+    
+    // Priority 2: Use file system path (stable)
+    if (filePaths.length > 0) {
+      const firstPath = filePaths[0];
+      const pathMatch = firstPath.match(/\/projects\/([^\/]+)/);
+      if (pathMatch) {
+        const projectUuid = pathMatch[1];
+        return `git-${projectUuid}`;
+      }
+    }
+    
+    // Priority 3: Fallback to projectId
+    return `git-${projectId}`;
+  };
+
+  const stableRepoName = getStableRepoName();
+
   // Inject CSS styles
   useEffect(() => {
     const styleId = 'git-panel-styles';
@@ -151,11 +182,12 @@ export function GitPanelReal({
   const [showHistory, setShowHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGitInitialized, setIsGitInitialized] = useState<boolean | null>(null);
+  const [initialCommitFiles, setInitialCommitFiles] = useState<string[]>([]);
 
   const loadCommitHistory = useCallback(async () => {
-    if (!projectId) return;
+    if (!stableRepoName) return;
     try {
-      const history = await gitStore.getCommitHistory(projectId, 20);
+      const history = await gitStore.getCommitHistory(stableRepoName, 20);
       setCommits(history);
     } catch (error) {
       console.error("Failed to load commit history:", error);
@@ -176,8 +208,8 @@ export function GitPanelReal({
   const checkGitInitialization = async () => {
     setIsLoading(true);
     try {
-      if (!projectId) return;
-      const repo = await gitStore.getRepository(projectId);
+      if (!stableRepoName) return;
+      const repo = await gitStore.getRepository(stableRepoName);
       const wasInitialized = !!repo;
       setIsGitInitialized(wasInitialized);
       
@@ -194,10 +226,10 @@ export function GitPanelReal({
   };
 
   const initializeGitRepository = async () => {
-    if (!projectId) return;
+    if (!stableRepoName) return;
     setIsLoading(true);
     try {
-      await gitStore.createRepository(projectId);
+      await gitStore.createRepository(stableRepoName);
       setIsGitInitialized(true);
       
       // Automatically create initial commit with all current files
@@ -208,7 +240,7 @@ export function GitPanelReal({
       console.log('� Creating initial commit with all current files...');
       
       // Get all project files from IDBFS
-      const allProjectFiles = await getAllProjectFiles(projectId);
+      const allProjectFiles = await getAllProjectFiles(projectId!);
       console.log('� INITIAL COMMIT DEBUG - All project files:', allProjectFiles);
       console.log('🔍 INITIAL COMMIT DEBUG - Buffer manager available:', !!bufferManager);
       
@@ -257,7 +289,7 @@ export function GitPanelReal({
       
       if (initialChanges.length > 0) {
         const commitId = await gitStore.createCommit(
-          projectId,
+          stableRepoName,
           "Initial commit",
           initialChanges,
           "User"
@@ -265,11 +297,15 @@ export function GitPanelReal({
         console.log(`✅ Created initial commit ${commitId} with ${initialChanges.length} files`);
         console.log('🔍 Initial commit files:', initialChanges.map(c => c.path));
         
+        // Store committed files for UI display
+        setInitialCommitFiles(initialChanges.map(c => c.path));
+        
         // Reload commit history and detect changes
         await loadCommitHistory();
         await detectFileChanges();
       } else {
         console.log('⚠️ No files with content found for initial commit');
+        setInitialCommitFiles([]);
         await loadCommitHistory();
       }
     } catch (error) {
@@ -280,9 +316,9 @@ export function GitPanelReal({
   };
 
   const detectFileChanges = async () => {
-    if (!projectId) return;
+    if (!stableRepoName) return;
     try {
-      const currentRepo = await gitStore.getRepository(projectId);
+      const currentRepo = await gitStore.getRepository(stableRepoName);
       setRepo(currentRepo); // Store repo in state
       
       if (!currentRepo || currentRepo.commits.length === 0) {
@@ -319,8 +355,17 @@ export function GitPanelReal({
           const lastCommit = currentRepo.commits[0];
           const fileInCommit = lastCommit.files.find((f: any) => f.path === fileName);
           
+          console.log(`🔍 CHANGE DETECTION DEBUG - File: ${fileName}`);
+          console.log(`🔍 CHANGE DETECTION DEBUG - In commit: ${!!fileInCommit}`);
+          console.log(`🔍 CHANGE DETECTION DEBUG - Current content length: ${currentContent.length}`);
+          if (fileInCommit) {
+            console.log(`🔍 CHANGE DETECTION DEBUG - Committed content length: ${fileInCommit.content.length}`);
+            console.log(`🔍 CHANGE DETECTION DEBUG - Content matches: ${currentContent === fileInCommit.content}`);
+          }
+          
           if (!fileInCommit) {
             // File doesn't exist in last commit - it's new
+            console.log(`🔍 CHANGE DETECTION DEBUG - Status: NEW (not in commit)`);
             detectedChanges.push({
               path: fileName, // Use full filename with extension
               status: "added" as const,
@@ -330,11 +375,14 @@ export function GitPanelReal({
             // File exists - check if content changed
             const contentHash = calculateFileHash(currentContent);
             if (contentHash !== fileInCommit.hash) {
+              console.log(`🔍 CHANGE DETECTION DEBUG - Status: MODIFIED (hash mismatch)`);
               detectedChanges.push({
                 path: fileName, // Use full filename with extension
                 status: "modified" as const,
                 staged: false,
               });
+            } else {
+              console.log(`🔍 CHANGE DETECTION DEBUG - Status: UNCHANGED (hash matches)`);
             }
           }
         } catch (error) {
@@ -392,7 +440,7 @@ export function GitPanelReal({
       });
 
       const commitId = await gitStore.createCommit(
-        projectId!,
+        stableRepoName!,
         commitMessage.trim(),
         gitChanges,
         "User"
@@ -420,7 +468,7 @@ export function GitPanelReal({
   }, [commitMessage, changes, projectId, filePaths, onCloseFile]);
 
   const handleFileClick = useCallback(async (fileName: string) => {
-    if (!projectId) return;
+    if (!stableRepoName) return;
     // Find the exact file path by matching the full filename (including extension)
     const fullPath = filePaths.find((p) => {
       const pathFileName = p.split("/").pop() || p;
@@ -444,7 +492,7 @@ export function GitPanelReal({
       let showDiff = true;
       
       try {
-        const repo = await gitStore.getRepository(projectId);
+        const repo = await gitStore.getRepository(stableRepoName!);
         console.log('🔍 Debug - Repo data:', {
           hasRepo: !!repo,
           commitsCount: repo?.commits?.length || 0,
@@ -572,6 +620,23 @@ export function GitPanelReal({
             >
               {isLoading ? "Initializing..." : "Initialize Git"}
             </button>
+            
+            {/* Show initial commit results */}
+            {initialCommitFiles.length > 0 && (
+              <div className="mt-6 w-full max-w-md">
+                <div className="text-xs text-[var(--muted)] mb-2">Initial commit included:</div>
+                <div className="bg-[var(--muted)]/10 rounded border border-[var(--border)] p-2 max-h-32 overflow-auto">
+                  {initialCommitFiles.map((file, index) => (
+                    <div key={index} className="text-xs text-[var(--foreground)] truncate">
+                      {file}
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-[var(--muted)] mt-1">
+                  {initialCommitFiles.length} file{initialCommitFiles.length !== 1 ? 's' : ''} committed
+                </div>
+              </div>
+            )}
           </div>
         ) : showHistory ? (
           <div>

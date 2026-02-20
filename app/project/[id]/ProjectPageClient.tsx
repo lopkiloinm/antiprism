@@ -87,6 +87,32 @@ function isBinaryPath(path: string): boolean {
   return BINARY_EXT.test(path);
 }
 
+// Helper function to get stable git repository name (same as GitPanel)
+const getStableGitRepoName = (projectName: string, filePaths: string[], projectId: string) => {
+  // Priority 1: Use project name (most stable)
+  if (projectName) {
+    const sanitizedName = projectName
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    return `git-${sanitizedName}`;
+  }
+  
+  // Priority 2: Use file system path (stable)
+  if (filePaths.length > 0) {
+    const firstPath = filePaths[0];
+    const pathMatch = firstPath.match(/\/projects\/([^\/]+)/);
+    if (pathMatch) {
+      const projectUuid = pathMatch[1];
+      return `git-${projectUuid}`;
+    }
+  }
+  
+  // Priority 3: Fallback to projectId
+  return `git-${projectId}`;
+};
+
 export default function ProjectPageClient({ idOverride }: { idOverride?: string }) {
   const { theme, setTheme } = useTheme();
   const params = useParams();
@@ -330,10 +356,12 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         try {
           // Try to get the original content from git store
           const { gitStore } = await import('@/lib/gitStore');
-          const repo = await gitStore.getRepository(id);
+          const stableRepoName = getStableGitRepoName(projectName, openTabs.filter(t => t.type === "text").map(t => t.path), id);
+          const repo = await gitStore.getRepository(stableRepoName);
           console.log('🔍 DIFF DEBUG - Repository data:', {
             hasRepo: !!repo,
             commitsCount: repo?.commits?.length || 0,
+            stableRepoName,
             activeGitTabPath
           });
           
@@ -2225,11 +2253,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           {sidebarTab === "git" && (
             <GitPanelReal
               projectId={id}
+              projectName={projectName}
+              currentPath={activeGitTabPath}
               bufferManager={getBufferMgr()}
               filePaths={openTabs.filter(t => t.type === "text").map(t => t.path)}
               // TODO: Get all project files, not just open tabs, for proper git initialization
               // For now, we'll use open tabs but this should be fixed to get all files
-              currentPath={activeGitTabPath}
               onFileSelect={async (filePath, options) => {
                 // Check if file is already open in git tab context
                 const existingTab = gitOpenTabs.find(t => t.path === filePath);

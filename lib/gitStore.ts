@@ -59,8 +59,18 @@ class GitStore {
   }
 
   async createRepository(name: string): Promise<void> {
+    console.log(`🔍 GitStore.createRepository called with name: "${name}"`);
     if (!this.db) await this.init();
     
+    // Check if repository already exists
+    const existingRepo = await this.getRepository(name);
+    console.log(`🔍 GitStore.createRepository - existing repo:`, existingRepo ? 'found' : 'not found');
+    if (existingRepo) {
+      console.log(`Repository ${name} already exists, skipping creation`);
+      return;
+    }
+    
+    console.log(`🔍 GitStore.createRepository - creating new repository: ${name}`);
     return new Promise((resolve, reject) => {
       const repository: GitRepository = {
         name,
@@ -125,20 +135,48 @@ class GitStore {
     changes: GitChange[],
     author?: string
   ): Promise<string> {
+    console.log(`🔍 GitStore.createCommit called for repo: "${repoName}" with ${changes.length} changes`);
     const repo = await this.getRepository(repoName);
     if (!repo) throw new Error(`Repository ${repoName} not found`);
-
-    // Create file snapshots for changed files
-    const fileSnapshots: GitFileSnapshot[] = [];
     
-    for (const change of changes) {
-      const snapshot: GitFileSnapshot = {
-        path: change.path,
-        content: change.newContent || '',
-        timestamp: new Date(),
-        hash: this.generateHash(change.newContent || '')
-      };
-      fileSnapshots.push(snapshot);
+    console.log(`🔍 GitStore.createCommit - repo found with ${repo.commits.length} existing commits`);
+
+    // Create file snapshots for all files (preserve unchanged files)
+    let allFileSnapshots: GitFileSnapshot[] = [];
+    
+    if (repo.commits.length > 0) {
+      // Start with all files from the previous commit
+      const previousCommit = repo.commits[0];
+      allFileSnapshots = [...previousCommit.files];
+      
+      // Update files that have changes
+      for (const change of changes) {
+        const snapshot: GitFileSnapshot = {
+          path: change.path,
+          content: change.newContent || '',
+          timestamp: new Date(),
+          hash: this.generateHash(change.newContent || '')
+        };
+        
+        // Find and replace the existing file, or add if new
+        const existingIndex = allFileSnapshots.findIndex(f => f.path === change.path);
+        if (existingIndex >= 0) {
+          allFileSnapshots[existingIndex] = snapshot;
+        } else {
+          allFileSnapshots.push(snapshot);
+        }
+      }
+    } else {
+      // First commit - only include the changed files
+      for (const change of changes) {
+        const snapshot: GitFileSnapshot = {
+          path: change.path,
+          content: change.newContent || '',
+          timestamp: new Date(),
+          hash: this.generateHash(change.newContent || '')
+        };
+        allFileSnapshots.push(snapshot);
+      }
     }
 
     // Create commit
@@ -146,7 +184,7 @@ class GitStore {
       id: this.generateCommitId(),
       message,
       timestamp: new Date(),
-      files: fileSnapshots,
+      files: allFileSnapshots,
       author,
       parentIds: repo.headCommitId ? [repo.headCommitId] : undefined
     };
