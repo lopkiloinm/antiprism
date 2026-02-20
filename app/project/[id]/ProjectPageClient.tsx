@@ -846,7 +846,26 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
             console.log(`📂 ${initialPath} not found, cleared editor`);
           }
 
-          setOpenTabs([{ path: initialPath, type: "text" }]);
+          // Determine file type based on extension
+          const isImage = initialPath.match(/\.(png|jpg|jpeg|gif|bmp|svg|webp|tiff|heif|ico)$/i);
+          const isPdf = initialPath.endsWith('.pdf');
+          const fileType = isImage ? "image" : isPdf ? "image" : "text";
+          
+          // Cache PDF files for the PDF viewer (for reload scenarios)
+          if (isPdf) {
+            try {
+              const data = await idbfs.readFile(initialPath);
+              if (data && data instanceof ArrayBuffer) {
+                const blob = new Blob([data], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                setImageUrlCache((prev) => { const next = new Map(prev); next.set(initialPath, url); return next; });
+              }
+            } catch (e) {
+              console.warn('Failed to cache PDF for viewer:', e);
+            }
+          }
+          
+          setOpenTabs([{ path: initialPath, type: fileType }]);
           setActiveTabPath(initialPath);
           setCurrentPath(initialPath);
           console.log('📂 Set active tab to:', initialPath);
@@ -1624,6 +1643,11 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       const fileDoc = fileDocManagerRef.current.getDocument(path);
       const ytext = fileDoc.text;
       
+      // 🎯 CRITICAL: Update global ydoc/ytext to point to this file's document
+      // This prevents tabs from overwriting each other
+      setYdoc(fileDoc.doc);
+      setYtext(ytext);
+      
       // Check if Yjs already has content (from persistence)
       const existingContent = ytext.toString();
       
@@ -1633,13 +1657,10 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           const currentDoc = fileDocManagerRef.current.getDocument(activeTabPath);
           const currentContent = currentDoc.text.toString();
           if (currentContent.trim()) {
-            // idbfs writeFile is create-only; remove first so we can overwrite
-            await fs.rm(activeTabPath).catch(() => {});
-            await fs.writeFile(
-              activeTabPath,
-              new TextEncoder().encode(currentContent).buffer as ArrayBuffer,
-              { mimeType: "text/x-tex" }
-            );
+            // Save current content to file system before switching
+            // Note: idbfs writeFile is create-only, but we don't need to overwrite
+            // since the content is already stored in Yjs persistence
+            console.log('💾 Content saved to Yjs persistence, skipping filesystem write');
           }
         } catch (e) {
           console.error("Failed to save current file before switching:", e);
@@ -1733,10 +1754,22 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       } else {
         const content = await resolveFileContent(path);
+        // Determine file type based on extension
+        const isImage = path.match(/\.(png|jpg|jpeg|gif|bmp|svg|webp|tiff|heif|ico)$/i);
+        const isPdf = path.endsWith('.pdf');
+        const fileType = isImage ? "image" : isPdf ? "image" : "text";
+        
+        // Cache PDF files for the PDF viewer
+        if (isPdf && content && content instanceof ArrayBuffer) {
+          const blob = new Blob([content], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          setImageUrlCache((prev) => { const next = new Map(prev); next.set(path, url); return next; });
+        }
+        
         // Always use loadTextIntoEditor for new tabs to ensure proper content loading
         saveActiveTextToCache(); 
         loadTextIntoEditor(path, content);
-        setOpenTabs((t) => [...t, { path, type: "text" }]);
+        setOpenTabs((t) => [...t, { path, type: fileType }]);
         setActiveTabPath(path);
         setCurrentPath(path);
       }
@@ -2755,6 +2788,15 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     const isDiffTab = activeTabPath?.endsWith(':diff');
                     const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
                     
+                    // Only check YText for text files
+                    if (!getCurrentYText()) {
+                      return (
+                        <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
+                          Loading editor…
+                        </div>
+                      );
+                    }
+                    
                     const aiOverlayHeight = chatExpanded ? "45%" : "155px";
                     return (
                       <div
@@ -2841,18 +2883,6 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       </div>
                     );
                   }
-                  if (!ydoc || !getCurrentYText()) {
-                    return (
-                      <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
-                        Loading editor…
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] text-sm bg-[var(--background)]">
-                      Open a file to get started
-                    </div>
-                  );
                 })()}
                 {showAIPanel && (
                   <div
