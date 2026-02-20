@@ -103,15 +103,21 @@ async function loadDir(fs: IdbfsFs, path: string): Promise<TreeNode[]> {
   const { dirs, files } = await fs.readdir(path);
   const nodes: TreeNode[] = [];
 
-  for (const d of dirs) {
+  // Sort directories alphabetically
+  const sortedDirs = dirs.sort((a, b) => a.name.localeCompare(b.name));
+  for (const d of sortedDirs) {
     const fullPath = path === "/" ? `/${d.name}` : `${path}/${d.name}`;
     nodes.push({ name: d.name, path: fullPath, type: "folder", children: [], loaded: false });
   }
-  for (const f of files) {
+  
+  // Sort files alphabetically
+  const sortedFiles = files.sort((a, b) => a.name.localeCompare(b.name));
+  for (const f of sortedFiles) {
     const fullPath = path === "/" ? `/${f.name}` : `${path}/${f.name}`;
     const stat = await fs.stat(fullPath).catch(() => null);
     nodes.push({ name: f.name, path: fullPath, type: "file", size: stat?.size ?? 0 });
   }
+  
   return nodes;
 }
 

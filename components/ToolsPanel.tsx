@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { logger, type LogEntry } from "@/lib/logger";
 import { SummaryView } from "./SummaryView";
+import { gitStore } from "@/lib/gitStore";
 
 interface ToolsPanelProps {
   isOpen: boolean;
@@ -13,7 +14,7 @@ interface ToolsPanelProps {
   summaryRaw?: string;
 }
 
-type ToolsTab = "summary" | "ai-logs" | "latex-logs" | "typst-logs";
+type ToolsTab = "summary" | "ai-logs" | "latex-logs" | "typst-logs" | "git-logs";
 
 /* ── Tab button ── */
 
@@ -192,6 +193,59 @@ function LatexLogDisplay({ logs, category }: { logs: LogEntry[]; category: strin
   );
 }
 
+/* ── Git Log Display component ── */
+
+function GitLogDisplay({ logs }: { logs: any[] }) {
+  if (logs.length === 0) {
+    return (
+      <div className="text-sm text-[var(--muted)] italic">
+        No git commits available
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {logs.map((commit: any, i: number) => (
+        <div
+          key={i}
+          className="text-sm p-3 rounded border bg-[color-mix(in_srgb,var(--border)_10%,transparent)] border-[var(--border)]"
+        >
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <div className="font-medium mb-1 text-[var(--foreground)]">
+                {commit.message}
+              </div>
+              <div className="text-xs text-[var(--muted)] mb-2">
+                <div>Repository: <span className="text-blue-400">{commit.repositoryName}</span></div>
+                <div>Author: {commit.author || 'Unknown'}</div>
+                <div>Date: {new Date(commit.timestamp).toLocaleString()}</div>
+                <div>Commit ID: <span className="font-mono text-xs">{commit.id}</span></div>
+                <div>Files: {commit.files?.length || 0} changed</div>
+              </div>
+              
+              {commit.files && commit.files.length > 0 && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-[var(--muted)] hover:text-[var(--foreground)]">
+                    View changed files
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    {commit.files.map((file: any, idx: number) => (
+                      <div key={idx} className="text-[var(--muted)] font-mono text-xs">
+                        {file.path}
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ── Main component ── */
 
 export function ToolsPanel({
@@ -206,6 +260,7 @@ export function ToolsPanel({
   const [aiLogs, setAiLogs] = useState<LogEntry[]>([]);
   const [latexLogs, setLatexLogs] = useState<LogEntry[]>([]);
   const [typstLogs, setTypstLogs] = useState<LogEntry[]>([]);
+  const [gitLogs, setGitLogs] = useState<any[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize logs when panel opens
@@ -215,6 +270,30 @@ export function ToolsPanel({
       const aiEntries = logger.getLogs("ai").slice(-50);
       const latexEntries = logger.getLogs("latex").slice(-50);
       const typstEntries = logger.getLogs("typst").slice(-50);
+      
+      // Load git logs (get all repositories and their commit history)
+      const loadGitLogs = async () => {
+        try {
+          const repos = await gitStore.getAllRepositories();
+          const allCommits: any[] = [];
+          
+          for (const repo of repos) {
+            const commits = await gitStore.getCommitHistory(repo.name, 50);
+            allCommits.push(...commits.map(commit => ({
+              ...commit,
+              repositoryName: repo.name
+            })));
+          }
+          
+          // Sort by timestamp (newest first)
+          allCommits.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setGitLogs(allCommits);
+        } catch (error) {
+          console.error("Failed to load git logs:", error);
+        }
+      };
+      
+      loadGitLogs();
       
       setAiLogs(aiEntries);
       setLatexLogs(latexEntries);
@@ -302,6 +381,16 @@ export function ToolsPanel({
           >
             <span className="text-sm">Typst</span>
           </div>
+          <div
+            className={`group relative flex items-center px-3 py-2 cursor-pointer shrink-0 h-full ${
+              activeTab === "git-logs"
+                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
+            }`}
+            onClick={() => setActiveTab("git-logs")}
+          >
+            <span className="text-sm">Git</span>
+          </div>
           <div className="flex-1" />
           <button
             onClick={onClose}
@@ -369,6 +458,15 @@ export function ToolsPanel({
               <div className="text-sm text-[var(--muted)] italic">Loading logs...</div>
             ) : (
               <LogDisplay logs={typstLogs} category="Typst" />
+            )
+          )}
+
+          {/* ── Git Logs tab ── */}
+          {activeTab === "git-logs" && (
+            !isInitialized ? (
+              <div className="text-sm text-[var(--muted)] italic">Loading git logs...</div>
+            ) : (
+              <GitLogDisplay logs={gitLogs} />
             )
           )}
         </div>

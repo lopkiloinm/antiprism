@@ -91,6 +91,19 @@ class GitStore {
     });
   }
 
+  async getAllRepositories(): Promise<GitRepository[]> {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.storeName], 'readonly');
+      const store = transaction.objectStore(this.storeName);
+      const request = store.getAll();
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || []);
+    });
+  }
+
   async getRepository(name: string): Promise<GitRepository | null> {
     if (!this.db) await this.init();
     
