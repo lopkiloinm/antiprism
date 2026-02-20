@@ -1,8 +1,76 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { NameModal } from "./NameModal";
+import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconCheckSquare, IconSquare } from "./Icons";
 import { gitStore } from "@/lib/gitStore";
-import { IconGitBranch, IconGitCommit, IconFileText, IconPlus, IconTrash2 } from "./Icons";
+import type { EditorBufferManager } from "@/lib/editorBufferManager";
+
+// CSS styles for dashboard-like appearance
+const gitPanelStyles = `
+  .file-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .file-checkbox input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 10px;
+    color: rgb(249 250 251 / 0.8);
+  }
+
+  .file-item:hover {
+    background: color-mix(in srgb, var(--border) 45%, transparent);
+  }
+
+  .file-item.selected {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+
+  .file-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .file-name {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 10px;
+    color: rgb(249 250 251 / 0.8);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .file-name:hover {
+    text-decoration: underline;
+  }
+`;
+
+// Define types locally since they're not exported from gitStore
+interface FileChange {
+  path: string;
+  status: "modified" | "added" | "deleted";
+  staged: boolean;
+}
+
+interface GitRepository {
+  id: string;
+  branch: string;
+  commits: any[];
+}
 
 // Simple hash function for file content
 const calculateFileHash = (content: string): string => {
@@ -53,14 +121,27 @@ interface GitPanelProps {
   bufferManager?: any; // Buffer manager instance for file content access
 }
 
-export function GitPanelReal({ 
-  filePaths = [], 
-  currentPath, 
-  onFileSelect, 
+export function GitPanelReal({
+  projectId,
+  bufferManager,
+  filePaths = [],
+  currentPath,
+  onFileSelect,
   onCloseFile,
-  projectId = "default-project",
-  bufferManager
 }: GitPanelProps) {
+  // Inject CSS styles
+  useEffect(() => {
+    const styleId = 'git-panel-styles';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = gitPanelStyles;
+      document.head.appendChild(style);
+    }
+  }, []);
+
+  const [repo, setRepo] = useState<GitRepository | null>(null);
+
   const [branch, setBranch] = useState("main");
   const [changes, setChanges] = useState<FileChange[]>([]);
   const [commits, setCommits] = useState<any[]>([]);
@@ -68,9 +149,9 @@ export function GitPanelReal({
   const [showHistory, setShowHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGitInitialized, setIsGitInitialized] = useState<boolean | null>(null);
-  const [repo, setRepo] = useState<any>(null);
 
   const loadCommitHistory = useCallback(async () => {
+    if (!projectId) return;
     try {
       const history = await gitStore.getCommitHistory(projectId, 20);
       setCommits(history);
@@ -410,6 +491,18 @@ export function GitPanelReal({
 
   const stagedCount = changes.filter((c) => c.staged).length;
 
+  // Debug logging for path comparison
+  useEffect(() => {
+    console.log('🔍 GIT PANEL DEBUG - currentPath:', currentPath);
+    console.log('🔍 GIT PANEL DEBUG - changes:', changes.map(c => ({ path: c.path, isActive: currentPath === c.path })));
+  }, [currentPath, changes]);
+
+  // Extract just the filename from currentPath for comparison
+  const getCurrentFileName = () => {
+    if (!currentPath) return null;
+    return currentPath.split('/').pop() || currentPath;
+  };
+
   const statusIcon = (status: FileChange["status"]) => {
     switch (status) {
       case "modified":
@@ -475,56 +568,62 @@ export function GitPanelReal({
             </button>
           </div>
         ) : showHistory ? (
-          <div className="p-3">
-            <h3 className="text-sm font-medium text-[var(--foreground)] mb-2">Commit History</h3>
-            {commits.length === 0 ? (
-              <p className="text-[var(--muted)] text-xs italic">No commits yet</p>
-            ) : (
-              <div className="space-y-2">
-                {commits.map((commit) => (
-                  <div key={commit.id} className="border border-[var(--border)] rounded p-2">
-                    <div className="flex items-start gap-2">
+          <div>
+            {/* Commit history header */}
+            <div className="px-3 py-2 text-sm flex items-center gap-2 min-w-0">
+              <IconGitCommit />
+              <span className="truncate min-w-0 flex-1 text-[var(--foreground)]">Commit History</span>
+              <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}></span>
+            </div>
+            
+            {/* Border separator */}
+            <div className="border-b border-[var(--border)] shrink-0"></div>
+            
+            {/* Commit list */}
+            <div className="flex-1 overflow-auto min-h-0">
+              {commits.length === 0 ? (
+                <div className="p-3 text-center">
+                  <div className="text-xs text-[var(--muted)] italic">No commits yet</div>
+                </div>
+              ) : (
+                <div>
+                  {commits.map((commit) => (
+                    <div key={commit.id} className="px-3 py-2 cursor-pointer text-sm flex items-start gap-2 min-w-0 transition-colors hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]">
                       <IconGitCommit />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-[var(--foreground)]">
+                        <div className="truncate text-[var(--foreground)]">
                           {commit.message}
                         </div>
-                        <div className="text-xs text-[var(--muted)]">
+                        <div className="text-xs text-[var(--muted)] truncate">
                           {commit.timestamp.toLocaleString()} · {commit.id.slice(0, 7)}
                         </div>
                       </div>
+                      <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}></span>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div>
             {/* Staging controls */}
-            <div className="border-b border-[var(--border)] shrink-0">
-              <div className="flex items-center gap-2 text-xs px-2 py-1">
+            <div className="shrink-0">
+              <div className="flex items-center gap-2 min-w-0 text-sm px-3 py-2">
                 <button
                   onClick={() => stagedCount === changes.length ? unstageAll() : stageAll()}
-                  className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
-                    stagedCount === changes.length && changes.length > 0
-                      ? "border-[var(--accent)] bg-[var(--accent)]"
-                      : "border-[var(--border)]"
-                  }`}
-                  title={stagedCount === changes.length ? "Unstage all" : "Stage all"}
+                  disabled={changes.length === 0}
+                  className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] transition-colors"
                 >
-                  {stagedCount === changes.length && changes.length > 0 && (
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
+                  {stagedCount === changes.length && changes.length > 0 ? <IconCheckSquare /> : <IconSquare />}
                 </button>
-                <div className="flex-1 text-left truncate hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors rounded px-2 py-1">
-                  <span className="text-[var(--foreground)]">Changes ({stagedCount} staged)</span>
-                </div>
-                <span className="shrink-0 w-4 text-right"></span>
+                <span className="truncate min-w-0 flex-1 text-[var(--foreground)]">Changes ({stagedCount} staged)</span>
+                <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}></span>
               </div>
             </div>
+
+            {/* Border separator */}
+            <div className="border-b border-[var(--border)] shrink-0"></div>
 
             {/* File changes list */}
             <div className="flex-1 overflow-auto min-h-0">
@@ -540,37 +639,25 @@ export function GitPanelReal({
                 </div>
               ) : (
                 changes.map((change, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs px-2 py-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleStage(i);
-                      }}
-                      className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
-                        change.staged
-                          ? "border-[var(--accent)] bg-[var(--accent)]"
-                          : "border-[var(--border)]"
-                      }`}
-                      title={change.staged ? "Click to unstage" : "Click to stage"}
-                    >
-                      {change.staged && (
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      )}
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFileClick(change.path);
-                      }}
-                      className="flex-1 text-left truncate hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors rounded px-2 py-1"
-                      title={`Open ${change.path}`}
-                    >
-                      <span className="truncate text-[var(--foreground)]">{change.path}</span>
-                    </button>
-                    <span className="shrink-0 w-4 text-right">{statusIcon(change.status)}</span>
-                  </div>
+                  <div key={i} className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-2 min-w-0 transition-colors ${
+                    getCurrentFileName() === change.path
+                      ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+                      : "hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                  }`}
+                  onClick={() => handleFileClick(change.path)}
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStage(i);
+                    }}
+                    className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] transition-colors"
+                  >
+                    {change.staged ? <IconCheckSquare /> : <IconSquare />}
+                  </button>
+                  <span className="truncate min-w-0 flex-1">{change.path}</span>
+                  <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}>{statusIcon(change.status)}</span>
+                </div>
                 ))
               )}
             </div>
