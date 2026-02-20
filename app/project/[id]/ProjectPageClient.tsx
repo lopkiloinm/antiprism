@@ -1069,7 +1069,6 @@ Parser Features
               console.log('[LaTeX] Parser result:', {
                 type: result.type,
                 statsWordsInText: result.stats.wordsInText,
-                statsWordsInHeaders: result.stats.wordsInHeaders,
                 metadataWordCount: result.metadata.wordCount,
                 simpleWordCount: content.split(/\s+/).filter(Boolean).length
               });
@@ -2380,11 +2379,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           }
 
           // Regular editor panel for files/chats tabs
-          const activeTab = (sidebarTab === "git" ? gitOpenTabs : openTabs).find((t) => t.path === (sidebarTab === "git" ? activeGitTabPath : activeTabPath));
+          const isGitTab = (sidebarTab as "files" | "chats" | "git") === "git";
+          const activeTab = (isGitTab ? gitOpenTabs : openTabs).find((t) => t.path === (isGitTab ? activeGitTabPath : activeTabPath));
           const showAIPanel = activeTab?.type === "text" && ydoc && ytext && provider;
           
           // Filter tabs based on sidebar context
-          const displayTabs = sidebarTab === "git" 
+          const displayTabs = isGitTab 
             ? gitOpenTabs.filter(t => t.type === "text") // Show git tabs when in git context
             : openTabs;
             
@@ -2392,7 +2392,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             <section style={{ flex: `${editorFraction} 1 0%` }} className="flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
               <FileTabs
                 tabs={displayTabs}
-                activePath={sidebarTab === "git" ? activeGitTabPath : activeTabPath}
+                activePath={isGitTab ? activeGitTabPath : activeTabPath}
                 onSelect={handleTabSelect}
                 onClose={handleTabClose}
                 onToggleTools={() => setToolsPanelOpen(!toolsPanelOpen)}
