@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import JSZip from "jszip";
 import { NameModal } from "./NameModal";
 import { IconFileText, IconFolder, IconFolderOpen, IconImage, IconLoader, IconPencil, IconDownload, IconTrash2, IconFileCode, IconFileJson, IconFileCog, IconBraces, IconPalette, IconFile } from "./Icons";
+import { useContextMenu } from "@/contexts/ContextMenuContext";
 
 function getFileIcon(path: string) {
   const name = path.split("/").pop()?.toLowerCase() ?? "";
@@ -138,8 +139,7 @@ function TreeNodeComponent({
   const [children, setChildren] = useState<TreeNode[]>(node.children || []);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const { showContextMenu } = useContextMenu();
 
   const isSelected = currentPath === node.path;
 
@@ -174,83 +174,53 @@ function TreeNodeComponent({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    // Close any existing context menus first
-    document.querySelectorAll('[data-context-menu]').forEach(el => el.remove());
-    setContextMenu({ x: e.clientX, y: e.clientY });
-  };
-
-  useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    if (contextMenu) {
-      document.addEventListener("click", handleClick);
-      return () => document.removeEventListener("click", handleClick);
-    }
-  }, [contextMenu]);
-
-  const handleRename = () => {
-    setContextMenu(null);
-    onOpenRenameModal({ name: node.name, path: node.path, type: "file" });
-  };
-
-  const handleDownload = async () => {
-    try {
-      const data = await fs.readFile(node.path);
-      const blob = data instanceof ArrayBuffer ? new Blob([data]) : new Blob([data]);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = node.name;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Download failed:", e);
-    }
-    setContextMenu(null);
-  };
-
-  const handleDelete = async () => {
-    try {
-      await fs.rm(node.path);
-      onFileDeleted?.(node.path, false);
-      onRefresh();
-    } catch (e) {
-      console.error("Delete failed:", e);
-    }
-    setContextMenu(null);
-  };
-
-  const handleRenameFolder = () => {
-    setContextMenu(null);
-    onOpenRenameModal({ name: node.name, path: node.path, type: "folder" });
-  };
-
-  const handleDownloadFolder = async () => {
-    setContextMenu(null);
-    try {
-      const zip = new JSZip();
-      await zipFolderRecursive(fs, node.path, zip, node.name);
-      const blob = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${node.name}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Download folder failed:", e);
-    }
-  };
-
-  const handleDeleteFolder = async () => {
-    setContextMenu(null);
-    if (!confirm(`Delete folder "${node.name}" and all its contents?`)) return;
-    try {
-      await fs.rm(node.path, true);
-      onFileDeleted?.(node.path, true);
-      onRefresh();
-    } catch (e) {
-      console.error("Delete folder failed:", e);
-    }
+    
+    const menuItems = [
+      {
+        label: "Rename",
+        icon: <IconPencil />,
+        onClick: () => onOpenRenameModal({ name: node.name, path: node.path, type: node.type })
+      },
+      {
+        label: "Download",
+        icon: <IconDownload />,
+        onClick: async () => {
+          try {
+            const { mount } = await import("@wwog/idbfs");
+            const fs = await mount();
+            const content = await fs.readFile(node.path);
+            const blob = new Blob([content], { type: "application/octet-stream" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = node.name;
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            console.error("Download failed:", e);
+          }
+        }
+      },
+      {
+        label: "Delete",
+        icon: <IconTrash2 />,
+        danger: true,
+        onClick: async () => {
+          if (!confirm(`Delete ${node.type} "${node.name}"?`)) return;
+          try {
+            const { mount } = await import("@wwog/idbfs");
+            const fs = await mount();
+            await fs.rm(node.path, node.type === "folder");
+            onRefresh();
+            onFileDeleted?.(node.path, node.type === "folder");
+          } catch (e) {
+            console.error("Delete failed:", e);
+          }
+        }
+      }
+    ];
+    
+    showContextMenu(e.clientX, e.clientY, menuItems);
   };
 
   if (node.type === "file") {
@@ -271,37 +241,6 @@ function TreeNodeComponent({
           </span>
           <span className="truncate min-w-0">{node.name}</span>
         </div>
-        {contextMenu && (
-          <div
-            ref={contextMenuRef}
-            data-context-menu="true"
-            className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={handleRename}
-              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-            >
-              <IconPencil />
-              Rename file
-            </button>
-            <button
-              onClick={handleDownload}
-              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-            >
-              <IconDownload />
-              Download file
-            </button>
-            <button
-              onClick={handleDelete}
-              className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-            >
-              <IconTrash2 />
-              Delete file
-            </button>
-          </div>
-        )}
       </>
     );
   }
@@ -323,37 +262,6 @@ function TreeNodeComponent({
         </span>
         <span className="truncate min-w-0">{node.name}</span>
       </div>
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          data-context-menu="true"
-          className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={handleRenameFolder}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconPencil />
-            Rename folder
-          </button>
-          <button
-            onClick={handleDownloadFolder}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconDownload />
-            Download folder
-          </button>
-          <button
-            onClick={handleDeleteFolder}
-            className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconTrash2 />
-            Delete folder
-          </button>
-        </div>
-      )}
       {expanded &&
         children.map((child) => (
           <TreeNodeComponent

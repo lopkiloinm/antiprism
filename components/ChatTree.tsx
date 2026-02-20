@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { NameModal } from "./NameModal";
 import { IconMessageSquare, IconPencil, IconDownload, IconTrash2 } from "./Icons";
 import { renameChat, deleteChat, getChatMessages, type ChatSession } from "@/lib/chatStore";
+import { useContextMenu } from "@/contexts/ContextMenuContext";
 
 interface ChatTreeProps {
   onChatSelect: (chatId: string) => void;
@@ -27,59 +28,53 @@ function ChatNodeComponent({
   level: number;
   refreshTrigger?: number;
 }) {
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const { showContextMenu } = useContextMenu();
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY });
-  };
-
-  useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    if (contextMenu) {
-      document.addEventListener("click", handleClick);
-      return () => document.removeEventListener("click", handleClick);
-    }
-  }, [contextMenu]);
-
-  const handleRename = () => {
-    setContextMenu(null);
-    onOpenRenameModal(chat);
-  };
-
-  const handleDownload = async () => {
-    try {
-      const messages = getChatMessages(chat.id);
-      const chatData = {
-        id: chat.id,
-        title: chat.title,
-        createdAt: chat.createdAt,
-        modelId: chat.modelId,
-        messages: messages,
-      };
-      const blob = new Blob([JSON.stringify(chatData, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${chat.title.replace(/[^a-z0-9\s]/gi, "").slice(0, 50) || chat.id}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Download failed:", e);
-    }
-    setContextMenu(null);
-  };
-
-  const handleDelete = async () => {
-    if (!confirm(`Delete chat "${chat.title}"?`)) return;
-    try {
-      deleteChat(chat.id);
-      onRefresh();
-    } catch (e) {
-      console.error("Delete failed:", e);
-    }
-    setContextMenu(null);
+    
+    const menuItems = [
+      {
+        label: "Rename",
+        icon: <IconPencil />,
+        onClick: () => onOpenRenameModal(chat)
+      },
+      {
+        label: "Download",
+        icon: <IconDownload />,
+        onClick: async () => {
+          try {
+            const messages = await getChatMessages(chat.id);
+            const content = JSON.stringify(messages, null, 2);
+            const blob = new Blob([content], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${chat.title.replace(/[^a-zA-Z0-9]/g, "_")}_messages.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            console.error("Download failed:", e);
+          }
+        }
+      },
+      {
+        label: "Delete",
+        icon: <IconTrash2 />,
+        danger: true,
+        onClick: async () => {
+          if (!confirm(`Delete chat "${chat.title}"?`)) return;
+          try {
+            await deleteChat(chat.id);
+            onRefresh();
+          } catch (e) {
+            console.error("Delete failed:", e);
+          }
+        }
+      }
+    ];
+    
+    showContextMenu(e.clientX, e.clientY, menuItems);
   };
 
   return (
@@ -98,36 +93,6 @@ function ChatNodeComponent({
           {new Date(chat.createdAt).toLocaleDateString()}
         </span>
       </div>
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={handleRename}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconPencil />
-            Rename chat
-          </button>
-          <button
-            onClick={handleDownload}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconDownload />
-            Export chat
-          </button>
-          <button
-            onClick={handleDelete}
-            className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconTrash2 />
-            Delete chat
-          </button>
-        </div>
-      )}
     </>
   );
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ContextMenuProvider } from "@/contexts/ContextMenuContext";
 
 export const metadata: Metadata = {
   title: "Antiprism LaTeX Editor",
@@ -16,7 +17,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="h-screen w-screen overflow-hidden antialiased bg-[var(--background)] text-[var(--foreground)]">
         <ThemeProvider>
-          {children}
+          <ContextMenuProvider>
+            {children}
+          </ContextMenuProvider>
         </ThemeProvider>
       </body>
     </html>
