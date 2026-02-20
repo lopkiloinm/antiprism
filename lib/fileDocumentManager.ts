@@ -92,7 +92,7 @@ export class FileDocumentManager {
     });
     
     webrtcProvider.on('peers', (event: any) => {
-      console.log(`👥 WebRTC peers for ${filePath}:`, event.peers.length);
+      console.log(`👥 WebRTC peers for ${filePath}:`, event.peers?.length ?? 0);
     });
     
     doc.on('update', (update: any, origin: any) => {
