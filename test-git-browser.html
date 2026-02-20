@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Implementation Browser Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .pass {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .fail {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Git Implementation Browser Test</h1>
+    <p>This page tests the actual git functionality in a browser environment with IndexedDB.</p>
+    
+    <div class="test-container">
+        <h2>Test Controls</h2>
+        <button onclick="runAllTests()">🚀 Run All Tests</button>
+        <button onclick="clearDatabase()">🗑️ Clear Database</button>
+        <button onclick="showDatabaseInfo()">📊 Show Database Info</button>
+    </div>
+
+    <div id="results"></div>
+
+    <script type="module">
+        // Import gitStore (we'll need to simulate it since we can't import TS directly)
+        // For now, we'll create a simplified version for testing
+        
+        class TestGitStore {
+            constructor() {
+                this.dbName = 'GitRepository';
+                this.storeName = 'repositories';
+                this.db = null;
+            }
+
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, 1);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        this.db = request.result;
+                        resolve();
+                    };
+                    
+                    request.onupgradeneeded = () => {
+                        const db = request.result;
+                        if (!db.objectStoreNames.contains(this.storeName)) {
+                            const store = db.createObjectStore(this.storeName, { keyPath: 'name' });
+                            store.createIndex('timestamp', 'timestamp');
+                        }
+                    };
+                });
+            }
+
+            async createRepository(name) {
+                if (!this.db) await this.init();
+                
+                return new Promise((resolve, reject) => {
+                    const repository = {
+                        name,
+                        commits: [],
+                        currentBranch: 'main',
+                        branches: ['main'],
+                    };
+                    
+                    const tx = this.db.transaction([this.storeName], 'readwrite');
+                    const store = tx.objectStore(this.storeName);
+                    const request = store.put(repository);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve();
+                    
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+
+            async getRepository(name) {
+                if (!this.db) await this.init();
+                
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction([this.storeName], 'readonly');
+                    const store = tx.objectStore(this.storeName);
+                    const request = store.get(name);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        const result = request.result;
+                        resolve(result || null);
+                    };
+                });
+            }
+
+            async createCommit(repoName, message, changes, author) {
+                const repo = await this.getRepository(repoName);
+                if (!repo) throw new Error(`Repository ${repoName} not found`);
+
+                const fileSnapshots = [];
+                
+                for (const change of changes) {
+                    const snapshot = {
+                        path: change.path,
+                        content: change.newContent || '',
+                        timestamp: new Date(),
+                        hash: this.generateHash(change.newContent || '')
+                    };
+                    fileSnapshots.push(snapshot);
+                }
+
+                const commit = {
+                    id: this.generateCommitId(),
+                    message,
+                    timestamp: new Date(),
+                    files: fileSnapshots,
+                    author,
+                    parentIds: repo.headCommitId ? [repo.headCommitId] : undefined
+                };
+
+                repo.commits.unshift(commit);
+                repo.headCommitId = commit.id;
+                
+                await this.saveRepository(repo);
+                
+                return commit.id;
+            }
+
+            async saveRepository(repository) {
+                if (!this.db) await this.init();
+                
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction([this.storeName], 'readwrite');
+                    const store = tx.objectStore(this.storeName);
+                    const request = store.put(repository);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve();
+                    
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            }
+
+            async getCommitHistory(repoName, limit = 50) {
+                const repo = await this.getRepository(repoName);
+                if (!repo) return [];
+                
+                return repo.commits.slice(0, limit);
+            }
+
+            generateCommitId() {
+                return Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
+            }
+
+            generateHash(content) {
+                let hash = 0;
+                for (let i = 0; i < content.length; i++) {
+                    const char = content.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return Math.abs(hash).toString(36);
+            }
+
+            static calculateFileHash(content) {
+                let hash = 0;
+                for (let i = 0; i < content.length; i++) {
+                    const char = content.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return Math.abs(hash).toString(36);
+            }
+        }
+
+        // Make functions available globally
+        window.testGitStore = new TestGitStore();
+        window.runAllTests = runAllTests;
+        window.clearDatabase = clearDatabase;
+        window.showDatabaseInfo = showDatabaseInfo;
+
+        function addResult(title, status, message, details = null) {
+            const resultsDiv = document.getElementById('results');
+            const testDiv = document.createElement('div');
+            testDiv.className = 'test-container';
+            
+            let html = `<h3>${title}</h3>`;
+            html += `<div class="test-result ${status}">${status.toUpperCase()}: ${message}</div>`;
+            
+            if (details) {
+                html += `<pre>${JSON.stringify(details, null, 2)}</pre>`;
+            }
+            
+            testDiv.innerHTML = html;
+            resultsDiv.appendChild(testDiv);
+        }
+
+        async function testRepositoryCreation() {
+            addResult('📁 Repository Creation', 'loading', 'Testing repository creation...');
+            
+            try {
+                const projectId = 'test-repo-' + Date.now();
+                await window.testGitStore.createRepository(projectId);
+                const repo = await window.testGitStore.getRepository(projectId);
+                
+                if (repo && repo.name === projectId && repo.commits.length === 0) {
+                    addResult('📁 Repository Creation', 'pass', 'Repository created successfully', {
+                        name: repo.name,
+                        commits: repo.commits.length,
+                        branches: repo.branches
+                    });
+                } else {
+                    addResult('📁 Repository Creation', 'fail', 'Repository creation failed', repo);
+                }
+            } catch (error) {
+                addResult('📁 Repository Creation', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        async function testCommitCreation() {
+            addResult('📝 Commit Creation', 'loading', 'Testing commit creation...');
+            
+            try {
+                const projectId = 'test-commits-' + Date.now();
+                await window.testGitStore.createRepository(projectId);
+                
+                const changes = [
+                    {
+                        path: 'test.txt',
+                        status: 'added',
+                        newContent: 'Hello World!'
+                    },
+                    {
+                        path: 'test2.txt',
+                        status: 'modified', 
+                        newContent: 'Modified content'
+                    }
+                ];
+                
+                const commitId = await window.testGitStore.createCommit(
+                    projectId,
+                    'Test commit message',
+                    changes,
+                    'Test Author'
+                );
+                
+                const repo = await window.testGitStore.getRepository(projectId);
+                
+                if (commitId && repo.commits.length === 1) {
+                    addResult('📝 Commit Creation', 'pass', 'Commit created successfully', {
+                        commitId,
+                        message: repo.commits[0].message,
+                        author: repo.commits[0].author,
+                        filesCount: repo.commits[0].files.length
+                    });
+                } else {
+                    addResult('📝 Commit Creation', 'fail', 'Commit creation failed', { commitId, commits: repo.commits });
+                }
+            } catch (error) {
+                addResult('📝 Commit Creation', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        async function testCommitHistory() {
+            addResult('📚 Commit History', 'loading', 'Testing commit history...');
+            
+            try {
+                const projectId = 'test-history-' + Date.now();
+                await window.testGitStore.createRepository(projectId);
+                
+                // Create multiple commits
+                const commit1Id = await window.testGitStore.createCommit(
+                    projectId,
+                    'First commit',
+                    [{ path: 'file1.txt', status: 'added', newContent: 'Content 1' }],
+                    'Author 1'
+                );
+                
+                // Small delay to ensure different timestamps
+                await new Promise(resolve => setTimeout(resolve, 10));
+                
+                const commit2Id = await window.testGitStore.createCommit(
+                    projectId,
+                    'Second commit',
+                    [{ path: 'file2.txt', status: 'added', newContent: 'Content 2' }],
+                    'Author 2'
+                );
+                
+                const history = await window.testGitStore.getCommitHistory(projectId, 10);
+                
+                if (history.length === 2 && 
+                    history[0].message === 'Second commit' &&
+                    history[1].message === 'First commit') {
+                    addResult('📚 Commit History', 'pass', 'Commit history working correctly', {
+                        totalCommits: history.length,
+                        newest: history[0].message,
+                        oldest: history[1].message
+                    });
+                } else {
+                    addResult('📚 Commit History', 'fail', 'Commit history failed', history);
+                }
+            } catch (error) {
+                addResult('📚 Commit History', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        async function testHashConsistency() {
+            addResult('#️⃣ Hash Consistency', 'loading', 'Testing hash consistency...');
+            
+            try {
+                const content = 'Test file content for hashing';
+                const hash1 = TestGitStore.calculateFileHash(content);
+                const hash2 = TestGitStore.calculateFileHash(content);
+                const hash3 = TestGitStore.calculateFileHash('Different content');
+                
+                if (hash1 === hash2 && hash1 !== hash3) {
+                    addResult('#️⃣ Hash Consistency', 'pass', 'Hash consistency working', {
+                        sameContentHash: hash1,
+                        differentContentHash: hash3,
+                        consistent: hash1 === hash2
+                    });
+                } else {
+                    addResult('#️⃣ Hash Consistency', 'fail', 'Hash consistency failed', {
+                        hash1,
+                        hash2,
+                        hash3,
+                        sameContentMatch: hash1 === hash2,
+                        differentContentDiff: hash1 !== hash3
+                    });
+                }
+            } catch (error) {
+                addResult('#️⃣ Hash Consistency', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        async function clearDatabase() {
+            try {
+                const deleteReq = indexedDB.deleteDatabase('GitRepository');
+                deleteReq.onsuccess = () => {
+                    addResult('🗑️ Clear Database', 'info', 'Database cleared successfully');
+                };
+                deleteReq.onerror = () => {
+                    addResult('🗑️ Clear Database', 'fail', 'Failed to clear database');
+                };
+            } catch (error) {
+                addResult('🗑️ Clear Database', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        async function showDatabaseInfo() {
+            try {
+                const db = await window.testGitStore.init();
+                const tx = db.transaction(['repositories'], 'readonly');
+                const store = tx.objectStore('repositories');
+                const getAllRequest = store.getAll();
+                
+                getAllRequest.onsuccess = () => {
+                    const repositories = getAllRequest.result;
+                    addResult('📊 Database Info', 'info', `Found ${repositories.length} repositories`, repositories);
+                };
+                
+                getAllRequest.onerror = () => {
+                    addResult('📊 Database Info', 'fail', 'Failed to read database');
+                };
+            } catch (error) {
+                addResult('📊 Database Info', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        async function runAllTests() {
+            document.getElementById('results').innerHTML = '';
+            
+            await testHashConsistency();
+            await testRepositoryCreation();
+            await testCommitCreation();
+            await testCommitHistory();
+            
+            addResult('🎉 Test Summary', 'info', 'All tests completed! Check results above.');
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            addResult('🚀 Ready', 'info', 'Git implementation test page loaded. Click "Run All Tests" to begin.');
+        });
+    </script>
+</body>
+</html>

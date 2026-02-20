@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { gitStore } from "@/lib/gitStore";
 import { IconGitBranch, IconGitCommit, IconFileText, IconPlus, IconTrash2, IconRefreshCw } from "./Icons";
 
 interface FileChange {
@@ -20,6 +21,8 @@ interface GitPanelProps {
   filePaths?: string[];
   /** Current active file path */
   currentPath?: string;
+  /** Callback when a file is clicked */
+  onFileSelect?: (filePath: string) => void;
 }
 
 /**
@@ -28,7 +31,7 @@ interface GitPanelProps {
  * implementation — not a full git client, but offers commit/history
  * functionality for project snapshots.
  */
-export function GitPanel({ filePaths = [], currentPath }: GitPanelProps) {
+export function GitPanel({ filePaths = [], currentPath, onFileSelect }: GitPanelProps) {
   const [branch, setBranch] = useState("main");
   const [changes, setChanges] = useState<FileChange[]>([]);
   const [commits, setCommits] = useState<Commit[]>([]);
@@ -40,7 +43,7 @@ export function GitPanel({ filePaths = [], currentPath }: GitPanelProps) {
     if (filePaths.length === 0) return;
     // In a real implementation, this would diff against the last committed snapshot
     const simulated: FileChange[] = filePaths.slice(0, 5).map((p) => ({
-      path: p.split("/").pop() || p,
+      path: p.split("/").pop() || p, // Show only file name, not full path
       status: "modified" as const,
       staged: false,
     }));
@@ -76,6 +79,14 @@ export function GitPanel({ filePaths = [], currentPath }: GitPanelProps) {
     setChanges((prev) => prev.filter((c) => !c.staged));
     setCommitMessage("");
   }, [commitMessage, changes]);
+
+  const handleFileClick = useCallback((fileName: string) => {
+    // Find the full path that matches this file name
+    const fullPath = filePaths.find(p => p.split("/").pop() === fileName);
+    if (fullPath) {
+      onFileSelect?.(fullPath);
+    }
+  }, [onFileSelect, filePaths]);
 
   const stagedCount = changes.filter((c) => c.staged).length;
 
@@ -159,29 +170,31 @@ export function GitPanel({ filePaths = [], currentPath }: GitPanelProps) {
               <div className="p-3 text-[var(--muted)] italic text-xs">No changes detected</div>
             ) : (
               changes.map((change, i) => (
-                <button
-                  key={i}
-                  onClick={() => toggleStage(i)}
-                  className={`w-full text-left px-3 py-1.5 flex items-center gap-2 text-xs hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors ${
-                    change.staged ? "bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" : ""
-                  }`}
-                  title={change.staged ? "Click to unstage" : "Click to stage"}
-                >
-                  <span className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
-                    change.staged
-                      ? "border-[var(--accent)] bg-[var(--accent)]"
-                      : "border-[var(--border)]"
-                  }`}>
+                <div key={i} className="flex items-center gap-2 text-xs px-2 py-1">
+                  <button
+                    onClick={() => toggleStage(i)}
+                    className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 ${
+                      change.staged
+                        ? "border-[var(--accent)] bg-[var(--accent)]"
+                        : "border-[var(--border)]"
+                    }`}
+                    title={change.staged ? "Click to unstage" : "Click to stage"}
+                  >
                     {change.staged && (
                       <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
-                  </span>
-                  <IconFileText />
-                  <span className="truncate text-[var(--foreground)]">{change.path}</span>
-                  <span className="ml-auto shrink-0">{statusIcon(change.status)}</span>
-                </button>
+                  </button>
+                  <button
+                    onClick={() => handleFileClick(change.path)}
+                    className="flex-1 text-left truncate hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors rounded px-2 py-1"
+                    title={`Open ${change.path}`}
+                  >
+                    <span className="truncate text-[var(--foreground)]">{change.path}</span>
+                  </button>
+                  <span className="shrink-0 w-4 text-right">{statusIcon(change.status)}</span>
+                </div>
               ))
             )}
           </div>

@@ -174,6 +174,8 @@ function TreeNodeComponent({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    // Close any existing context menus first
+    document.querySelectorAll('[data-context-menu]').forEach(el => el.remove());
     setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
@@ -272,6 +274,7 @@ function TreeNodeComponent({
         {contextMenu && (
           <div
             ref={contextMenuRef}
+            data-context-menu="true"
             className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2"
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
@@ -306,7 +309,7 @@ function TreeNodeComponent({
   return (
     <div>
       <div
-        className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-1 min-w-0 transition-colors ${
+        className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-2 min-w-0 transition-colors ${
           isSelected
             ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
             : "hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
@@ -315,7 +318,7 @@ function TreeNodeComponent({
         onClick={handleExpand}
         onContextMenu={handleContextMenu}
       >
-        <span className="w-4 flex items-center justify-center shrink-0">
+        <span className="shrink-0 flex items-center">
           {loading ? <IconLoader /> : expanded ? <IconFolderOpen /> : <IconFolder />}
         </span>
         <span className="truncate min-w-0">{node.name}</span>
@@ -323,6 +326,7 @@ function TreeNodeComponent({
       {contextMenu && (
         <div
           ref={contextMenuRef}
+          data-context-menu="true"
           className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}

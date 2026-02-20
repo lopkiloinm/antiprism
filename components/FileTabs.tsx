@@ -8,7 +8,14 @@ export const SETTINGS_TAB_PATH = "__settings__";
 interface Tab {
   path: string;
   type: "text" | "image" | "settings" | "chat";
+  diffData?: {
+    filePath: string;
+    currentContent: string;
+    originalContent: string;
+  };
 }
+
+export type { Tab };
 
 interface FileTabsProps {
   tabs: Tab[];
@@ -16,6 +23,7 @@ interface FileTabsProps {
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
   onToggleTools?: () => void;
+  onReorder?: (newTabs: Tab[]) => void;
 }
 
 function getTabLabel(tab: Tab): string {
@@ -36,12 +44,16 @@ function getTabLabel(tab: Tab): string {
   return tab.path.split("/").filter(Boolean).pop() || tab.path;
 }
 
-export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools }: FileTabsProps) {
+export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools, onReorder }: FileTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
   const [isHovering, setIsHovering] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isReordering, setIsReordering] = useState(false);
+  const [draggedTab, setDraggedTab] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragStartRef = useRef({ x: 0, scrollLeft: 0 });
+  const dragTabRef = useRef<{ index: number; tab: Tab } | null>(null);
 
   const updateScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -82,6 +94,72 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools }:
     dragStartRef.current = { x: e.clientX, scrollLeft: el?.scrollLeft ?? 0 };
   };
 
+  // Tab reordering handlers
+  const handleTabDragStart = (e: React.DragEvent, tab: Tab, index: number) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tab.path);
+    setDraggedTab(tab.path);
+    dragTabRef.current = { index, tab };
+    setIsReordering(true);
+  };
+
+  const handleTabDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleTabDragEnd = () => {
+    setIsReordering(false);
+    setDraggedTab(null);
+    setDragOverIndex(null);
+    dragTabRef.current = null;
+  };
+
+  const handleTabDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    
+    if (!draggedTab || !dragTabRef.current) return;
+    
+    const draggedIndex = dragTabRef.current.index;
+    const draggedTabData = dragTabRef.current.tab;
+    
+    // If dropping at the end, use the last index
+    const actualDropIndex = dropIndex >= tabs.length ? tabs.length : dropIndex;
+    
+    if (draggedIndex === actualDropIndex) return;
+    
+    // Create new tabs array with reordered tabs
+    const newTabs = [...tabs];
+    newTabs.splice(draggedIndex, 1);
+    newTabs.splice(actualDropIndex, 0, draggedTabData);
+    
+    // Call a callback to update the tabs in the parent component
+    if (onReorder) {
+      onReorder(newTabs);
+    }
+  };
+
+  // Calculate drop indicator position
+  const getDropIndicatorPosition = (index: number) => {
+    const tabElements = Array.from(document.querySelectorAll('.file-tabs-scroll > div'));
+    
+    if (index < tabElements.length) {
+      const targetTab = tabElements[index];
+      const rect = targetTab.getBoundingClientRect();
+      return rect.left;
+    }
+    
+    // For dropping beyond the last tab, position at the end of the tab container
+    const container = document.querySelector('.file-tabs-scroll');
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      return containerRect.right - 2; // 2px for the indicator width
+    }
+    
+    return 0;
+  };
+
   useEffect(() => {
     if (!isDragging) return;
     const onMove = (e: MouseEvent) => {
@@ -118,9 +196,12 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools }:
         ref={scrollRef}
         className="file-tabs-scroll h-12 flex flex-nowrap items-end overflow-x-auto overflow-y-hidden"
       >
-      {tabs.map((tab) => {
+      {tabs.map((tab, index) => {
         const isActive = tab.path === activePath;
         const name = getTabLabel(tab);
+        const isDragOver = isReordering && dragOverIndex === index;
+        const dropPosition = isDragOver ? getDropIndicatorPosition(index) : null;
+        
         return (
           <div
             key={tab.path}
@@ -128,10 +209,30 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools }:
               isActive
                 ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
+            } ${
+              isReordering && draggedTab === tab.path ? "opacity-50" : ""
+            } ${
+              isDragOver ? "border-l-2 border-l-[var(--accent)]" : ""}
             }`}
+            draggable
+            onDragStart={(e) => handleTabDragStart(e, tab, index)}
+            onDragOver={(e) => handleTabDragOver(e, index)}
+            onDragEnd={handleTabDragEnd}
+            onDrop={(e) => handleTabDrop(e, index)}
             onClick={() => onSelect(tab.path)}
           >
-                        <span className="text-sm truncate">{name}</span>
+            <span className="text-sm truncate">{name}</span>
+            {/* Drop indicator */}
+            {isDragOver && dropPosition !== null && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-[var(--accent)] pointer-events-none"
+                style={{
+                  left: `${dropPosition}px`,
+                  height: '100%',
+                  width: '2px'
+                }}
+              />
+            )}
             <div
               className="absolute right-0 top-0 bottom-0 w-16 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
               style={{
@@ -155,6 +256,25 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools }:
           </div>
         );
       })}
+      {/* Drop zone for moving tabs to the end */}
+      {isReordering && (
+        <div
+          className="relative flex items-center h-full min-w-[40px] cursor-pointer"
+          onDragOver={(e) => handleTabDragOver(e, tabs.length)}
+          onDrop={(e) => handleTabDrop(e, tabs.length)}
+        >
+          {dragOverIndex === tabs.length && (
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-[var(--accent)] pointer-events-none"
+              style={{
+                left: '0px',
+                height: '100%',
+                width: '2px'
+              }}
+            />
+          )}
+        </div>
+      )}
       {onToggleTools && (
         <div className="ml-auto flex items-center h-full border-l border-[var(--border)]">
           <button

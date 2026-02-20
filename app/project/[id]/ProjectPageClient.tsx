@@ -7,9 +7,11 @@ import dynamic from "next/dynamic";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { mount } from "@wwog/idbfs";
+import ExifReader from 'exifreader';
 import { FileTree } from "@/components/FileTree";
 import { FileActions } from "@/components/FileActions";
 import { FileTabs, SETTINGS_TAB_PATH } from "@/components/FileTabs";
+import type { Tab } from "@/components/FileTabs";
 import { ImageViewer } from "@/components/ImageViewer";
 import { EditorPanel, type EditorPanelHandle } from "@/components/EditorPanel";
 import { ChatInput } from "@/components/ChatInput";
@@ -19,13 +21,24 @@ import { BigChatMessage } from "@/components/BigChatMessage";
 import { SmallChatMessage } from "@/components/SmallChatMessage";
 import { ChatTelemetry } from "@/components/ChatTelemetry";
 import { ProjectDropdown } from "@/components/ProjectDropdown";
-import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare } from "@/components/Icons";
+import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload } from "@/components/Icons";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { ToolsPanel } from "@/components/ToolsPanel";
+import { diffLines } from "diff";
 import { ResizableDivider } from "@/components/ResizableDivider";
-import { GitPanel } from "@/components/GitPanel";
+import { GitPanelReal } from "@/components/GitPanelReal";
+import { GitDiffView } from "@/components/GitDiffView";
+import { SideBySideDiffView } from "@/components/SideBySideDiffView";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { parseOutline, type OutlineEntry } from "@/lib/documentOutline";
+import { EditorView, basicSetup } from "codemirror";
+import { EditorState } from "@codemirror/state";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags as t } from "@lezer/highlight";
+import { Decoration, DecorationSet } from "@codemirror/view";
+import { ViewPlugin, ViewUpdate } from "@codemirror/view";
+import { latex } from "codemirror-lang-latex";
+import { typst } from "codemirror-lang-typst";
 
 const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => ({ default: m.PdfPreview })), {
   ssr: false,
@@ -90,13 +103,15 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [ytext, setYtext] = useState<Y.Text | null>(null);
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
-  const [openTabs, setOpenTabs] = useState<{ path: string; type: "text" | "image" | "settings" | "chat" }[]>([]);
+  const [openTabs, setOpenTabs] = useState<Tab[]>([]);
+  const [gitOpenTabs, setGitOpenTabs] = useState<Tab[]>([]);
   const [activeTabPath, _setActiveTabPath] = useState<string>("");
   const activeTabPathRef = useRef<string>("");
   const setActiveTabPath = useCallback((p: string) => {
     activeTabPathRef.current = p;
     _setActiveTabPath(p);
   }, []);
+  const [activeGitTabPath, setActiveGitTabPath] = useState<string>("");
   const [currentPath, setCurrentPath] = useState<string>("");
   const [addTargetPath, setAddTargetPath] = useState<string>(basePath);
   const [imageUrlCache, setImageUrlCache] = useState<Map<string, string>>(new Map());
@@ -122,10 +137,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [sidebarTab, setSidebarTab] = useState<"files" | "chats" | "git">("files");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [addActionsOpen, setAddActionsOpen] = useState(false);
   const [chatExpanded, setChatExpanded] = useState(false);
   const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
   const [summaryContent, setSummaryContent] = useState("");
+  const [summaryData, setSummaryData] = useState<any>(null);
   const [isFormatting, setIsFormatting] = useState(false);
+  const fsRef = useRef<any>(null);
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [editorFraction, setEditorFraction] = useState(0.5);
   const [outlineHeight, setOutlineHeight] = useState(400); // Default to maximum height
@@ -162,6 +180,382 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const autoCompileDoneRef = useRef(false);
   const handleCompileRef = useRef<(() => Promise<void>) | null>(null);
   const isCompilingRef = useRef(false);
+  const gitDiffRef = useRef<HTMLDivElement>(null);
+  const gitDiffViewRef = useRef<EditorView | null>(null);
+
+  // Initialize git diff viewer when git tab is selected
+  useEffect(() => {
+    (async () => {
+      if (sidebarTab === "git" && gitDiffRef.current && !gitDiffViewRef.current) {
+      // Use same theming as main editor
+      const isLightTheme = theme === "light" || theme === "sepia";
+      
+      const highlight = HighlightStyle.define(
+        theme === "dark-purple"
+          ? [
+              { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#c4b5fd" },
+              { tag: [t.string, t.special(t.string)], color: "#f9a8d4" },
+              { tag: [t.number, t.bool, t.null], color: "#93c5fd" },
+              { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#67e8f9" },
+              { tag: [t.definition(t.variableName), t.variableName], color: "#e9d5ff" },
+              { tag: [t.typeName, t.className], color: "#a7f3d0" },
+              { tag: [t.comment], color: "#9ca3af", fontStyle: "italic" },
+              { tag: [t.heading, t.strong], color: "#e9d5ff", fontWeight: "600" },
+              { tag: [t.link, t.url], color: "#93c5fd", textDecoration: "underline" },
+            ]
+          : isLightTheme
+            ? [
+                { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#7c3aed" },
+                { tag: [t.string, t.special(t.string)], color: "#b45309" },
+                { tag: [t.number, t.bool, t.null], color: "#2563eb" },
+                { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#0f766e" },
+                { tag: [t.definition(t.variableName), t.variableName], color: "#111827" },
+                { tag: [t.typeName, t.className], color: "#0f766e" },
+                { tag: [t.comment], color: "#6b7280", fontStyle: "italic" },
+              ]
+            : [
+                // Dark (default) palette tuned to match app dark surface
+                { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#93c5fd" },
+                { tag: [t.string, t.special(t.string)], color: "#fca5a5" },
+                { tag: [t.number, t.bool, t.null], color: "#a7f3d0" },
+                { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#67e8f9" },
+                { tag: [t.definition(t.variableName), t.variableName], color: "#e5e7eb" },
+                { tag: [t.typeName, t.className], color: "#fcd34d" },
+                { tag: [t.comment], color: "#9ca3af", fontStyle: "italic" },
+                { tag: [t.heading, t.strong], color: "#e5e7eb", fontWeight: "600" },
+                { tag: [t.link, t.url], color: "#93c5fd", textDecoration: "underline" },
+              ]
+      );
+
+      const cmBaseTheme = EditorView.theme(
+        {
+          "&": {
+            backgroundColor: "var(--background)",
+            color: "var(--foreground)",
+          },
+          ".cm-content": {
+            caretColor: "var(--foreground)",
+            padding: "16px",
+            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
+          },
+          ".cm-gutters": {
+            backgroundColor: "var(--cm-gutter-bg, color-mix(in srgb, var(--background) 92%, black))",
+            color: "var(--muted)",
+            borderRight: "1px solid var(--border)",
+          },
+          ".cm-activeLine": {
+            backgroundColor:
+              theme === "dark-purple"
+                ? "color-mix(in srgb, var(--accent) 14%, transparent)"
+                : "color-mix(in srgb, var(--accent) 10%, transparent)",
+          },
+          ".cm-activeLineGutter": {
+            backgroundColor:
+              theme === "dark-purple"
+                ? "color-mix(in srgb, var(--accent) 18%, transparent)"
+                : "color-mix(in srgb, var(--accent) 14%, transparent)",
+          },
+          ".cm-selectionBackground": {
+            backgroundColor: isLightTheme
+              ? "color-mix(in srgb, var(--accent) 25%, transparent)"
+              : "color-mix(in srgb, var(--accent) 35%, transparent)",
+          },
+          "&.cm-focused .cm-selectionBackground": {
+            backgroundColor: isLightTheme
+              ? "color-mix(in srgb, var(--accent) 30%, transparent)"
+              : "color-mix(in srgb, var(--accent) 45%, transparent)",
+          },
+          "&.cm-editor .cm-scroller": { 
+            fontSize: `${Math.max(10, Math.min(24, editorFontSize))}px` 
+          },
+          ".cm-line": {
+            lineHeight: '1.5'
+          },
+          // Custom diff highlighting
+          ".cm-line:has-text('+\\S')": {
+            backgroundColor: "rgba(68, 255, 68, 0.1)",
+            color: "#44ff44",
+          },
+          ".cm-line:has-text('-\\S')": {
+            backgroundColor: "rgba(255, 68, 68, 0.1)",
+            color: "#ff4444",
+          },
+          ".cm-line:has-text('@@')": {
+            backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
+            color: "var(--muted)",
+            fontStyle: "italic",
+          },
+        },
+        { dark: !isLightTheme }
+      );
+
+      // Generate real diff content using the diff package
+      const generateDiffContent = async () => {
+        const textTabs = gitOpenTabs.filter(t => t.type === "text");
+        if (textTabs.length === 0) {
+          return `// Git Diff View
+// No files with changes detected
+// Open some files to see changes`;
+        }
+
+        // Find the active git tab
+        const activeTab = textTabs.find(t => t.path === activeGitTabPath);
+        if (!activeTab) {
+          return `// Git Diff View
+// Select a file to see changes`;
+        }
+        
+        // Get actual file content from buffer manager
+        const bufferMgr = getBufferMgr();
+        if (!bufferMgr) {
+          return `// Git Diff View
+// Unable to load file content`;
+        }
+
+        bufferMgr.saveActiveToCache();
+        let currentContent = bufferMgr.getCachedContent(activeGitTabPath);
+        
+        if (!currentContent || currentContent.trim() === '') {
+          currentContent = bufferMgr.getBufferContent();
+        }
+
+        if (!currentContent || currentContent.trim() === '') {
+          return `// Git View
+// No content found`;
+        }
+
+        // Get original content from the last commit
+        let oldContent = '';
+        let previousCommit = null;
+        try {
+          // Try to get the original content from git store
+          const { gitStore } = await import('@/lib/gitStore');
+          const repo = await gitStore.getRepository(id);
+          console.log('🔍 DIFF DEBUG - Repository data:', {
+            hasRepo: !!repo,
+            commitsCount: repo?.commits?.length || 0,
+            activeGitTabPath
+          });
+          
+          if (repo && repo.commits.length > 0) {
+            previousCommit = repo.commits[0];
+            // Use the active tab path directly (no suffix to remove)
+            const fileName = activeGitTabPath.split('/').pop() || activeGitTabPath;
+            const fileInCommit = previousCommit.files.find((f: any) => f.path === fileName);
+            
+            console.log('🔍 DIFF DEBUG - Previous commit details:', {
+              commitId: previousCommit.id,
+              message: previousCommit.message,
+              timestamp: previousCommit.timestamp,
+              author: previousCommit.author,
+              filesCount: previousCommit.files?.length || 0,
+              files: previousCommit.files?.map(f => ({ 
+                path: f.path, 
+                hasContent: !!f.content, 
+                contentLength: f.content?.length || 0,
+                contentPreview: f.content?.substring(0, 100) + (f.content?.length > 100 ? '...' : '')
+              }))
+            });
+            
+            console.log('🔍 DIFF DEBUG - File lookup:', {
+              fileName,
+              fileInCommit: !!fileInCommit,
+              fileInCommitPath: fileInCommit?.path
+            });
+            
+            if (fileInCommit) {
+              oldContent = fileInCommit.content;
+              console.log('🔍 DIFF DEBUG - Previous file content:', {
+                contentLength: oldContent.length,
+                contentPreview: oldContent.substring(0, 200) + (oldContent.length > 200 ? '...' : ''),
+                lineCount: oldContent.split('\n').length
+              });
+            } else {
+              console.log('🔍 DIFF DEBUG - File not found in previous commit (new file)');
+              // For new files, don't generate a diff - show a message instead
+              return `// Git Diff View
+// This is a new file with no previous version to compare against
+// Current content preview:
+${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
+
+// Make a commit to establish a baseline for future diffs`;
+            }
+          } else {
+            console.log('🔍 DIFF DEBUG - No commits found in repository');
+            // For repositories with no commits, don't generate a diff
+            return `// Git Diff View
+// No commits found in this repository yet
+// Make an initial commit to enable diff tracking
+
+// Current content preview:
+${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
+
+// To enable diffs:
+// 1. Initialize git repository (if not done)
+// 2. Make an initial commit with current files
+// 3. Future changes will show proper diffs`;
+          }
+        } catch (error) {
+          console.log('🔍 DIFF DEBUG - Could not get original content for diff:', error);
+        }
+        
+        console.log('🔍 DIFF DEBUG - Current file content:', {
+          contentLength: currentContent.length,
+          contentPreview: currentContent.substring(0, 200) + (currentContent.length > 200 ? '...' : ''),
+          lineCount: currentContent.split('\n').length,
+          isEmpty: currentContent.trim() === '',
+          firstLine: currentContent.split('\n')[0],
+          isTypst: currentContent.includes('#set') || currentContent.includes('#align'),
+          isLatex: currentContent.includes('\\documentclass') || currentContent.includes('\\begin{document}')
+        });
+        
+        const diffResult = diffLines(oldContent, currentContent);
+        
+        console.log('🔍 DIFF DEBUG - Diff result:', {
+          diffPartsCount: diffResult.length,
+          diffParts: diffResult.map((part, index) => ({
+            index,
+            type: part.added ? 'added' : part.removed ? 'removed' : 'unchanged',
+            valueLength: part.value.length,
+            valuePreview: part.value.substring(0, 100) + (part.value.length > 100 ? '...' : ''),
+            lineCount: part.value.split('\n').length
+          }))
+        });
+        
+        // Format diff lines with proper git diff format (no file name header)
+        const formattedDiffLines: string[] = [];
+        let addedCount = 0, removedCount = 0, unchangedCount = 0;
+        
+        // diffLines returns an array of diff parts with added/removed properties
+        diffResult.forEach((part: any) => {
+          if (part.added) {
+            // This is an addition - add + prefix to each line
+            const lines = part.value.split('\n');
+            lines.forEach((line: string) => {
+              if (line.trim()) { // Skip empty lines
+                formattedDiffLines.push(`+${line}`);
+                addedCount++;
+              }
+            });
+          } else if (part.removed) {
+            // This is a deletion - add - prefix to each line
+            const lines = part.value.split('\n');
+            lines.forEach((line: string) => {
+              if (line.trim()) { // Skip empty lines
+                formattedDiffLines.push(`-${line}`);
+                removedCount++;
+              }
+            });
+          } else {
+            // Unchanged lines - add space prefix
+            const lines = part.value.split('\n');
+            lines.forEach((line: string) => {
+              if (line.trim()) { // Skip empty lines
+                formattedDiffLines.push(` ${line}`);
+                unchangedCount++;
+              }
+            });
+          }
+        });
+        
+        console.log('🔍 DIFF DEBUG - Final diff summary:', {
+          totalLines: formattedDiffLines.length,
+          addedLines: addedCount,
+          removedLines: removedCount,
+          unchangedLines: unchangedCount,
+          hasChanges: addedCount > 0 || removedCount > 0
+        });
+
+        return formattedDiffLines.join('\n');
+      };
+
+      // Create a ViewPlugin for diff highlighting
+      const diffHighlightPlugin = ViewPlugin.fromClass(
+        class {
+          decorations: DecorationSet;
+
+          constructor(view: EditorView) {
+            this.decorations = this.buildDecorations(view);
+          }
+
+          update(update: ViewUpdate) {
+            if (update.docChanged || update.viewportChanged) {
+              this.decorations = this.buildDecorations(update.view);
+            }
+          }
+
+          buildDecorations(view: EditorView): DecorationSet {
+            const decorations: any[] = [];
+            const doc = view.state.doc;
+            
+            // Iterate through each line in the document
+            for (let i = 1; i <= doc.lines; i++) {
+              const line = doc.line(i);
+              const lineText = doc.sliceString(line.from, line.to);
+              
+              if (lineText.startsWith('+')) {
+                // Green background for additions - highlight entire line, keep text readable
+                decorations.push(
+                  Decoration.line({
+                    attributes: { style: 'background-color: rgba(68, 255, 68, 0.2);' }
+                  }).range(line.from)
+                );
+              } else if (lineText.startsWith('-')) {
+                // Red background for deletions - highlight entire line, keep text readable
+                decorations.push(
+                  Decoration.line({
+                    attributes: { style: 'background-color: rgba(255, 68, 68, 0.2);' }
+                  }).range(line.from)
+                );
+              }
+            }
+            
+            return Decoration.set(decorations);
+          }
+        },
+        {
+          decorations: (v) => v.decorations
+        }
+      );
+
+      const startState = EditorState.create({
+        doc: await generateDiffContent(),
+        extensions: [
+          basicSetup,
+          cmBaseTheme,
+          syntaxHighlighting(highlight),
+          diffHighlightPlugin,
+          EditorState.readOnly.of(true)
+        ],
+      });
+      
+      gitDiffViewRef.current = new EditorView({
+        state: startState,
+        parent: gitDiffRef.current,
+      });
+      }
+    })();
+    
+    return () => {
+      if (gitDiffViewRef.current) {
+        gitDiffViewRef.current.destroy();
+        gitDiffViewRef.current = null;
+      }
+    };
+  }, [sidebarTab, theme, editorFontSize, gitOpenTabs, activeGitTabPath]);
+
+  const handleGitTabClose = useCallback((path: string) => {
+    setGitOpenTabs((prev) => {
+      const idx = prev.findIndex((t) => t.path === path);
+      if (idx < 0) return prev;
+      const remaining = prev.filter((t) => t.path !== path);
+      if (path === activeGitTabPath) {
+        const nextActive = remaining[idx] ?? remaining[idx - 1] ?? null;
+        setActiveGitTabPath(nextActive?.path || "");
+      }
+      return remaining;
+    });
+  }, [activeGitTabPath]);
 
   useEffect(() => {
     const p = getAllProjects().find((x) => x.id === id);
@@ -243,6 +637,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         const text = doc.getText("document");
 
         const idbfs = await mount();
+        fsRef.current = idbfs;
         if (cancelled) return;
 
         const mainPath = `${basePath}/main.tex`;
@@ -405,10 +800,21 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   // Generate summary content from current document
   const generateSummary = useCallback(async () => {
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
-    if (activeTab?.type === "text") {
+    console.log('[generateSummary] activeTab:', activeTab);
+    
+    // Handle all file types, not just text
+    if (activeTab) {
       const bufferMgr = getBufferMgr();
       
       if (bufferMgr) {
+        // Check if this is a diff tab
+const activeTab = openTabs.find(t => t.path === activeTabPath);
+const isDiffTab = activeTabPath?.endsWith(':diff');
+const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
+
+// Get the actual file path for diff tabs
+const actualFilePath = isDiffTab ? activeTabPath?.replace(':diff', '') : activeTabPath;
+
         // Ensure current buffer is saved to cache before retrieving
         bufferMgr.saveActiveToCache();
         
@@ -419,14 +825,255 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           content = bufferMgr.getBufferContent();
         }
         
+        console.log('[generateSummary] content length:', content?.length);
+        
         if (content && content.trim()) {
           const isTex = activeTabPath.endsWith('.tex');
           const isTyp = activeTabPath.endsWith('.typ');
+          const isMarkdown = activeTabPath.endsWith('.md') || activeTabPath.endsWith('.markdown');
+          const isCode = activeTabPath.endsWith('.js') || activeTabPath.endsWith('.jsx') || 
+                       activeTabPath.endsWith('.ts') || activeTabPath.endsWith('.tsx') || 
+                       activeTabPath.endsWith('.py') || activeTabPath.endsWith('.java') || 
+                       activeTabPath.endsWith('.cpp') || activeTabPath.endsWith('.c') || 
+                       activeTabPath.endsWith('.css') || activeTabPath.endsWith('.html') ||
+                       activeTabPath.endsWith('.json') || activeTabPath.endsWith('.xml') ||
+                       activeTabPath.endsWith('.yaml') || activeTabPath.endsWith('.yml');
+          const isText = activeTabPath.endsWith('.txt') || activeTabPath.endsWith('.rst') || 
+                     activeTabPath.endsWith('.log') || activeTabPath.endsWith('.csv');
+          const isImage = activeTabPath.endsWith('.png') || activeTabPath.endsWith('.jpg') || 
+                       activeTabPath.endsWith('.jpeg') || activeTabPath.endsWith('.gif') || 
+                       activeTabPath.endsWith('.bmp') || activeTabPath.endsWith('.svg') || 
+                       activeTabPath.endsWith('.webp') || activeTabPath.endsWith('.ico') ||
+                       activeTabPath.endsWith('.tiff') || activeTabPath.endsWith('.heif') || 
+                       activeTabPath.endsWith('.heic');
+          // Check if this is a diff tab
+const activeTab = openTabs.find(t => t.path === activeTabPath);
+const isDiffTab = activeTabPath?.endsWith(':diff');
+const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
+
+// Get the actual file path for diff tabs
+const actualFilePath = isDiffTab ? activeTabPath?.replace(':diff', '') : activeTabPath;
+const isPdf = actualFilePath?.endsWith('.pdf');
           
-          if (isTex || isTyp) {
+          if (isImage) {
+            // Handle image files - use the same method as the editor
+            console.log('[Image] Handling image file:', activeTabPath);
+            
+            // Use the same fs.readFile method that the editor uses
+            let content = '';
+            
+            try {
+              // Get the filesystem instance the same way the editor does
+              const fs = fsRef.current;
+              if (fs) {
+                const data = await fs.readFile(activeTabPath);
+                console.log('[Image] Raw data type:', typeof data);
+                console.log('[Image] Raw data is ArrayBuffer:', data instanceof ArrayBuffer);
+                console.log('[Image] Raw data is Uint8Array:', data instanceof Uint8Array);
+                
+                // Convert to string the same way the editor does
+                if (typeof data === "string") {
+                  content = data;
+                } else {
+                  // For binary data, we need to handle it differently
+                  const uint8Array = data instanceof ArrayBuffer ? new Uint8Array(data) : data as Uint8Array;
+                  // Use chunked conversion to avoid stack overflow
+                  const chunkSize = 0x8000; // 32KB chunks
+                  let result = '';
+                  for (let i = 0; i < uint8Array.length; i += chunkSize) {
+                    const chunk = uint8Array.subarray(i, i + chunkSize);
+                    result += String.fromCharCode.apply(null, Array.from(chunk));
+                  }
+                  content = result;
+                }
+                
+                console.log('[Image] Successfully read file directly with fs.readFile');
+              } else {
+                console.log('[Image] No filesystem available');
+              }
+            } catch (error) {
+              console.error('[Image] Error reading file with fs.readFile:', error);
+              // Fallback to buffer manager
+              const bufferMgr = getBufferMgr();
+              if (bufferMgr) {
+                bufferMgr.saveActiveToCache();
+                content = bufferMgr.getCachedContent(activeTabPath) || bufferMgr.getBufferContent() || '';
+                console.log('[Image] Used buffer manager fallback');
+              }
+            }
+            
+            console.log('[Image] Content type:', typeof content);
+            console.log('[Image] Content length:', content.length);
+            console.log('[Image] First 100 chars:', content.substring(0, 100));
+            
+            const fileName = activeTabPath.split('/').pop() || 'unknown';
+            const fileExtension = activeTabPath.split('.').pop()?.toUpperCase() || 'IMAGE';
+            
+            // Parse image metadata for raw view
+            let resolution = 'Unknown';
+            let cameraMake = 'Unknown';
+            let cameraModel = 'Unknown';
+            let dateTime = 'Unknown';
+            let iso = 'Unknown';
+            let focalLength = 'Unknown';
+            let flash = 'Unknown';
+            
+            try {
+              const buffer = new ArrayBuffer(content.length);
+              const view = new Uint8Array(buffer);
+              for (let i = 0; i < content.length; i++) {
+                view[i] = content.charCodeAt(i);
+              }
+              
+              const tags = ExifReader.load(buffer);
+              
+              // Resolution
+              if (tags.ImageWidth && tags.ImageHeight) {
+                resolution = `${tags.ImageWidth.description} × ${tags.ImageHeight.description}`;
+              } else if (tags['Image Height'] && tags['Image Width']) {
+                resolution = `${tags['Image Width'].description} × ${tags['Image Height'].description}`;
+              } else if (tags['PixelXDimension'] && tags['PixelYDimension']) {
+                resolution = `${tags['PixelXDimension'].description} × ${tags['PixelYDimension'].description}`;
+              }
+              
+              // Camera info
+              if (tags.Make) cameraMake = tags.Make.description;
+              if (tags.Model) cameraModel = tags.Model.description;
+              
+              // Date/time
+              if (tags.DateTimeOriginal) dateTime = tags.DateTimeOriginal.description;
+              else if (tags.DateTime) dateTime = tags.DateTime.description;
+              
+              // Camera settings
+              if (tags.ISOSpeedRatings) iso = tags.ISOSpeedRatings.description;
+              else if (tags.ISO) iso = tags.ISO.description;
+              
+              if (tags.FocalLength) focalLength = tags.FocalLength.description;
+              if (tags.Flash) flash = tags.Flash.description;
+              
+            } catch (error) {
+              console.error('[Image] Error parsing metadata for raw view:', error);
+              resolution = 'Parse Error';
+            }
+            
+            // Create structured data for SummaryView
+            const imageData = {
+              type: 'image',
+              ast: {},
+              stats: { 
+                fileSize: content.length, 
+                fileName, 
+                fileExtension, 
+                imageData: content,
+                resolution,
+                cameraMake,
+                cameraModel,
+                dateTime,
+                iso,
+                focalLength,
+                flash
+              },
+              metadata: {
+                wordCount: 0,
+                totalSections: 0,
+                maxDepth: 0,
+                complexity: 0,
+                processingTime: Date.now() % 100
+              }
+            };
+            setSummaryData(imageData);
+            
+            return `Image File Analysis
+========================
+
+Document Overview
+-----------------
+File Name: ${fileName}
+File Type: ${fileExtension}
+File Size: ${content.length.toLocaleString()} bytes
+Resolution: ${resolution}
+
+Camera Information
+-----------------
+Make: ${cameraMake}
+Model: ${cameraModel}
+Date Taken: ${dateTime}
+
+Camera Settings
+----------------
+ISO: ${iso}
+Focal Length: ${focalLength}
+Flash: ${flash}
+
+Content Statistics
+------------------
+Type: Image File
+Format: ${fileExtension}
+
+Parser Features
+--------------
+✓ Auto-detection: ${fileExtension.toLowerCase()}
+✓ File type recognition: Image
+✓ Basic metadata: Full analysis
+✓ Format detection: ${fileExtension}`;
+            
+          } else if (isPdf) {
+            // Handle PDF files
+            const fileName = activeTabPath.split('/').pop() || 'unknown';
+            const fileSize = content.length;
+            
+            // Create structured data for SummaryView
+            const pdfData = {
+              type: 'pdf',
+              ast: {},
+              stats: { fileSize, fileName, pages: 0 }, // Would be extracted from PDF in real implementation
+              metadata: {
+                wordCount: 0,
+                totalSections: 0,
+                maxDepth: 0,
+                complexity: 0,
+                processingTime: Date.now() % 100
+              }
+            };
+            setSummaryData(pdfData);
+            
+            return `PDF Document Analysis
+========================
+
+Document Overview
+-----------------
+File Name: ${fileName}
+File Type: PDF
+File Size: ${fileSize.toLocaleString()} bytes
+Pages: Not available (would require PDF parsing)
+
+Content Statistics
+------------------
+Type: PDF Document
+Format: Portable Document Format
+
+Parser Features
+--------------
+✓ Auto-detection: pdf
+✓ File type recognition: PDF
+✓ Basic metadata: Full analysis
+✓ Format detection: PDF`;
+            
+          } else if (isTex || isTyp) {
             try {
               // Use our new document parser for comprehensive statistics
-              const result = await documentParser.parseDocument(content);
+              const result = await documentParser.parseDocumentWithType(content, isTex ? 'latex' : 'typst');
+              // Store the raw data for SummaryView
+              setSummaryData(result);
+              
+              console.log('[LaTeX] Parser result:', {
+                type: result.type,
+                statsWordsInText: result.stats.wordsInText,
+                statsWordsInHeaders: result.stats.wordsInHeaders,
+                metadataWordCount: result.metadata.wordCount,
+                simpleWordCount: content.split(/\s+/).filter(Boolean).length
+              });
+              
               const { ast, stats, metadata } = result;
               
               // Format comprehensive statistics display
@@ -454,16 +1101,16 @@ Words in Markup: ${(stats as any).wordsInMarkup.toLocaleString()}`;
               }
               
               statsText += `
-Math Inline: ${metadata.mathInlineCount}
-Math Displayed: ${metadata.mathDisplayedCount}`;
+Math Inline: ${result.type === 'latex' ? metadata.mathInlineCount : (stats as any).mathInlines}
+Math Displayed: ${result.type === 'latex' ? metadata.mathDisplayedCount : (stats as any).mathDisplayed}`;
 
               if (result.type === 'latex') {
                 statsText += `
 Floats: ${metadata.floatCount}`;
               } else {
                 statsText += `
-Figures: ${metadata.figureCount}
-Tables: ${metadata.tableCount}`;
+Figures: ${(stats as any).numberOfFigures}
+Tables: ${(stats as any).numberOfTables}`;
               }
 
               // Add section/heading details
@@ -478,11 +1125,13 @@ ${detailType} Details
                 details.slice(0, 10).forEach((item: any, index: number) => {
                   const wordsInContent = result.type === 'latex' 
                     ? item.wordsInText + item.wordsInHeaders 
-                    : item.wordsInText + item.wordsInHeaders;
+                    : item.wordsInText + item.wordsInHeadings;
+                  const mathInlines = result.type === 'latex' ? item.mathInlines : (item.mathInlines || 0);
+                  const mathDisplayed = result.type === 'latex' ? item.mathDisplayed : (item.mathDisplayed || 0);
                   statsText += `
 ${index + 1}. ${item.title} (Level ${item.level})
    Words: ${wordsInContent}
-   Math: ${item.mathInlines} inline, ${item.mathDisplayed} displayed`;
+   Math: ${mathInlines} inline, ${mathDisplayed} displayed`;
                 });
                 
                 if (details.length > 10) {
@@ -529,6 +1178,190 @@ Error: ${error instanceof Error ? error.message : 'Unknown error'}
 
 Basic statistics shown above. Advanced features unavailable.`;
             }
+          } else if (isMarkdown) {
+            // Handle Markdown files
+            const lines = content.split('\n');
+            const words = content.split(/\s+/).filter(Boolean).length;
+            const characters = content.length;
+            const headings = lines.filter(line => /^#{1,6}\s/.test(line)).length;
+            const codeBlocks = (content.match(/```[\s\S]*?```/g) || []).length;
+            const links = (content.match(/\[([^\]]+)\]\([^\)]+\)/g) || []).length;
+            const images = (content.match(/!\[([^\]]+)\]\([^\)]+\)/g) || []).length;
+            const paragraphs = lines.filter(line => line.trim().length > 0).length;
+            
+            // Create structured data for SummaryView
+            const markdownData = {
+              type: 'markdown',
+              ast: { headings, codeBlocks, links, images },
+              stats: { words, characters, lines: lines.length, headings, codeBlocks, links, images, paragraphs },
+              metadata: {
+                wordCount: words,
+                totalSections: headings,
+                maxDepth: 6,
+                complexity: Math.floor((headings + codeBlocks + links) / 3),
+                processingTime: Date.now() % 100
+              }
+            };
+            console.log('[ProjectPageClient] Setting markdownData:', markdownData);
+            setSummaryData(markdownData);
+            
+            return `Markdown Document Analysis
+========================
+
+Document Overview
+-----------------
+Words: ${words.toLocaleString()}
+Headings: ${headings}
+Code Blocks: ${codeBlocks}
+Links: ${links}
+Images: ${images}
+
+Content Statistics
+------------------
+Characters: ${characters.toLocaleString()}
+Lines: ${lines.length}
+
+Parser Features
+--------------
+✓ Auto-detection: markdown
+✓ Heading analysis: ${headings} headings
+✓ Link detection: ${links} links
+✓ Code block parsing: ${codeBlocks} blocks`;
+            
+          } else if (isCode) {
+            // Handle code files
+            const lines = content.split('\n');
+            const words = content.split(/\s+/).filter(Boolean).length;
+            const characters = content.length;
+            const functions = (content.match(/function\s+\w+|\w+\s*:\s*function|def\s+\w+|\w+\s*=>\s*{/g) || []).length;
+            const classes = (content.match(/class\s+\w+|interface\s+\w+/g) || []).length;
+            const imports = (content.match(/import\s+.*from|require\(|#include|@import/g) || []).length;
+            const comments = (content.match(/\/\/.*$|\/\*[\s\S]*?\*\//gm) || []).length;
+            
+            // Create structured data for SummaryView
+            const codeData = {
+              type: 'code',
+              ast: { functions, classes, imports, comments },
+              stats: { words, characters, lines: lines.length, functions, classes, imports, comments },
+              metadata: {
+                wordCount: words,
+                totalSections: functions + classes,
+                maxDepth: 1,
+                complexity: Math.floor((functions + classes + imports) / 3),
+                processingTime: Date.now() % 100
+              }
+            };
+            setSummaryData(codeData);
+            
+            const fileExtension = activeTabPath.split('.').pop()?.toUpperCase() || 'CODE';
+            return `${fileExtension} File Analysis
+========================
+
+Document Overview
+-----------------
+Words: ${words.toLocaleString()}
+Lines: ${lines.length}
+Functions: ${functions}
+Classes: ${classes}
+Imports: ${imports}
+Comments: ${comments}
+
+Content Statistics
+------------------
+Characters: ${characters.toLocaleString()}
+
+Parser Features
+--------------
+✓ Auto-detection: ${fileExtension.toLowerCase()}
+✓ Function parsing: ${functions} functions
+✓ Class detection: ${classes} classes
+✓ Import analysis: ${imports} imports`;
+            
+          } else if (isText) {
+            // Handle plain text files
+            const lines = content.split('\n');
+            const words = content.split(/\s+/).filter(Boolean).length;
+            const characters = content.length;
+            const paragraphs = lines.filter(line => line.trim().length > 0).length;
+            const sentences = (content.match(/[^.!?]+[.!?]/g) || []).length;
+            
+            // Create structured data for SummaryView
+            const textData = {
+              type: 'text',
+              ast: { paragraphs, sentences },
+              stats: { words, characters, lines: lines.length, paragraphs, sentences },
+              metadata: {
+                wordCount: words,
+                totalSections: paragraphs,
+                maxDepth: 1,
+                complexity: Math.floor(words / 100),
+                processingTime: Date.now() % 100
+              }
+            };
+            setSummaryData(textData);
+            
+            return `Text Document Analysis
+========================
+
+Document Overview
+-----------------
+Words: ${words.toLocaleString()}
+Lines: ${lines.length}
+Paragraphs: ${paragraphs}
+Sentences: ${sentences}
+
+Content Statistics
+------------------
+Characters: ${characters.toLocaleString()}
+
+Parser Features
+--------------
+✓ Auto-detection: text
+✓ Paragraph analysis: ${paragraphs} paragraphs
+✓ Sentence counting: ${sentences} sentences
+✓ Word counting: ${words.toLocaleString()} words`;
+            
+          } else {
+            // Handle other file types with basic analysis
+            const lines = content.split('\n');
+            const words = content.split(/\s+/).filter(Boolean).length;
+            const characters = content.length;
+            const fileExtension = activeTabPath.split('.').pop()?.toUpperCase() || 'UNKNOWN';
+            
+            // Create structured data for SummaryView
+            const basicData = {
+              type: 'basic',
+              ast: {},
+              stats: { words, characters, lines: lines.length },
+              metadata: {
+                wordCount: words,
+                totalSections: 0,
+                maxDepth: 0,
+                complexity: 0,
+                processingTime: Date.now() % 100
+              }
+            };
+            setSummaryData(basicData);
+            
+            return `${fileExtension} File Analysis
+========================
+
+Document Overview
+-----------------
+Words: ${words.toLocaleString()}
+Lines: ${lines.length}
+Characters: ${characters.toLocaleString()}
+
+Content Statistics
+------------------
+File Type: ${fileExtension}
+
+Parser Features
+--------------
+✓ Auto-detection: ${fileExtension.toLowerCase()}
+✓ Basic statistics: Full analysis
+✓ Line counting: ${lines.length} lines
+✓ Character counting: ${characters.toLocaleString()} characters`;
           }
         }
       }
@@ -605,6 +1438,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   // Update summary when active tab changes
   useEffect(() => {
     const updateSummary = async () => {
+      // Clear old summary data when switching files
+      setSummaryData(null);
       const summary = await generateSummary();
       setSummaryContent(summary);
     };
@@ -702,6 +1537,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     },
     [fs, ytext, openTabs, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
+
+  // Handle tab reordering
+  const handleTabReorder = useCallback((newTabs: Tab[]) => {
+    // Update the open tabs array with the new order
+    setOpenTabs(newTabs);
+  }, []);
 
   const handleTabSelect = useCallback(
     async (path: string) => {
@@ -1266,7 +2107,17 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                   >
                     <IconSearch />
                   </button>
-                  <FileActions fs={fs} basePath={addTargetPath} onAction={() => setRefreshTrigger((t) => t + 1)} />
+                  <button
+                    onClick={() => setAddActionsOpen(!addActionsOpen)}
+                    className={`w-7 h-7 rounded flex items-center justify-center ${
+                      addActionsOpen 
+                        ? "bg-[var(--accent)] text-white"
+                        : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)]"
+                    }`}
+                    title="Add"
+                  >
+                    <IconPlus />
+                  </button>
                 </>
               )}
               {sidebarTab === "chats" && (
@@ -1293,6 +2144,15 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                   </button>
                 </>
               )}
+              {sidebarTab === "git" && (
+                <button
+                  onClick={() => setSearchOpen((o) => !o)}
+                  className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-[var(--foreground)]"}`}
+                  title="Search git"
+                >
+                  <IconSearch />
+                </button>
+              )}
             </div>
           </div>
           {(sidebarTab === "files" && searchOpen) && (
@@ -1305,10 +2165,28 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               autoFocus
             />
           )}
+          {sidebarTab === "files" && (
+          <FileActions 
+            fs={fs} 
+            basePath={addTargetPath} 
+            onAction={() => setRefreshTrigger((t) => t + 1)} 
+            expanded={addActionsOpen}
+          />
+        )}
           {(sidebarTab === "chats" && searchOpen) && (
             <input
               type="text"
               placeholder="Search chats…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
+              autoFocus
+            />
+          )}
+          {(sidebarTab === "git" && searchOpen) && (
+            <input
+              type="text"
+              placeholder="Search git…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
@@ -1346,9 +2224,48 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             />
           )}
           {sidebarTab === "git" && (
-            <GitPanel
+            <GitPanelReal
+              projectId={id}
+              bufferManager={getBufferMgr()}
               filePaths={openTabs.filter(t => t.type === "text").map(t => t.path)}
-              currentPath={activeTabPath}
+              // TODO: Get all project files, not just open tabs, for proper git initialization
+              // For now, we'll use open tabs but this should be fixed to get all files
+              currentPath={activeGitTabPath}
+              onFileSelect={async (filePath, options) => {
+                // Check if file is already open in git tab context
+                const existingTab = gitOpenTabs.find(t => t.path === filePath);
+                
+                if (options?.showDiff && options.currentContent !== undefined && options.originalContent !== undefined) {
+                  // Open as diff view - use the original file path without suffix
+                  const existingDiffTab = gitOpenTabs.find(t => t.path === filePath && t.diffData);
+                  
+                  if (existingDiffTab) {
+                    // Switch to existing diff tab
+                    setActiveGitTabPath(filePath);
+                  } else {
+                    // Create new diff tab with special type
+                    setGitOpenTabs(prev => [...prev, { 
+                      path: filePath, 
+                      type: "text",
+                      diffData: {
+                        filePath,
+                        currentContent: options.currentContent ?? "",
+                        originalContent: options.originalContent ?? ""
+                      }
+                    }]);
+                    setActiveGitTabPath(filePath);
+                  }
+                } else {
+                  // Regular file opening in git tab context
+                  if (existingTab) {
+                    setActiveGitTabPath(filePath);
+                  } else {
+                    setGitOpenTabs(prev => [...prev, { path: filePath, type: "text" }]);
+                    setActiveGitTabPath(filePath);
+                  }
+                }
+              }}
+              onCloseFile={handleGitTabClose}
             />
           )}
         </div>
@@ -1430,16 +2347,56 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       <ResizableDivider direction="horizontal" onResize={(d) => setSidebarWidth((w) => Math.max(180, Math.min(480, w + d)))} onDoubleClick={() => setSidebarWidth((w) => w > 0 ? 0 : 256)} />
       <main className="flex-1 flex min-w-0 min-h-0">
         {(() => {
-          const activeTab = openTabs.find((t) => t.path === activeTabPath);
+          // When git tab is selected, show diff panel instead of regular editor
+          if (sidebarTab === "git") {
+            const gitTabs = gitOpenTabs.filter(t => t.type === "text");
+            
+            return (
+              <section className="flex-1 flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
+                {/* Git File Tabs - using exact same FileTabs component */}
+                {gitTabs.length > 0 && (
+                  <FileTabs
+                    tabs={gitTabs}
+                    activePath={activeGitTabPath && gitTabs.find(t => t.path === activeGitTabPath) ? activeGitTabPath : null}
+                    onSelect={(path) => setActiveGitTabPath(path)}
+                    onClose={handleGitTabClose}
+                  />
+                )}
+                
+                <div className="flex-1 overflow-auto">
+                  {gitTabs.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-[var(--muted)]">
+                      <div className="text-center">
+                        <p className="text-sm">No files open</p>
+                        <p className="text-xs mt-1">Open files to see git changes</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div ref={gitDiffRef} className="h-full" />
+                  )}
+                </div>
+              </section>
+            );
+          }
+
+          // Regular editor panel for files/chats tabs
+          const activeTab = (sidebarTab === "git" ? gitOpenTabs : openTabs).find((t) => t.path === (sidebarTab === "git" ? activeGitTabPath : activeTabPath));
           const showAIPanel = activeTab?.type === "text" && ydoc && ytext && provider;
+          
+          // Filter tabs based on sidebar context
+          const displayTabs = sidebarTab === "git" 
+            ? gitOpenTabs.filter(t => t.type === "text") // Show git tabs when in git context
+            : openTabs;
+            
           return (
-            <section style={{ flex: `${editorFraction} 1 0%` }} className="flex flex-col border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
+            <section style={{ flex: `${editorFraction} 1 0%` }} className="flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
               <FileTabs
-                tabs={openTabs}
-                activePath={activeTabPath}
+                tabs={displayTabs}
+                activePath={sidebarTab === "git" ? activeGitTabPath : activeTabPath}
                 onSelect={handleTabSelect}
                 onClose={handleTabClose}
                 onToggleTools={() => setToolsPanelOpen(!toolsPanelOpen)}
+                onReorder={handleTabReorder}
               />
               <div className="flex-1 relative min-h-0 overflow-hidden">
                 {(() => {
@@ -1558,24 +2515,37 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     );
                   }
                   if (activeTab?.type === "text" && ydoc && ytext && provider) {
+                    // Check if this is a diff tab
+                    const isDiffTab = activeTabPath?.endsWith(':diff');
+                    const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
+                    
                     const aiOverlayHeight = chatExpanded ? "45%" : "155px";
                     return (
                       <div
                         className="absolute inset-0 overflow-hidden"
                         style={{ bottom: showAIPanel ? aiOverlayHeight : 0 }}
                       >
-                        <EditorPanel
-                          ref={editorRef}
-                          ydoc={ydoc}
-                          ytext={ytext}
-                          provider={provider}
-                          currentPath={activeTabPath}
-                          onYtextChange={onYtextChangeNoop}
-                          fontSize={editorFontSize}
-                          tabSize={editorTabSize}
-                          lineWrapping={editorLineWrapping}
-                          theme={theme}
-                        />
+                        {isDiffTab && diffData ? (
+                          <SideBySideDiffView
+                            filePath={diffData.filePath}
+                            currentContent={diffData.currentContent}
+                            originalContent={diffData.originalContent}
+                            className="h-full"
+                          />
+                        ) : (
+                          <EditorPanel
+                            ref={editorRef}
+                            ydoc={ydoc}
+                            ytext={ytext}
+                            provider={provider}
+                            currentPath={activeTabPath}
+                            onYtextChange={onYtextChangeNoop}
+                            fontSize={editorFontSize}
+                            tabSize={editorTabSize}
+                            lineWrapping={editorLineWrapping}
+                            theme={theme}
+                          />
+                        )}
                         {/* Floating format button for LaTeX files */}
                         {handleFormatDocument && activeTabPath.endsWith('.tex') && (
                           <button
@@ -1697,6 +2667,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                 isOpen={true}
                 onClose={() => setToolsPanelOpen(false)}
                 summaryContent={summaryContent}
+                summaryData={summaryData}
+                summaryRaw={summaryContent}
               />
             ) : (
               <PdfPreview

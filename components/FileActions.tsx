@@ -10,24 +10,14 @@ interface FileActionsProps {
   fs: IdbfsFs | null;
   basePath?: string;
   onAction: () => void;
+  expanded?: boolean;
+  onToggle?: () => void;
 }
 
-export function FileActions({ fs, basePath = "/", onAction }: FileActionsProps) {
-  const [open, setOpen] = useState(false);
+export function FileActions({ fs, basePath = "/", onAction, expanded = false }: FileActionsProps) {
   const [addModalType, setAddModalType] = useState<"file" | "folder" | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dirInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const handleAddFile = async (name: string) => {
     if (!fs) return;
@@ -68,7 +58,6 @@ export function FileActions({ fs, basePath = "/", onAction }: FileActionsProps) 
         }
       }
       e.target.value = "";
-      setOpen(false);
       onAction();
     })();
   };
@@ -102,60 +91,44 @@ export function FileActions({ fs, basePath = "/", onAction }: FileActionsProps) 
         }
       }
       e.target.value = "";
-      setOpen(false);
       onAction();
     })();
   };
 
-  if (!fs) return null;
+  if (!fs || !expanded) return null;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center"
-        title="Add"
-      >
-        <IconPlus />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-2 z-50 min-w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
-          <button
-            onClick={() => {
-              setAddModalType("file");
-              setOpen(false);
-            }}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconFilePlus />
-            Add File
-          </button>
-          <button
-            onClick={() => {
-              setAddModalType("folder");
-              setOpen(false);
-            }}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconFolderPlus />
-            Add Folder
-          </button>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconUpload />
-            Upload File
-          </button>
-          <button
-            onClick={() => dirInputRef.current?.click()}
-            className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-          >
-            <IconUpload />
-            Upload Directory
-          </button>
-        </div>
-      )}
+    <>
+      <div className="space-y-1">
+        <button
+          onClick={() => setAddModalType("file")}
+          className="w-full px-2 py-1.5 text-xs text-left text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 rounded"
+        >
+          <IconFilePlus />
+          Add File
+        </button>
+        <button
+          onClick={() => setAddModalType("folder")}
+          className="w-full px-2 py-1.5 text-xs text-left text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 rounded"
+        >
+          <IconFolderPlus />
+          Add Folder
+        </button>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="w-full px-2 py-1.5 text-xs text-left text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 rounded"
+        >
+          <IconUpload />
+          Upload File
+        </button>
+        <button
+          onClick={() => dirInputRef.current?.click()}
+          className="w-full px-2 py-1.5 text-xs text-left text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 rounded"
+        >
+          <IconUpload />
+          Upload Directory
+        </button>
+      </div>
       <NameModal
         isOpen={addModalType === "file"}
         title="New file"
@@ -189,6 +162,6 @@ export function FileActions({ fs, basePath = "/", onAction }: FileActionsProps) 
         onChange={handleUploadDir}
         {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
       />
-    </div>
+    </>
   );
 }
