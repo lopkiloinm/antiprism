@@ -1643,10 +1643,17 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       const fileDoc = fileDocManagerRef.current.getDocument(path);
       const ytext = fileDoc.text;
       
-      // 🎯 CRITICAL: Update global ydoc/ytext to point to this file's document
-      // This prevents tabs from overwriting each other
-      setYdoc(fileDoc.doc);
-      setYtext(ytext);
+      // 🎯 CRITICAL: Only update global state if document actually changed
+      // This prevents Yjs Text corruption during tab switching
+      if (ydoc !== fileDoc.doc) {
+        console.log('🔄 Switching to new document:', path);
+        setYdoc(fileDoc.doc);
+        setYtext(ytext);
+      } else {
+        console.log('📝 Same document, updating content:', path);
+        // Same document but content might have changed, just ensure ytext is correct
+        setYtext(ytext);
+      }
       
       // Check if Yjs already has content (from persistence)
       const existingContent = ytext.toString();
