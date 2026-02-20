@@ -6,6 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
+import { IndexeddbPersistence } from "y-indexeddb";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
 import { FileTree } from "@/components/FileTree";
@@ -128,6 +129,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
   const [ytext, setYtext] = useState<Y.Text | null>(null);
   const [provider, setProvider] = useState<WebrtcProvider | null>(null);
+  const [idbProvider, setIdbProvider] = useState<any>(null);
   const [fs, setFs] = useState<Awaited<ReturnType<typeof mount>> | null>(null);
   const [openTabs, setOpenTabs] = useState<Tab[]>([]);
   const [gitOpenTabs, setGitOpenTabs] = useState<Tab[]>([]);
@@ -650,6 +652,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     setYdoc(null);
     setYtext(null);
     setProvider(null);
+    setIdbProvider(null); // ✅ Reset IndexedDB provider
     setFs(null);
     setOpenTabs([]);
     setActiveTabPath("");
@@ -660,6 +663,8 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       try {
         const doc = new Y.Doc();
         const prov = new WebrtcProvider(id, doc);
+        const idbProv = new IndexeddbPersistence(id, doc); // ✅ Add persistence!
+        
         providerRef.current = prov;
         ydocRef.current = doc;
         const text = doc.getText("document");
@@ -754,10 +759,15 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           try {
             const data = await idbfs.readFile(initialPath);
             const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
-            if (text.length === 0 && content?.length > 0) text.insert(0, content);
+            // Clear any IndexedDB content and load actual file content
+            text.delete(0, text.length);
+            text.insert(0, content || "");
             textContentCacheRef.current.set(initialPath, content ?? "");
+            console.log(`📂 Loaded ${initialPath} from file system (${content.length} chars)`);
           } catch {
-            // ignore
+            // File doesn't exist, clear any IndexedDB content
+            text.delete(0, text.length);
+            console.log(`📂 ${initialPath} not found, cleared editor`);
           }
 
           setOpenTabs([{ path: initialPath, type: "text" }]);
@@ -773,6 +783,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         setYdoc(doc);
         setYtext(text);
         setProvider(prov);
+        setIdbProvider(idbProv); // ✅ Set IndexedDB provider
         setFs(idbfs);
       } catch (e) {
         if (cancelled) return;
@@ -794,6 +805,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       initRef.current = false;
       providerRef.current?.destroy();
       providerRef.current = null;
+      idbProvider?.destroy(); // ✅ Cleanup IndexedDB provider
       ydocRef.current?.destroy();
       ydocRef.current = null;
     };
@@ -1483,12 +1495,33 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   }, [getBufferMgr]);
 
   const loadTextIntoEditor = useCallback(
-    (path: string, content: string) => {
+    async (path: string, content: string) => {
       if (!ytext) return;
+      
+      // Save current content to file system before switching
+      if (activeTabPath && activeTabPath !== path && fs) {
+        try {
+          const currentContent = ytext.toString();
+          if (currentContent.trim()) {
+            // Remove and rewrite to save current file
+            await fs.rm(activeTabPath).catch(() => {});
+            await fs.writeFile(
+              activeTabPath,
+              new TextEncoder().encode(currentContent).buffer as ArrayBuffer,
+              { mimeType: "text/x-tex" }
+            );
+            console.log(`💾 Saved ${activeTabPath} before switching to ${path}`);
+          }
+        } catch (error) {
+          console.error(`Failed to save ${activeTabPath} before switching:`, error);
+        }
+      }
+      
+      // Load new content
       ytext.delete(0, ytext.length);
       ytext.insert(0, content || "");
     },
-    [ytext]
+    [ytext, activeTabPath, fs]
   );
 
   /** Resolve the text content for a file from cache or filesystem. */
