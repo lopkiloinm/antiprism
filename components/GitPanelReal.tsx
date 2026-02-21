@@ -198,6 +198,7 @@ export function GitPanelReal({
   const [commitMessage, setCommitMessage] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDetectingChanges, setIsDetectingChanges] = useState(false);
   const [isGitInitialized, setIsGitInitialized] = useState<boolean | null>(null);
   const [initialCommitFiles, setInitialCommitFiles] = useState<string[]>([]);
 
@@ -344,7 +345,14 @@ export function GitPanelReal({
   };
 
   const detectFileChanges = async () => {
-    if (!stableRepoName) return;
+    if (!stableRepoName || isDetectingChanges) {
+      if (isDetectingChanges) {
+        console.log('🔍 detectFileChanges skipped - already running');
+      }
+      return;
+    }
+    
+    setIsDetectingChanges(true);
     try {
       console.log('🔍 detectFileChanges called for repo:', stableRepoName);
       const currentRepo = await gitStore.getRepository(stableRepoName);
@@ -372,30 +380,49 @@ export function GitPanelReal({
       const allFilesToScan = await getAllProjectFiles(projectId!);
       console.log('🔍 Scanning files for changes:', allFilesToScan);
 
+      // Pre-load all text files into Yjs to ensure we have the latest content
+      if (fileDocManager) {
+        console.log('🔍 Pre-loading text files into Yjs...');
+        const textFiles = allFilesToScan.filter(filePath => 
+          filePath.endsWith('.tex') || filePath.endsWith('.typ') || filePath.endsWith('.md') || filePath.endsWith('.txt')
+        );
+        
+        for (const filePath of textFiles) {
+          try {
+            // This will load the file into Yjs if not already loaded
+            const doc = fileDocManager.getDocument(filePath, true); // silent=true
+            if (doc && doc.text) {
+              console.log(`🔍 Pre-loaded ${filePath} into Yjs, content length: ${doc.text.toString().length}`);
+            }
+          } catch (error) {
+            console.log(`🔍 Could not pre-load ${filePath} into Yjs:`, error);
+          }
+        }
+      }
+
       for (const filePath of allFilesToScan) {
         try {
-          // Read current file content from Yjs document manager (most up-to-date source)
+          // Read current file content - always trust Yjs when available (IDBFS can be stale)
           let currentContent = "";
           try {
-            // For text files, try to get content from Yjs document manager
+            // For text files, always try to get content from Yjs first (most up-to-date)
             if (filePath.endsWith('.tex') || filePath.endsWith('.typ') || filePath.endsWith('.md') || filePath.endsWith('.txt')) {
-              // Use the passed fileDocManager for direct Yjs content access
               if (fileDocManager) {
                 const doc = fileDocManager.getDocument(filePath, true); // silent=true
                 if (doc && doc.text && doc.text.toString().length > 0) {
-                  // Only use Yjs content if it actually has content
+                  // Always use Yjs content when available - it's the most up-to-date
                   currentContent = doc.text.toString();
                   console.log(`🔍 File ${filePath}: got content from Yjs, length ${currentContent.length}`);
                 } else {
-                  // If Yjs document is empty or doesn't exist, fall back to IDBFS
+                  // Fallback to IDBFS only if Yjs document is truly empty/unavailable
                   const { mount } = await import("@wwog/idbfs");
                   const fs = await mount();
                   const contentBuffer = await fs.readFile(filePath);
                   currentContent = new TextDecoder().decode(contentBuffer);
-                  console.log(`🔍 File ${filePath}: got content from IDBFS (Yjs empty), length ${currentContent.length}`);
+                  console.log(`🔍 File ${filePath}: got content from IDBFS (Yjs unavailable), length ${currentContent.length}`);
                 }
               } else {
-                // Fallback to IDBFS if manager not available
+                // No fileDocManager available, use IDBFS
                 const { mount } = await import("@wwog/idbfs");
                 const fs = await mount();
                 const contentBuffer = await fs.readFile(filePath);
@@ -449,6 +476,8 @@ export function GitPanelReal({
       setChanges(detectedChanges);
     } catch (error) {
       console.error("Failed to detect file changes:", error);
+    } finally {
+      setIsDetectingChanges(false);
     }
   };
 

@@ -3008,14 +3008,16 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             
             return (
               <section className="flex-1 flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
-                {/* Git File Tabs - using exact same FileTabs component */}
+                {/* Git Mode - Separate tab system for git diffs */}
                 {gitTabs.length > 0 && (
-                  <FileTabs
-                    tabs={gitTabs}
-                    activePath={activeGitTabPath && gitTabs.find(t => t.path === activeGitTabPath) ? activeGitTabPath : null}
-                    onSelect={(path) => setActiveGitTabPath(path)}
-                    onClose={handleGitTabClose}
-                  />
+                  <div className="border-b border-[var(--border)] bg-[var(--muted)/30]">
+                    <FileTabs
+                      tabs={gitTabs}
+                      activePath={activeGitTabPath && gitTabs.find(t => t.path === activeGitTabPath) ? activeGitTabPath : null}
+                      onSelect={(path) => setActiveGitTabPath(path)}
+                      onClose={handleGitTabClose}
+                    />
+                  </div>
                 )}
                 
                 <div className="flex-1 overflow-auto">
@@ -3034,21 +3036,22 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             );
           }
 
-          // Regular editor panel for files/chats tabs
-          const displayTabs = isGitTab 
-            ? gitOpenTabs.filter(t => t.type === "text") // Show git tabs when in git context
-            : openTabs;
+          // Regular editor panel for files/chats tabs ONLY
+          const displayTabs = openTabs; // Never mix with git tabs
             
           return (
             <section style={{ flex: `${editorFraction} 1 0%` }} className="flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
-              <FileTabs
-                tabs={displayTabs}
-                activePath={isGitTab ? activeGitTabPath : activeTabPath}
-                onSelect={handleTabSelect}
-                onClose={handleTabClose}
-                onToggleTools={() => setToolsPanelOpen(!toolsPanelOpen)}
-                onReorder={handleTabReorder}
-              />
+              {/* Files/Chats Mode - Separate tab system for regular files */}
+              <div className="border-b border-[var(--border)] bg-[var(--background)]">
+                <FileTabs
+                  tabs={displayTabs}
+                  activePath={activeTabPath}
+                  onSelect={handleTabSelect}
+                  onClose={handleTabClose}
+                  onToggleTools={() => setToolsPanelOpen(!toolsPanelOpen)}
+                  onReorder={handleTabReorder}
+                />
+              </div>
               <div className="flex-1 relative min-h-0 overflow-hidden">
                 {(() => {
                   if (activeTab?.type === "settings") {
