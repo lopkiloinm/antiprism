@@ -20,13 +20,14 @@ interface PdfPreviewProps {
   isCompiling: boolean;
   latexReady?: boolean;
   lastCompileMs?: number | null;
+  isFullscreen?: boolean;
 }
 
-export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false, lastCompileMs }: PdfPreviewProps) {
+export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false, lastCompileMs, isFullscreen: propIsFullscreen = false }: PdfPreviewProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [scale, setScale] = useState<number>(1);
   const [containerWidth, setContainerWidth] = useState<number>(400);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(propIsFullscreen);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(1);
@@ -45,6 +46,11 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
   useEffect(() => {
     scaleRef.current = scale;
   }, [scale]);
+
+  // Sync fullscreen state with prop
+  useEffect(() => {
+    setIsFullscreen(propIsFullscreen);
+  }, [propIsFullscreen]);
 
   // Keep the point under cursor (or viewport center) fixed by adjusting scroll after zoom.
   useEffect(() => {
@@ -90,15 +96,6 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
     ro.observe(el);
     return () => ro.disconnect();
   }, [numPages, pdfUrl]);
-
-  // Fullscreen change listener
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
 
   // Touchpad/pinch zoom: 1% per step, batched with RAF; anchor to cursor to prevent scroll jumps
   useEffect(() => {

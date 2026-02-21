@@ -11,13 +11,19 @@ import {
   IconDownload,
   IconRotateCcw,
   IconX,
+  IconMaximize2,
+  IconMinimize2,
+  IconPalette,
+  IconSun,
+  IconMoon,
 } from "./Icons";
 
-type NavItem = "all" | "projects" | "servers" | "trash";
+type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
 
 const TITLES: Record<NavItem, string> = {
   all: "All Projects",
   projects: "Your Projects",
+  "recently-opened": "Recently Opened",
   servers: "Signaling Servers",
   trash: "Trashed Projects",
 };
@@ -37,6 +43,10 @@ interface DashboardHeaderProps {
   onBulkDelete: () => void;
   onBulkDownload?: () => void;
   onBulkRestore?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  theme?: string;
+  onThemeChange?: (theme: string) => void;
 }
 
 export function DashboardHeader({
@@ -54,14 +64,23 @@ export function DashboardHeader({
   onBulkDelete,
   onBulkDownload,
   onBulkRestore,
+  isFullscreen = false,
+  onToggleFullscreen,
+  theme = "dark",
+  onThemeChange,
 }: DashboardHeaderProps) {
   const [importOpen, setImportOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
   const importRef = useRef<HTMLDivElement>(null);
+  const themeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (importRef.current && !importRef.current.contains(e.target as Node)) {
         setImportOpen(false);
+      }
+      if (themeRef.current && !themeRef.current.contains(e.target as Node)) {
+        setThemeOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -139,7 +158,87 @@ export function DashboardHeader({
             className="pl-10 pr-3 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] w-64"
           />
         </div>
-        {activeNav !== "servers" && (
+        <div className="relative" ref={themeRef}>
+          <button
+            onClick={() => setThemeOpen(!themeOpen)}
+            className="px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-2"
+          >
+            <div className="flex items-center gap-1">
+              {theme === "light" || theme === "sepia" ? <IconSun /> : <IconMoon />}
+              <div className="flex gap-1">
+                <div className={`w-2 h-2 rounded-full ${theme === "light" ? "bg-yellow-400" : "bg-gray-400"}`}></div>
+                <div className={`w-2 h-2 rounded-full ${theme === "sepia" ? "bg-orange-300" : "bg-gray-400"}`}></div>
+                <div className={`w-2 h-2 rounded-full ${theme === "dark" ? "bg-blue-500" : "bg-gray-400"}`}></div>
+                <div className={`w-2 h-2 rounded-full ${theme === "dark-purple" ? "bg-purple-500" : "bg-gray-400"}`}></div>
+              </div>
+            </div>
+          </button>
+          {themeOpen && (
+            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
+              <button
+                onClick={() => {
+                  onThemeChange?.("light");
+                  setThemeOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
+                  theme === "light" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                }`}
+              >
+                <IconSun />
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-yellow-400"></div>
+                  Light
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  onThemeChange?.("sepia");
+                  setThemeOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
+                  theme === "sepia" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                }`}
+              >
+                <IconSun />
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-orange-300"></div>
+                  Sepia
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  onThemeChange?.("dark");
+                  setThemeOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
+                  theme === "dark" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                }`}
+              >
+                <IconMoon />
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  Dark
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  onThemeChange?.("dark-purple");
+                  setThemeOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
+                  theme === "dark-purple" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                }`}
+              >
+                <IconMoon />
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                  Dark Purple
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
+        {activeNav !== "servers" && activeNav !== "recently-opened" && (
           <>
             <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
               <button
@@ -156,6 +255,15 @@ export function DashboardHeader({
               >
                 <IconLayoutGrid />
               </button>
+              {onToggleFullscreen && (
+                <button
+                  onClick={onToggleFullscreen}
+                  className="px-2 py-2 border-l border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"
+                  title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                >
+                  {isFullscreen ? <IconMinimize2 /> : <IconMaximize2 />}
+                </button>
+              )}
             </div>
             <div className="relative" ref={importRef}>
               <button
@@ -197,6 +305,35 @@ export function DashboardHeader({
             </button>
           </>
         )}
+        {activeNav === "recently-opened" && (
+          <>
+            <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
+              <button
+                onClick={() => onViewModeChange("list")}
+                className={`px-2 py-2 ${viewMode === "list" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                title="List view"
+              >
+                <IconList />
+              </button>
+              <button
+                onClick={() => onViewModeChange("icons")}
+                className={`px-2 py-2 border-l border-[var(--border)] ${viewMode === "icons" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                title="Icons view"
+              >
+                <IconLayoutGrid />
+              </button>
+              {onToggleFullscreen && (
+                <button
+                  onClick={onToggleFullscreen}
+                  className="px-2 py-2 border-l border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"
+                  title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                >
+                  {isFullscreen ? <IconMinimize2 /> : <IconMaximize2 />}
+                </button>
+              )}
+            </div>
+          </>
+        )}
         {activeNav === "servers" && (
           <>
             <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
@@ -214,6 +351,15 @@ export function DashboardHeader({
               >
                 <IconLayoutGrid />
               </button>
+              {onToggleFullscreen && (
+                <button
+                  onClick={onToggleFullscreen}
+                  className="px-2 py-2 border-l border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"
+                  title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                >
+                  {isFullscreen ? <IconMinimize2 /> : <IconMaximize2 />}
+                </button>
+              )}
             </div>
             <button
               onClick={onNewServer}

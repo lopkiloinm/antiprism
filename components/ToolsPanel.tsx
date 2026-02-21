@@ -370,7 +370,7 @@ export function ToolsPanel({
             <span className="text-sm">LaTeX</span>
           </div>
           <div
-            className={`group relative flex items-center px-3 py-2 cursor-pointer shrink-0 h-full ${
+            className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "typst-logs"
                 ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
@@ -380,7 +380,7 @@ export function ToolsPanel({
             <span className="text-sm">Typst</span>
           </div>
           <div
-            className={`group relative flex items-center px-3 py-2 cursor-pointer shrink-0 h-full ${
+            className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "yjs-logs"
                 ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
@@ -390,7 +390,7 @@ export function ToolsPanel({
             <span className="text-sm">Yjs</span>
           </div>
           <div
-            className={`group relative flex items-center px-3 py-2 cursor-pointer shrink-0 h-full ${
+            className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "git-logs"
                 ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"

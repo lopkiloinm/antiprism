@@ -48,6 +48,7 @@ import {
   CheckSquare,
   Square,
   X,
+  History,
   Wrench,
   GitBranch,
   GitCommit,
@@ -66,6 +67,8 @@ import {
   Braces,
   Palette,
   MessageSquare,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -134,6 +137,9 @@ export const IconFileCog = () => <FileCog {...iconProps} />;
 export const IconBraces = () => <Braces {...iconProps} />;
 export const IconPalette = () => <Palette {...iconProps} />;
 export const IconMessageSquare = () => <MessageSquare {...iconProps} />;
+export const IconHistory = () => <History {...iconProps} />;
+export const IconSun = () => <Sun {...iconProps} />;
+export const IconMoon = () => <Moon {...iconProps} />;
 export const IconAntiprism = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"

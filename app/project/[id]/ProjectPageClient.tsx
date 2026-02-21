@@ -73,7 +73,11 @@ import {
   getTheme,
   type Theme,
 } from "@/lib/settings";
-import { getAllProjects, getRooms } from "@/lib/projects";
+import {
+  getAllProjects,
+  getRooms,
+  addRecentlyOpened,
+} from "@/lib/projects";
 import { EditorBufferManager } from "@/lib/editorBufferManager";
 import { useTheme } from "@/contexts/ThemeContext";
 
@@ -94,17 +98,12 @@ function isBinaryPath(path: string): boolean {
 
 // Helper function to get stable git repository name (same as GitPanel)
 const getStableGitRepoName = (projectName: string, filePaths: string[], projectId: string) => {
-  // Priority 1: Use project name (most stable)
-  if (projectName) {
-    const sanitizedName = projectName
-      .toLowerCase()
-      .replace(/[^a-z0-9-_]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-    return `git-${sanitizedName}`;
+  // Priority 1: Use project ID (uniquely identifies the project)
+  if (projectId) {
+    return `git-${projectId}`;
   }
   
-  // Priority 2: Use file system path (stable)
+  // Priority 2: Use file system path (stable fallback)
   if (filePaths.length > 0) {
     const firstPath = filePaths[0];
     const pathMatch = firstPath.match(/\/projects\/([^\/]+)/);
@@ -114,8 +113,17 @@ const getStableGitRepoName = (projectName: string, filePaths: string[], projectI
     }
   }
   
-  // Priority 3: Fallback to projectId
-  return `git-${projectId}`;
+  // Priority 3: Fallback to project name
+  if (projectName) {
+    const sanitizedName = projectName
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    return `git-${sanitizedName}`;
+  }
+  
+  return `git-unknown`;
 };
 
 export default function ProjectPageClient({ idOverride }: { idOverride?: string }) {
@@ -186,6 +194,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [searchQuery, setSearchQuery] = useState("");
   const [addActionsOpen, setAddActionsOpen] = useState(false);
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
   const [summaryContent, setSummaryContent] = useState("");
   const [summaryData, setSummaryData] = useState<any>(null);
@@ -641,9 +650,13 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     if (p) {
       setProjectName(p.name);
       setIsRoom(false);
+      // Add to recently opened
+      addRecentlyOpened(p);
     } else if (r) {
       setProjectName(r.name);
       setIsRoom(true);
+      // Add to recently opened
+      addRecentlyOpened(r);
     } else {
       setProjectName("Project");
       setIsRoom(false);
@@ -678,9 +691,19 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         }
       }
     } catch (error) {
-      console.error('Failed to handle URL parameters:', error);
+      console.warn('Failed to process URL parameters:', error);
     }
   }, [id]);
+
+  // Handle fullscreen state changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     if (chatExpanded && chatScrollRef.current) {
@@ -3218,7 +3241,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     if (activeTabPath.endsWith(".pdf")) {
                       const pdfBlobUrl = imageUrlCache.get(activeTabPath) ?? null;
                       return pdfBlobUrl ? (
-                        <PdfPreview pdfUrl={pdfBlobUrl} onCompile={() => {}} isCompiling={false} />
+                        <PdfPreview pdfUrl={pdfBlobUrl} onCompile={() => {}} isCompiling={false} isFullscreen={isFullscreen} />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
                           Loading PDF…
@@ -3485,8 +3508,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                 pdfUrl={pdfUrl}
                 onCompile={handleCompile}
                 isCompiling={isCompiling}
-                latexReady={compilerReady}
+                latexReady={latexReady}
                 lastCompileMs={lastCompileMs}
+                isFullscreen={isFullscreen}
               />
             )}
           </div>

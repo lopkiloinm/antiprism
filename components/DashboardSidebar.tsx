@@ -11,9 +11,10 @@ import {
   IconServer,
   IconAntiprism,
   IconFileText,
+  IconHistory,
 } from "./Icons";
 
-type NavItem = "all" | "projects" | "servers" | "trash";
+type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
 
 interface DashboardSidebarProps {
   activeNav: NavItem;
@@ -56,6 +57,17 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
         >
           <IconFileText />
           Your Projects
+        </button>
+        <button
+          onClick={() => onNavChange("recently-opened")}
+          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+            activeNav === "recently-opened"
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+          }`}
+        >
+          <IconHistory />
+          Recently Opened
         </button>
         <button
           onClick={() => onNavChange("servers")}

@@ -9,6 +9,7 @@ export interface Project {
 
 const STORAGE_KEY_PROJECTS = "antiprism-projects";
 const STORAGE_KEY_ROOMS = "antiprism-rooms";
+const STORAGE_KEY_RECENTLY_OPENED = "antiprism-recently-opened";
 
 function loadJson<T>(key: string, defaultVal: T): T {
   if (typeof window === "undefined") return defaultVal;
@@ -149,4 +150,31 @@ export function renameRoom(id: string, name: string): void {
     r.id === id ? { ...r, name } : r
   );
   saveJson(STORAGE_KEY_ROOMS, rooms);
+}
+
+// Recently opened projects functionality
+export function addRecentlyOpened(project: Project): void {
+  const recentlyOpened = getRecentlyOpened();
+  const existingIndex = recentlyOpened.findIndex(p => p.id === project.id);
+  
+  // Remove if already exists
+  const filtered = existingIndex >= 0 
+    ? recentlyOpened.filter(p => p.id !== project.id)
+    : recentlyOpened;
+  
+  // Add to beginning
+  const updated = [{ ...project, lastOpened: Date.now() }, ...filtered];
+  
+  // Keep only last 20 items
+  const limited = updated.slice(0, 20);
+  
+  saveJson(STORAGE_KEY_RECENTLY_OPENED, limited);
+}
+
+export function getRecentlyOpened(): Project[] {
+  return loadJson<Project[]>(STORAGE_KEY_RECENTLY_OPENED, []);
+}
+
+export function clearRecentlyOpened(): void {
+  saveJson(STORAGE_KEY_RECENTLY_OPENED, []);
 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { mount } from "@wwog/idbfs";
 import JSZip from "jszip";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   getProjects,
   getRooms,
@@ -17,6 +18,8 @@ import {
   renameRoom,
   deleteRoom,
   deleteProjectDataFromStorage,
+  getRecentlyOpened,
+  addRecentlyOpened,
 } from "@/lib/projects";
 import type { Project } from "@/lib/projects";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
@@ -25,10 +28,11 @@ import { ProjectList } from "@/components/ProjectList";
 import { SignalingServerList } from "@/components/SignalingServerList";
 import { NameModal } from "@/components/NameModal";
 
-type NavItem = "all" | "projects" | "servers" | "trash";
+type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const signalingServerListRef = useRef<{ handleNewServer: () => void }>(null);
   const [activeNav, setActiveNav] = useState<NavItem>("projects");
   const [viewMode, setViewMode] = useState<"list" | "icons">("list");
@@ -37,11 +41,13 @@ export default function DashboardPage() {
   const [refresh, setRefresh] = useState(0);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const loadItems = useCallback(() => {
     let list: Project[];
     if (activeNav === "all") list = getAllItems();
     else if (activeNav === "projects") list = getProjects();
+    else if (activeNav === "recently-opened") list = getRecentlyOpened();
     else if (activeNav === "servers") list = []; // Servers handled by SignalingServerList
     else list = getTrashedProjects().map((p) => ({ ...p, isRoom: false }));
 
@@ -55,6 +61,28 @@ export default function DashboardPage() {
   useEffect(() => {
     loadItems();
   }, [loadItems, refresh]);
+
+  // Handle fullscreen state changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error('Failed to toggle fullscreen:', error);
+    }
+  };
 
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [projectToRename, setProjectToRename] = useState<Project | null>(null);
@@ -322,6 +350,10 @@ export default function DashboardPage() {
           onBulkDelete={handleBulkDelete}
           onBulkDownload={activeNav === "trash" ? undefined : handleBulkDownload}
           onBulkRestore={activeNav === "trash" ? handleBulkRestore : undefined}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+          theme={theme}
+          onThemeChange={(newTheme) => setTheme(newTheme as any)}
         />
         {activeNav === "servers" ? (
           <SignalingServerList 
