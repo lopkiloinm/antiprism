@@ -27,7 +27,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { ToolsPanel } from "@/components/ToolsPanel";
 import { diffLines } from "diff";
 import { ResizableDivider } from "@/components/ResizableDivider";
-import { GitPanelReal } from "@/components/GitPanelReal";
+import { GitPanelReal, getAllProjectFiles } from "@/components/GitPanelReal";
 import { GitDiffView } from "@/components/GitDiffView";
 import { SideBySideDiffView } from "@/components/SideBySideDiffView";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -152,6 +152,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [isInitialized, setIsInitialized] = useState(false);
   const [openTabs, setOpenTabs] = useState<Tab[]>([]);
   const [gitOpenTabs, setGitOpenTabs] = useState<Tab[]>([]);
+  const [allProjectFiles, setAllProjectFiles] = useState<string[]>([]);
   const [activeGitTabPath, setActiveGitTabPath] = useState<string>("");
   const [currentPath, setCurrentPath] = useState<string>("");
   const [addTargetPath, setAddTargetPath] = useState<string>(basePath);
@@ -954,6 +955,15 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         setFs(idbfs);
         setIsInitialized(true); // ✅ Mark as fully initialized
         console.log('🎉 Initialization complete, isInitialized set to true');
+        
+        // 📁 Load all project files for Git panel
+        try {
+          const allFiles = await getAllProjectFiles(id);
+          setAllProjectFiles(allFiles);
+          console.log('📁 Loaded all project files for Git:', allFiles);
+        } catch (error) {
+          console.error('Failed to load all project files:', error);
+        }
       } catch (e) {
         if (cancelled) return;
         // Don't surface "connection is closing" - happens when unmounting during init (e.g. Strict Mode)
@@ -2872,10 +2882,10 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               currentPath={activeGitTabPath}
               bufferManager={getBufferMgr()}
               fileDocManager={fileDocManagerRef.current}
-              filePaths={openTabs.filter(t => t.type === "text").map(t => t.path)}
+              filePaths={allProjectFiles || []}
               refreshTrigger={refreshTrigger}
-              // TODO: Get all project files, not just open tabs, for proper git initialization
-              // For now, we'll use open tabs but this should be fixed to get all files
+              // ✅ FIXED: Now using all project files, not just open tabs
+              // Git panel will show changes for all files regardless of which tabs are open
               onFileSelect={async (filePath, options) => {
                 // Check if file is already open in git tab context
                 const existingTab = gitOpenTabs.find(t => t.path === filePath);

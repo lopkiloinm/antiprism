@@ -75,7 +75,7 @@ interface GitRepository {
 }
 
 // Helper function to get all project files from IDBFS recursively
-const getAllProjectFiles = async (projectId: string): Promise<string[]> => {
+export const getAllProjectFiles = async (projectId: string): Promise<string[]> => {
   try {
     const { mount } = await import("@wwog/idbfs");
     const fs = await mount();
