@@ -6,6 +6,11 @@ import { ContextMenuProvider } from "@/contexts/ContextMenuContext";
 export const metadata: Metadata = {
   title: "Antiprism LaTeX Editor",
   description: "P2P decentralized LaTeX editor: WebRTC Yjs collaboration, WebGPU in-browser AI, client-side WASM LaTeX.",
+  icons: {
+    icon: '/favicon.svg',
+    shortcut: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({
