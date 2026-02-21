@@ -11,13 +11,16 @@ import {
   IconZap,
   IconArrowRight,
   IconSend,
+  IconGitBranch,
+  IconCheckSquare,
+  IconX,
 } from "@/components/Icons";
 
 type MockupKey =
   | "peers"
   | "chat"
   | "editor-pdf"
-  | "file-compile"
+  | "git"
   | "project-list"
   | "export";
 
@@ -49,11 +52,11 @@ const FEATURES: Array<{
     mockup: "editor-pdf",
   },
   {
-    title: "Typst compilation",
+    title: "Git integration",
     description:
-      "Official compiler via typst.ts — full Typst support in the browser. Same split view and live preview as LaTeX.",
-    Icon: IconFileCode,
-    mockup: "file-compile",
+      "Built-in Git panel with commit, diff, and history. Track changes, collaborate with version control, and sync with remote repositories.",
+    Icon: IconGitBranch,
+    mockup: "git",
   },
   {
     title: "Local-first storage",
@@ -326,38 +329,65 @@ effects (p < .05).
                       </div>
                     </div>
                   )}
-                  {mockup === "file-compile" && (
-                    <div className="flex min-h-[260px] w-[440px] flex-col border-b border-zinc-700/80">
-                      <div className="flex flex-1 min-h-0">
-                        <div className="flex w-1/2 flex-col border-r border-zinc-800 bg-zinc-950 p-2.5">
-                          <div className="flex gap-1 border-b border-zinc-800 pb-1.5">
-                            <span className="border-b-2 border-blue-500 px-2 text-[10px] text-zinc-300">main.typ</span>
-                            <span className="px-2 text-[10px] text-zinc-500">lib.typ</span>
-                          </div>
-                          <pre className="mt-2 flex-1 font-mono text-[10px] leading-relaxed text-zinc-500 whitespace-pre-wrap">{`#set document(...)
-= Introduction
-Lorem ipsum dolor sit
-amet, consectetur.
-= Methods
-We used a mixed-methods
-approach.
-= Results
-Data shows significant
-effects.`}</pre>
+                  {mockup === "git" && (
+                    <div className="flex min-h-[260px] w-[440px] flex-col bg-zinc-800/50">
+                      <div className="border-b border-zinc-700/80 px-3 py-2.5 text-[11px] font-medium text-zinc-400">
+                        Git
+                      </div>
+                      <div className="flex-1 overflow-hidden p-2">
+                        <div className="flex gap-1 border-b border-zinc-700/80 pb-1.5 mb-2">
+                          <span className="border-b-2 border-blue-500 px-2 text-[10px] text-zinc-300">Status</span>
+                          <span className="px-2 text-[10px] text-zinc-500">History</span>
+                          <span className="px-2 text-[10px] text-zinc-500">Branches</span>
                         </div>
-                        <div className="flex w-1/2 flex-col bg-zinc-900/60 p-2.5">
-                          <div className="text-[9px] text-zinc-500 uppercase">PDF</div>
-                          <div className="mt-2 flex-1 space-y-1.5">
-                            <div className="h-2 w-4/5 rounded bg-zinc-700/60" />
-                            <div className="h-1.5 w-full rounded bg-zinc-800/50" />
-                            <div className="h-1.5 w-5/6 rounded bg-zinc-800/50" />
-                            <div className="h-1.5 w-4/5 rounded bg-zinc-800/40" />
-                            <div className="h-1.5 w-full rounded bg-zinc-800/50" />
+                        <div className="space-y-2">
+                          <div className="text-[9px] text-zinc-500 uppercase">Changes</div>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                              <span className="text-green-500">+</span>
+                              <span>main.tex</span>
+                              <span className="text-zinc-500">+12/-3 lines</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                              <span className="text-green-500">+</span>
+                              <span>refs.bib</span>
+                              <span className="text-zinc-500">+5 lines</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                              <span className="text-red-500">-</span>
+                              <span>old-section.tex</span>
+                              <span className="text-zinc-500">-28 lines</span>
+                            </div>
+                          </div>
+                          
+                          {/* Diff Preview */}
+                          <div className="mt-3 pt-2 border-t border-zinc-700/60">
+                            <div className="text-[9px] text-zinc-500 uppercase mb-2">Diff Preview</div>
+                            <div className="bg-zinc-950/60 rounded border border-zinc-700/40 p-2 font-mono text-[9px] leading-tight space-y-0.5 max-h-24 overflow-hidden">
+                              <div className="text-zinc-600">@@ -15,7 +15,9 @@</div>
+                              <div className="text-red-600 bg-red-500/10">- Lorem ipsum dolor sit amet</div>
+                              <div className="text-red-600 bg-red-500/10">- consectetur adipiscing elit</div>
+                              <div className="text-green-600 bg-green-500/10">+ Lorem ipsum dolor sit amet,</div>
+                              <div className="text-green-600 bg-green-500/10">+ consectetur adipiscing elit.</div>
+                              <div className="text-zinc-400">  Sed do eiusmod tempor</div>
+                              <div className="text-zinc-400">  incididunt ut labore</div>
+                              <div className="text-green-600 bg-green-500/10">+ et dolore magna aliqua.</div>
+                              <div className="text-zinc-400">  Ut enim ad minim veniam</div>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3 pt-2 border-t border-zinc-700/60">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] text-zinc-500">main</span>
+                              <span className="text-[9px] text-zinc-500">2 commits ahead</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2 border-t border-zinc-700/80 bg-zinc-950/80 px-2.5 py-1.5 text-[9px] text-zinc-500">
-                        <span>Ln 8, Col 2</span><span>·</span><span>UTF-8</span><span>·</span><span>Typst</span>
+                      <div className="border-t border-zinc-700/80 px-2.5 py-1.5 flex gap-2">
+                        <span className="text-[10px] text-zinc-500">Commit changes</span>
+                        <span className="text-[10px] text-zinc-500">Push</span>
+                        <span className="text-[10px] text-zinc-500">Pull</span>
                       </div>
                     </div>
                   )}
@@ -449,30 +479,80 @@ effects.`}</pre>
         </div>
       </section>
 
-      {/* How it works / Single workspace */}
+      {/* Comparison Table */}
       <section className="border-b border-zinc-800 bg-zinc-900/20 py-16">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="text-4xl font-semibold leading-tight tracking-tight text-zinc-100 sm:text-5xl">
-            One workspace, no backend
+            Compare Antiprism
           </h2>
-          <p className="mt-5 text-lg leading-relaxed text-zinc-300">
-            No server to run, no API keys to manage. Compile in the browser,
-            collaborate over WebRTC, and keep your data on your device.
+          <p className="mt-5 mb-10 text-lg leading-relaxed text-zinc-300 max-w-3xl">
+            See how we stack up against traditional cloud-based LaTeX editors.
           </p>
-          <ul className="mt-6 space-y-2 text-zinc-300">
-            <li className="flex items-center gap-2">
-              <span className="text-blue-500">•</span>
-              Compile LaTeX and Typst in WASM, locally
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-blue-500">•</span>
-              Real-time sync via peer-to-peer (WebRTC + Yjs)
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-blue-500">•</span>
-              Optional in-browser AI with WebGPU
-            </li>
-          </ul>
+          
+          <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/50">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-800 bg-zinc-900/40">
+                    <th className="py-4 px-5 font-medium text-zinc-400 w-1/3">Feature</th>
+                    <th className="py-4 px-5 font-semibold text-zinc-100 w-1/4">Antiprism</th>
+                    <th className="py-4 px-5 font-medium text-zinc-500 w-1/4">Overleaf (Free)</th>
+                    <th className="py-4 px-5 font-medium text-zinc-500 w-1/4">Overleaf (Paid)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/50">
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">Offline compilation</td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">Privacy (Zero-knowledge)</td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">Unlimited collaborators</td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">Full Git Integration</td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">In-browser AI (Local)</td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">Typst support</td>
+                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                    <td className="py-4 px-5 text-zinc-600"><IconX /></td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">Compile timeout limits</td>
+                    <td className="py-4 px-5 text-zinc-300">None (Your hardware)</td>
+                    <td className="py-4 px-5 text-zinc-500">20 seconds</td>
+                    <td className="py-4 px-5 text-zinc-500">240 seconds</td>
+                  </tr>
+                  <tr className="hover:bg-zinc-800/20 transition-colors">
+                    <td className="py-4 px-5 text-sm text-zinc-300">Price</td>
+                    <td className="py-4 px-5 font-medium text-zinc-200">Free & Open Source</td>
+                    <td className="py-4 px-5 text-zinc-500">Free</td>
+                    <td className="py-4 px-5 text-zinc-500">$15-$30/month</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
