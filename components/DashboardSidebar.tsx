@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   IconLayoutDashboard,
@@ -12,7 +12,12 @@ import {
   IconAntiprism,
   IconFileText,
   IconHistory,
+  IconChevronDown,
+  IconChevronUp,
+  IconSun,
+  IconMoon,
 } from "./Icons";
+import { useTheme } from "@/contexts/ThemeContext";
 
 type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
 
@@ -23,6 +28,8 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarProps) {
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  const [themeOpen, setThemeOpen] = useState(false);
   
   return (
     <aside className="w-56 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0">
@@ -92,6 +99,66 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
           Trashed Projects
         </button>
       </nav>
+      <div className="mt-auto border-t border-[var(--border)] p-2">
+        <button
+          onClick={() => setThemeOpen(!themeOpen)}
+          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+            themeOpen
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+          }`}
+        >
+          {(theme === "light" || theme === "sepia") ? <IconSun /> : <IconMoon />}
+          <span className="capitalize">{theme}</span>
+          <div className="ml-auto">
+            {themeOpen ? <IconChevronUp /> : <IconChevronDown />}
+          </div>
+        </button>
+        {themeOpen && (
+          <div className="space-y-0.5">
+            <button
+              onClick={() => {
+                setTheme("light");
+                setThemeOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
+            >
+              <IconSun />
+              Light
+            </button>
+            <button
+              onClick={() => {
+                setTheme("sepia");
+                setThemeOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
+            >
+              <IconSun />
+              Sepia
+            </button>
+            <button
+              onClick={() => {
+                setTheme("dark");
+                setThemeOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
+            >
+              <IconMoon />
+              Dark
+            </button>
+            <button
+              onClick={() => {
+                setTheme("dark-purple");
+                setThemeOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
+            >
+              <IconMoon />
+              Dark Purple
+            </button>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { mount } from "@wwog/idbfs";
 import JSZip from "jszip";
-import { useTheme } from "@/contexts/ThemeContext";
 import {
   getProjects,
   getRooms,
@@ -32,7 +31,6 @@ type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const signalingServerListRef = useRef<{ handleNewServer: () => void }>(null);
   const [activeNav, setActiveNav] = useState<NavItem>("projects");
   const [viewMode, setViewMode] = useState<"list" | "icons">("list");
@@ -352,8 +350,6 @@ export default function DashboardPage() {
           onBulkRestore={activeNav === "trash" ? handleBulkRestore : undefined}
           isFullscreen={isFullscreen}
           onToggleFullscreen={toggleFullscreen}
-          theme={theme}
-          onThemeChange={(newTheme) => setTheme(newTheme as any)}
         />
         {activeNav === "servers" ? (
           <SignalingServerList 
