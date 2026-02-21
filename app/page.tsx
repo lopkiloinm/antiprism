@@ -132,6 +132,15 @@ export default function DashboardPage() {
             const content = await entry.async("arraybuffer");
             const cleanPath = path.replace(/\/$/, "");
             if (cleanPath) {
+              // Ensure parent directory exists
+              const dirPath = cleanPath.substring(0, cleanPath.lastIndexOf("/"));
+              if (dirPath && dirPath !== cleanPath) {
+                try {
+                  await fs.mkdir(`${basePath}/${dirPath}`);
+                } catch {
+                  // may exist
+                }
+              }
               await fs.writeFile(`${basePath}/${cleanPath}`, content, {
                 mimeType: "application/octet-stream",
               });
