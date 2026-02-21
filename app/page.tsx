@@ -130,7 +130,7 @@ export default function DashboardPage() {
             }
           } else {
             const content = await entry.async("arraybuffer");
-            const cleanPath = path.replace(/^[^/]+\//, "").replace(/\/$/, "");
+            const cleanPath = path.replace(/\/$/, "");
             if (cleanPath) {
               await fs.writeFile(`${basePath}/${cleanPath}`, content, {
                 mimeType: "application/octet-stream",
