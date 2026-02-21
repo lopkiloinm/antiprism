@@ -5,6 +5,7 @@ import { NameModal } from "./NameModal";
 import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconCheckSquare, IconSquare, IconChevronDown, IconChevronUp } from "./Icons";
 import { gitStore, GitStore, type GitChange } from "@/lib/gitStore";
 import type { EditorBufferManager } from "@/lib/editorBufferManager";
+import { getProjects } from "@/lib/projects";
 
 // CSS styles for dashboard-like appearance
 const gitPanelStyles = `
@@ -135,9 +136,28 @@ export function GitPanelReal({
   onCloseFile,
   refreshTrigger = 0,
 }: GitPanelProps) {
-  // Create a stable repository name based on the project name (most stable)
+  // Create a stable repository name based on the project ID to name mapping
   const getStableRepoName = () => {
-    // Priority 1: Use project name (most stable)
+    // Priority 1: Use project ID to get project name (most reliable)
+    if (projectId) {
+      try {
+        const projects = getProjects();
+        const project = projects.find(p => p.id === projectId);
+        if (project && project.name) {
+          // Sanitize project name for use as repository name
+          const sanitizedName = project.name
+            .toLowerCase()
+            .replace(/[^a-z0-9-_]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+          return `git-${sanitizedName}`;
+        }
+      } catch (error) {
+        console.warn('Failed to get project name for ID:', projectId, error);
+      }
+    }
+    
+    // Priority 2: Use project name directly (fallback)
     if (projectName) {
       // Sanitize project name for use as repository name
       const sanitizedName = projectName
@@ -148,7 +168,7 @@ export function GitPanelReal({
       return `git-${sanitizedName}`;
     }
     
-    // Priority 2: Use file system path (stable)
+    // Priority 3: Use file system path (stable)
     if (filePaths.length > 0) {
       const firstPath = filePaths[0];
       const pathMatch = firstPath.match(/\/projects\/([^\/]+)/);
@@ -158,7 +178,7 @@ export function GitPanelReal({
       }
     }
     
-    // Priority 3: Fallback to projectId
+    // Priority 4: Fallback to projectId
     return `git-${projectId}`;
   };
 
@@ -258,6 +278,9 @@ export function GitPanelReal({
     
     setIsLoading(true);
     try {
+      // Check and migrate repository if needed
+      await checkAndMigrateRepository();
+      
       // Check if git repository already exists
       const existingRepo = await gitStore.getRepository(stableRepoName);
       if (existingRepo) {
@@ -270,8 +293,8 @@ export function GitPanelReal({
 
       console.log('🚀 Creating initial commit with all current files...');
       
-      // Create repository first
-      await gitStore.createRepository(stableRepoName);
+      // Create repository first with project ID
+      await gitStore.createRepository(stableRepoName, projectId);
       
       // Get ALL project files for initial commit, not just open tabs
       const allProjectFiles = await getAllProjectFiles(projectId);
@@ -343,6 +366,34 @@ export function GitPanelReal({
       setIsLoading(false);
     }
   };
+
+  // Check and migrate repository if project name changed
+  const checkAndMigrateRepository = useCallback(async () => {
+    if (!projectId || !stableRepoName) return;
+    
+    try {
+      // Get all repositories to find ones with matching project ID
+      const allRepos = await gitStore.getAllRepositories();
+      const projectRepos = allRepos.filter(repo => repo.projectId === projectId);
+      
+      if (projectRepos.length === 0) {
+        // No repository found for this project ID, create new one
+        console.log('🔍 No repository found for project ID, will create new one');
+        return;
+      }
+      
+      // Find repository with different name than expected
+      const repoToMigrate = projectRepos.find(repo => repo.name !== stableRepoName);
+      
+      if (repoToMigrate) {
+        console.log(`🔍 Migrating repository: "${repoToMigrate.name}" -> "${stableRepoName}"`);
+        await gitStore.migrateRepository(repoToMigrate.name, stableRepoName, projectId);
+        console.log('✅ Repository migration completed');
+      }
+    } catch (error) {
+      console.warn('Failed to check/migrate repository:', error);
+    }
+  }, [projectId, stableRepoName]);
 
   const detectFileChanges = async () => {
     if (!stableRepoName || isDetectingChanges) {

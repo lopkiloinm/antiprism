@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { IconFolder, IconFileText, IconUsers, IconTrash2 } from "./Icons";
+import { IconFolder, IconFileText, IconServer, IconTrash2 } from "./Icons";
 
-type NavItem = "all" | "projects" | "rooms" | "trash";
+type NavItem = "all" | "projects" | "servers" | "trash";
 
 interface DashboardSidebarProps {
   activeNav: NavItem;
@@ -43,15 +43,15 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
           Your Projects
         </button>
         <button
-          onClick={() => onNavChange("rooms")}
+          onClick={() => onNavChange("servers")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
-            activeNav === "rooms"
+            activeNav === "servers"
               ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
               : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
           }`}
         >
-          <IconUsers />
-          Your Rooms
+          <IconServer />
+          Signaling Servers
         </button>
         <button
           onClick={() => onNavChange("trash")}

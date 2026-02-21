@@ -11,6 +11,11 @@ interface WebRTCStatusProps {
 export function WebRTCStatus({ provider, config }: WebRTCStatusProps) {
   const [status, setStatus] = useState<"connected" | "disconnected" | "connecting">("disconnected");
   const [peerCount, setPeerCount] = useState(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!provider) return;
@@ -38,6 +43,18 @@ export function WebRTCStatus({ provider, config }: WebRTCStatusProps) {
       }
     };
   }, [provider]);
+
+  // Don't render anything until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="flex items-center gap-2 px-2 py-1 text-xs bg-[color-mix(in_srgb,var(--border)_10%,transparent)] rounded">
+        <span>
+          <IconWifiOff />
+        </span>
+        <span>WebRTC disabled</span>
+      </div>
+    );
+  }
 
   if (!config.enabled) {
     return (

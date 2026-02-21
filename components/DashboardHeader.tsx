@@ -13,18 +13,19 @@ import {
   IconX,
 } from "./Icons";
 
-type NavItem = "all" | "projects" | "rooms" | "trash";
+type NavItem = "all" | "projects" | "servers" | "trash";
 
 const TITLES: Record<NavItem, string> = {
   all: "All Projects",
   projects: "Your Projects",
-  rooms: "Your Rooms",
+  servers: "Signaling Servers",
   trash: "Trashed Projects",
 };
 
 interface DashboardHeaderProps {
   activeNav: NavItem;
   onNewProject: () => void;
+  onNewServer?: () => void;
   onImportZip: () => void;
   onImportFolder: () => void;
   viewMode: "list" | "icons";
@@ -41,6 +42,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({
   activeNav,
   onNewProject,
+  onNewServer,
   onImportZip,
   onImportFolder,
   viewMode,
@@ -72,19 +74,19 @@ export function DashboardHeader({
         <h1 className="text-lg font-semibold text-[var(--foreground)]">{TITLES[activeNav]}</h1>
       </div>
       <div className="flex items-center gap-3">
-        {selectedCount > 0 && (
+        {selectedCount > 0 && activeNav !== "servers" && (
           <div
             className="flex items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--background))] shadow-sm overflow-hidden"
             role="toolbar"
             aria-label="Bulk actions"
           >
-            <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)]">
-              <span className="inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--accent)_30%,transparent)] text-[var(--foreground)] px-2 py-0.5 font-medium">
+            <div className="flex items-center gap-2 px-3 py-1 text-sm text-[var(--foreground)]">
+              <span className="font-medium">
                 {selectedCount} selected
               </span>
               <button
                 onClick={onClearSelection}
-                className="p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                className="px-2 py-1 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
                 title="Clear selection"
               >
                 <IconX />
@@ -134,63 +136,94 @@ export function DashboardHeader({
             placeholder="Search…"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10 pr-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] w-64"
+            className="pl-10 pr-3 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] w-64"
           />
         </div>
-        <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
-          <button
-            onClick={() => onViewModeChange("list")}
-            className={`p-2 ${viewMode === "list" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-            title="List view"
-          >
-            <IconList />
-          </button>
-          <button
-            onClick={() => onViewModeChange("icons")}
-            className={`p-2 border-l border-[var(--border)] ${viewMode === "icons" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-            title="Icons view"
-          >
-            <IconLayoutGrid />
-          </button>
-        </div>
-        <div className="relative" ref={importRef}>
-          <button
-            onClick={() => setImportOpen(!importOpen)}
-            className="px-4 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-2"
-          >
-            Import
-            <IconChevronDown />
-          </button>
-          {importOpen && (
-            <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
+        {activeNav !== "servers" && (
+          <>
+            <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
               <button
-                onClick={() => {
-                  onImportZip();
-                  setImportOpen(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                onClick={() => onViewModeChange("list")}
+                className={`px-2 py-2 ${viewMode === "list" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                title="List view"
               >
-                Import zip
+                <IconList />
               </button>
               <button
-                onClick={() => {
-                  onImportFolder();
-                  setImportOpen(false);
-                }}
-                className="w-full px-4 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                onClick={() => onViewModeChange("icons")}
+                className={`px-2 py-2 border-l border-[var(--border)] ${viewMode === "icons" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                title="Icons view"
               >
-                Import folder
+                <IconLayoutGrid />
               </button>
             </div>
-          )}
-        </div>
-        <button
-          onClick={onNewProject}
-          className="px-4 py-2 text-sm rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium flex items-center gap-2"
-        >
-          <IconPlus />
-          New
-        </button>
+            <div className="relative" ref={importRef}>
+              <button
+                onClick={() => setImportOpen(!importOpen)}
+                className="px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] border border-[var(--border)] flex items-center gap-2"
+              >
+                Import
+                <IconChevronDown />
+              </button>
+              {importOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
+                  <button
+                    onClick={() => {
+                      onImportZip();
+                      setImportOpen(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                  >
+                    Import zip
+                  </button>
+                  <button
+                    onClick={() => {
+                      onImportFolder();
+                      setImportOpen(false);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                  >
+                    Import folder
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={onNewProject}
+              className="px-3 py-2 text-sm rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium flex items-center gap-2"
+            >
+              <IconPlus />
+              New
+            </button>
+          </>
+        )}
+        {activeNav === "servers" && (
+          <>
+            <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">
+              <button
+                onClick={() => onViewModeChange("list")}
+                className={`px-2 py-2 ${viewMode === "list" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                title="List view"
+              >
+                <IconList />
+              </button>
+              <button
+                onClick={() => onViewModeChange("icons")}
+                className={`px-2 py-2 border-l border-[var(--border)] ${viewMode === "icons" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                title="Icons view"
+              >
+                <IconLayoutGrid />
+              </button>
+            </div>
+            <button
+              onClick={onNewServer}
+              className="px-3 py-2 text-sm rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium flex items-center gap-2"
+            >
+              <IconPlus />
+              New
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

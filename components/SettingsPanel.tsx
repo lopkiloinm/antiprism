@@ -43,6 +43,7 @@ import {
 } from "@/lib/settings";
 import { DEFAULT_PROMPT_ASK } from "@/lib/agent/ask";
 import { DEFAULT_PROMPT_CREATE } from "@/lib/agent/create";
+import { Select } from "./Select";
 
 interface SettingsPanelProps {
   latexEngine: LaTeXEngine;
@@ -164,44 +165,32 @@ export function SettingsPanel({
       <Section title="Theme">
         <div className="flex flex-col gap-1.5">
           <Label id="settings-theme" label="Color theme" hint="Choose your preferred color scheme." />
-          <select
+          <Select
             id="settings-theme"
             value={theme}
-            onChange={(e) => {
-              const v = e.target.value as Theme;
-              setTheme(v);
-              onThemeChange(v);
+            onChange={(value) => {
+              const newTheme = value as Theme;
+              setTheme(newTheme);
+              onThemeChange(newTheme);
             }}
-            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] cursor-pointer"
-          >
-            {(Object.keys(THEME_LABELS) as Theme[]).map((t) => (
-              <option key={t} value={t}>
-                {THEME_LABELS[t]}
-              </option>
-            ))}
-          </select>
+            options={Object.entries(THEME_LABELS).map(([value, label]) => ({ value, label }))}
+          />
         </div>
       </Section>
 
       <Section title="Compiler">
         <div className="flex flex-col gap-1.5">
           <Label id="settings-latex-engine" label="LaTeX engine" hint="Engine used to compile .tex to PDF." />
-          <select
+          <Select
             id="settings-latex-engine"
             value={latexEngine}
-            onChange={(e) => {
-              const v = e.target.value as LaTeXEngine;
-              setLatexEngine(v);
-              onLatexEngineChange(v);
+            onChange={(value) => {
+              const newEngine = value as LaTeXEngine;
+              setLatexEngine(newEngine);
+              onLatexEngineChange(newEngine);
             }}
-            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] cursor-pointer"
-          >
-            {(Object.keys(LATEX_ENGINE_LABELS) as LaTeXEngine[]).map((eng) => (
-              <option key={eng} value={eng}>
-                {LATEX_ENGINE_LABELS[eng]}
-              </option>
-            ))}
-          </select>
+            options={Object.entries(LATEX_ENGINE_LABELS).map(([value, label]) => ({ value, label }))}
+          />
         </div>
       </Section>
 

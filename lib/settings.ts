@@ -258,7 +258,7 @@ export interface WebRTCSignalingConfig {
 }
 
 const DEFAULT_WEBRTC_CONFIG: WebRTCSignalingConfig = {
-  enabled: true,
+  enabled: false,
   customServers: [],
   password: "",
   maxConnections: 35,

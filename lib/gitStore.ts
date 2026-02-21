@@ -28,10 +28,13 @@ interface GitChange {
 
 interface GitRepository {
   name: string;
+  projectId?: string; // Store project ID for tracking
   commits: GitCommit[];
   currentBranch: string;
   branches: string[];
   headCommitId?: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 class GitStore {
@@ -67,9 +70,9 @@ class GitStore {
     });
   }
 
-  async createRepository(name: string): Promise<void> {
-    console.log(`🔍 GitStore.createRepository called with name: "${name}"`);
-    gitLogger.info("createRepository called", { name });
+  async createRepository(name: string, projectId?: string): Promise<void> {
+    console.log(`🔍 GitStore.createRepository called with name: "${name}", projectId: "${projectId}"`);
+    gitLogger.info("createRepository called", { name, projectId });
     if (!this.db) await this.init();
     
     // Check if repository already exists
@@ -83,11 +86,15 @@ class GitStore {
     
     console.log(`🔍 GitStore.createRepository - creating new repository: ${name}`);
     return new Promise((resolve, reject) => {
+      const now = new Date();
       const repository: GitRepository = {
         name,
+        projectId,
         commits: [],
         currentBranch: 'main',
         branches: ['main'],
+        createdAt: now,
+        updatedAt: now,
       };
       
       const tx = this.db!.transaction([this.storeName], 'readwrite');
@@ -95,16 +102,82 @@ class GitStore {
       const request = store.put(repository);
       
       request.onerror = () => {
-        gitLogger.error("createRepository put failed", { name, error: String(request.error) });
+        gitLogger.error("createRepository put failed", { name, projectId, error: String(request.error) });
         reject(request.error);
       };
       request.onsuccess = () => {
-        gitLogger.info("createRepository success", { name });
+        gitLogger.info("createRepository success", { name, projectId });
         resolve();
       };
+    });
+  }
+
+  async getRepositoryByProjectId(projectId: string): Promise<GitRepository | null> {
+    if (!this.db) await this.init();
+    gitLogger.info("getRepositoryByProjectId called", { projectId });
+    
+    const allRepos = await this.getAllRepositories();
+    const repo = allRepos.find(r => r.projectId === projectId);
+    
+    gitLogger.info("getRepositoryByProjectId result", { projectId, found: !!repo, repoName: repo?.name });
+    return repo || null;
+  }
+
+  async migrateRepository(oldName: string, newName: string, projectId?: string): Promise<void> {
+    console.log(`🔍 GitStore.migrateRepository called: "${oldName}" -> "${newName}"`);
+    gitLogger.info("migrateRepository called", { oldName, newName, projectId });
+    if (!this.db) await this.init();
+    
+    // Get the old repository
+    const oldRepo = await this.getRepository(oldName);
+    if (!oldRepo) {
+      console.log(`Repository ${oldName} not found, cannot migrate`);
+      gitLogger.warn("migrateRepository failed; old repo not found", { oldName });
+      return;
+    }
+    
+    // Check if new repository already exists
+    const newRepo = await this.getRepository(newName);
+    if (newRepo) {
+      console.log(`Repository ${newName} already exists, cannot migrate`);
+      gitLogger.warn("migrateRepository failed; new repo already exists", { newName });
+      return;
+    }
+    
+    // Create new repository with updated data
+    const migratedRepo: GitRepository = {
+      ...oldRepo,
+      name: newName,
+      projectId: projectId || oldRepo.projectId,
+      updatedAt: new Date(),
+    };
+    
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction([this.storeName], 'readwrite');
+      const store = tx.objectStore(this.storeName);
       
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      // Add new repository
+      const addRequest = store.put(migratedRepo);
+      
+      addRequest.onerror = () => {
+        gitLogger.error("migrateRepository add failed", { oldName, newName, error: String(addRequest.error) });
+        reject(addRequest.error);
+      };
+      
+      addRequest.onsuccess = () => {
+        // Delete old repository
+        const deleteRequest = store.delete(oldName);
+        
+        deleteRequest.onerror = () => {
+          gitLogger.error("migrateRepository delete failed", { oldName, error: String(deleteRequest.error) });
+          reject(deleteRequest.error);
+        };
+        
+        deleteRequest.onsuccess = () => {
+          gitLogger.info("migrateRepository success", { oldName, newName });
+          resolve();
+        };
+      };
     });
   }
 

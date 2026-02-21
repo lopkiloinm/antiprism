@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Project } from "@/lib/projects";
-import { IconDownload, IconRestore, IconTrash2, IconCheckSquare, IconSquare } from "./Icons";
+import { IconDownload, IconRestore, IconTrash2, IconCheckSquare, IconSquare, IconPencil } from "./Icons";
 
 interface ProjectListProps {
   items: Project[];
@@ -10,6 +10,7 @@ interface ProjectListProps {
   onDelete?: (item: Project) => void;
   onDownload?: (item: Project) => void;
   onRestore?: (item: Project) => void;
+  onRename?: (item: Project, newName: string) => void;
   deleteTitle?: string;
   downloadTitle?: string;
   selectedItems: string[];
@@ -22,6 +23,7 @@ export function ProjectList({
   onDelete,
   onDownload,
   onRestore,
+  onRename,
   deleteTitle = "Move to trash",
   downloadTitle = "Download ZIP",
   selectedItems,
@@ -50,16 +52,15 @@ export function ProjectList({
                   const next = selectedItems.filter((id) => id !== item.id);
                   onSelectionChange(next);
                 }}
-                className="w-full flex items-center justify-between px-4 py-3 bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border-l-2 border-[color-mix(in_srgb,var(--accent)_65%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors cursor-pointer group"
+                className="w-full flex items-center justify-between px-4 py-3 bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
                   <button
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      const newSelection = isSelected
-                        ? selectedItems.filter(id => id !== item.id)
-                        : [...selectedItems, item.id];
+                      // When item is selected, clicking checkbox should deselect it
+                      const newSelection = selectedItems.filter(id => id !== item.id);
                       onSelectionChange?.(newSelection);
                     }}
                     className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] transition-colors"
@@ -74,6 +75,19 @@ export function ProjectList({
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
+                  {onRename && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onRename(item, item.name);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity"
+                      title="Rename"
+                    >
+                      <IconPencil />
+                    </button>
+                  )}
                   {!item.isRoom && onRestore && (
                     <button
                       onClick={(e) => {
@@ -126,9 +140,8 @@ export function ProjectList({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    const newSelection = selectedItems.includes(item.id)
-                      ? selectedItems.filter(id => id !== item.id)
-                      : [...selectedItems, item.id];
+                    // When item is not selected, clicking checkbox should select it
+                    const newSelection = [...selectedItems, item.id];
                     onSelectionChange?.(newSelection);
                   }}
                   className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
@@ -143,6 +156,19 @@ export function ProjectList({
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                {onRename && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onRename(item, item.name);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity"
+                    title="Rename"
+                  >
+                    <IconPencil />
+                  </button>
+                )}
                 {!item.isRoom && onRestore && (
                   <button
                     onClick={(e) => {
@@ -202,60 +228,21 @@ export function ProjectList({
                   const next = selectedItems.filter((id) => id !== item.id);
                   onSelectionChange(next);
                 }}
-                className="flex flex-col items-center p-4 rounded-lg border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors cursor-pointer group relative"
+                className="flex flex-col items-center p-4 rounded-lg border border-[color-mix(in_srgb,var(--accent)_22%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors cursor-pointer group relative"
               >
                 <div className="absolute top-2 left-2">
                   <button
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      const newSelection = isSelected
-                        ? selectedItems.filter(id => id !== item.id)
-                        : [...selectedItems, item.id];
-                      onSelectionChange?.(newSelection);
+                      // When item is selected, clicking checkbox should deselect it
+                      const newSelection = selectedItems.filter(id => id !== item.id);
+                      onSelectionChange(newSelection);
                     }}
                     className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] transition-colors"
                   >
                     {isSelected ? <IconCheckSquare /> : <IconSquare />}
                   </button>
-                </div>
-                <div className="absolute top-2 right-2 flex items-center gap-1">
-                  {!item.isRoom && onRestore && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onRestore(item);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-opacity"
-                      title="Restore"
-                    >
-                      <IconRestore />
-                    </button>
-                  )}
-                  {!item.isRoom && !onRestore && onDownload && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onDownload(item);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-opacity"
-                      title={downloadTitle}
-                    >
-                      <IconDownload />
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onDelete(item);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-opacity"
-                      title={deleteTitle}
-                    >
-                      <IconTrash2 />
-                    </button>
-                  )}
                 </div>
                 <div className="flex flex-col items-center mt-8">
                   <span className="text-sm font-medium text-[var(--foreground)] text-center truncate w-full">
@@ -280,10 +267,9 @@ export function ProjectList({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    const newSelection = selectedItems.includes(item.id)
-                      ? selectedItems.filter(id => id !== item.id)
-                      : [...selectedItems, item.id];
-                    onSelectionChange?.(newSelection);
+                    // When item is not selected, clicking checkbox should select it
+                    const newSelection = [...selectedItems, item.id];
+                    onSelectionChange(newSelection);
                   }}
                   className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
                 >
@@ -291,6 +277,19 @@ export function ProjectList({
                 </button>
               </div>
               <div className="absolute top-2 right-2 flex items-center gap-1">
+                {onRename && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onRename(item, item.name);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-opacity"
+                    title="Rename"
+                  >
+                    <IconPencil />
+                  </button>
+                )}
                 {!item.isRoom && onRestore && (
                   <button
                     onClick={(e) => {

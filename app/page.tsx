@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { mount } from "@wwog/idbfs";
 import JSZip from "jszip";
@@ -13,6 +13,8 @@ import {
   deleteProject,
   trashProject,
   restoreProject,
+  renameProject,
+  renameRoom,
   deleteRoom,
   deleteProjectDataFromStorage,
 } from "@/lib/projects";
@@ -20,11 +22,14 @@ import type { Project } from "@/lib/projects";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { ProjectList } from "@/components/ProjectList";
+import { SignalingServerList } from "@/components/SignalingServerList";
+import { NameModal } from "@/components/NameModal";
 
-type NavItem = "all" | "projects" | "rooms" | "trash";
+type NavItem = "all" | "projects" | "servers" | "trash";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const signalingServerListRef = useRef<{ handleNewServer: () => void }>(null);
   const [activeNav, setActiveNav] = useState<NavItem>("projects");
   const [viewMode, setViewMode] = useState<"list" | "icons">("list");
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,7 +42,7 @@ export default function DashboardPage() {
     let list: Project[];
     if (activeNav === "all") list = getAllItems();
     else if (activeNav === "projects") list = getProjects();
-    else if (activeNav === "rooms") list = getRooms();
+    else if (activeNav === "servers") list = []; // Servers handled by SignalingServerList
     else list = getTrashedProjects().map((p) => ({ ...p, isRoom: false }));
 
     if (searchQuery.trim()) {
@@ -50,6 +55,15 @@ export default function DashboardPage() {
   useEffect(() => {
     loadItems();
   }, [loadItems, refresh]);
+
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [projectToRename, setProjectToRename] = useState<Project | null>(null);
+
+  const handleNewServer = () => {
+    if (signalingServerListRef.current) {
+      signalingServerListRef.current.handleNewServer();
+    }
+  };
 
   const handleNewProject = () => {
     const project = createProject("Untitled Project");
@@ -271,6 +285,24 @@ export default function DashboardPage() {
   };
 
 
+  const handleRenameProject = (project: Project, newName: string) => {
+    setProjectToRename(project);
+    setRenameModalOpen(true);
+  };
+
+  const handleRenameConfirm = (newName: string) => {
+    if (!projectToRename) return;
+    
+    if (projectToRename.isRoom) {
+      renameRoom(projectToRename.id, newName);
+    } else {
+      renameProject(projectToRename.id, newName);
+    }
+    setRefresh((r) => r + 1); // Refresh the project list
+    setRenameModalOpen(false);
+    setProjectToRename(null);
+  };
+
   return (
     <div className="flex h-screen w-screen bg-[var(--background)] text-[var(--foreground)]">
       <DashboardSidebar activeNav={activeNav} onNavChange={setActiveNav} />
@@ -278,6 +310,7 @@ export default function DashboardPage() {
         <DashboardHeader
           activeNav={activeNav}
           onNewProject={handleNewProject}
+          onNewServer={handleNewServer}
           onImportZip={handleImportZip}
           onImportFolder={handleImportFolder}
           viewMode={viewMode}
@@ -290,17 +323,38 @@ export default function DashboardPage() {
           onBulkDownload={activeNav === "trash" ? undefined : handleBulkDownload}
           onBulkRestore={activeNav === "trash" ? handleBulkRestore : undefined}
         />
-        <ProjectList
-          items={items}
-          viewMode={viewMode}
-          onDelete={handleDelete}
-          onDownload={activeNav === "trash" ? undefined : handleDownloadProject}
-          onRestore={activeNav === "trash" ? handleRestoreProject : undefined}
-          deleteTitle={activeNav === "trash" ? "Delete permanently" : "Move to trash"}
-          selectedItems={selectedItems}
-          onSelectionChange={handleSelectionChange}
-        />
+        {activeNav === "servers" ? (
+          <SignalingServerList 
+            ref={signalingServerListRef}
+            searchQuery={searchQuery} 
+            viewMode={viewMode}
+            onNewServer={handleNewServer}
+          />
+        ) : (
+          <ProjectList
+            items={items}
+            viewMode={viewMode}
+            onDelete={handleDelete}
+            onDownload={activeNav === "trash" ? undefined : handleDownloadProject}
+            onRestore={activeNav === "trash" ? handleRestoreProject : undefined}
+            onRename={handleRenameProject}
+            deleteTitle={activeNav === "trash" ? "Delete permanently" : "Move to trash"}
+            selectedItems={selectedItems}
+            onSelectionChange={handleSelectionChange}
+          />
+        )}
       </div>
+      <NameModal
+        isOpen={renameModalOpen}
+        title={projectToRename?.isRoom ? "Rename room" : "Rename project"}
+        initialValue={projectToRename?.name || ""}
+        placeholder="Enter new name"
+        onClose={() => {
+          setRenameModalOpen(false);
+          setProjectToRename(null);
+        }}
+        onConfirm={handleRenameConfirm}
+      />
     </div>
   );
 }

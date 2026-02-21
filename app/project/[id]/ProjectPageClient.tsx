@@ -8,7 +8,7 @@ import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
-import { getWebRTCSignalingConfig, type WebRTCSignalingConfig } from "@/lib/settings";
+import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig } from "@/lib/settings";
 import { FileTree } from "@/components/FileTree";
 import { FileActions } from "@/components/FileActions";
 import { FileTabs, SETTINGS_TAB_PATH } from "@/components/FileTabs";
@@ -27,6 +27,7 @@ import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconT
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { WebRTCStatus } from "@/components/WebRTCStatus";
 import { ToolsPanel } from "@/components/ToolsPanel";
+import { ShareModal } from "@/components/ShareModal";
 import { diffLines } from "diff";
 import { ResizableDivider } from "@/components/ResizableDivider";
 import { GitPanelReal, getAllProjectFiles } from "@/components/GitPanelReal";
@@ -170,12 +171,14 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
   >([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCompiling, setIsCompiling] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [latexReady, setLatexReady] = useState(false);
   const [typstReady, setTypstReady] = useState(false);
   const compilerReady = latexReady && typstReady;
-  const [isCompiling, setIsCompiling] = useState(false);
   const [lastCompileMs, setLastCompileMs] = useState<number | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
   const [initError, setInitError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [sidebarTab, setSidebarTab] = useState<"files" | "chats" | "git">("files");
@@ -644,6 +647,38 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     } else {
       setProjectName("Project");
       setIsRoom(false);
+    }
+  }, [id]);
+
+  // Handle URL parameters for shared links
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const serverParam = urlParams.get('server');
+      
+      if (serverParam) {
+        // Clean up server URL (remove trailing slash)
+        const cleanServerParam = serverParam.replace(/\/$/, '');
+        
+        // Automatically set the signaling server from URL parameter
+        const currentConfig = getWebRTCSignalingConfig();
+        
+        // Only update if the server is not already in the custom servers
+        if (!currentConfig.customServers.includes(cleanServerParam)) {
+          const updatedConfig = {
+            ...currentConfig,
+            customServers: [...currentConfig.customServers, cleanServerParam],
+            enabled: true
+          };
+          
+          setWebRTCSignalingConfig(updatedConfig);
+          console.log('🔗 Automatically configured signaling server from shared link:', cleanServerParam);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to handle URL parameters:', error);
     }
   }, [id]);
 
@@ -2704,7 +2739,46 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
   const handleShare = () => {
     if (typeof window === "undefined") return;
-    navigator.clipboard?.writeText(window.location.href);
+    
+    try {
+      // Get current WebRTC signaling configuration
+      const webrtcConfig = getWebRTCSignalingConfig();
+      
+      // Find the first enabled signaling server
+      const workingServer = webrtcConfig.customServers.length > 0 
+        ? webrtcConfig.customServers[0].replace(/\/$/, '') // Remove trailing slash
+        : null;
+      
+      // Build share URL with project ID and signaling server
+      const baseUrl = window.location.origin + window.location.pathname;
+      const urlParams = new URLSearchParams();
+      
+      // Always include project ID
+      urlParams.set('project', id);
+      
+      // Include signaling server if available and WebRTC is enabled
+      if (webrtcConfig.enabled && workingServer) {
+        urlParams.set('server', workingServer);
+      }
+      
+      const shareUrl = `${baseUrl}?${urlParams.toString()}`;
+      
+      // Set share URL and open modal
+      setShareUrl(shareUrl);
+      setShareModalOpen(true);
+      
+      // Optional: Show success message with both encoded and decoded versions
+      console.log('Share URL generated (encoded):', shareUrl);
+      console.log('Share URL (decoded):', decodeURIComponent(shareUrl));
+      console.log('Project ID:', id);
+      console.log('Signaling Server:', workingServer);
+      
+    } catch (error) {
+      console.error('Failed to generate share URL:', error);
+      // Fallback to basic URL
+      setShareUrl(window.location.href);
+      setShareModalOpen(true);
+    }
   };
 
   const openOrSelectSettingsTab = useCallback(() => {
@@ -3418,6 +3492,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           </div>
         </section>
       </main>
+      <ShareModal
+        isOpen={shareModalOpen}
+        shareUrl={shareUrl}
+        projectName={projectName}
+        onClose={() => setShareModalOpen(false)}
+      />
     </div>
   );
 }
