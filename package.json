@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "npx serve@latest out",
     "lint": "next lint",
+    "signaling": "node signaling-server.js",
     "download-latex-assets": "npx texlyre-busytex download-assets ./public/core",
     "download-wasm-assets": "npx wasm-latex-tools copy-assets ./public/core",
     "test": "vitest run",

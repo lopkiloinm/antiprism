@@ -722,6 +722,15 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         if (webrtcConfig.enabled) {
           if (webrtcConfig.customServers.length > 0) {
             providerOptions.signaling = webrtcConfig.customServers;
+          } else {
+            // Use multiple public signaling servers for redundancy
+            providerOptions.signaling = [
+              'ws://localhost:4444', // Local server for testing
+              'wss://signaling.yjs.dev',
+              'wss://y-webrtc-signaling-eu.herokuapp.com', 
+              'wss://y-webrtc-signaling-us.herokuapp.com',
+              'wss://y-webrtc-eu.fly.dev'
+            ];
           }
           if (webrtcConfig.password) {
             providerOptions.password = webrtcConfig.password;
@@ -738,7 +747,8 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           roomId: id, 
           docGuid: doc.guid,
           enabled: webrtcConfig.enabled,
-          customServers: webrtcConfig.customServers.length,
+          signalingServers: providerOptions.signaling,
+          signalingServerCount: providerOptions.signaling.length,
           hasPassword: !!webrtcConfig.password,
           maxConnections: webrtcConfig.maxConnections
         });
