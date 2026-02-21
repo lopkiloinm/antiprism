@@ -8,6 +8,7 @@ import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
+import { getWebRTCSignalingConfig, type WebRTCSignalingConfig } from "@/lib/settings";
 import { FileTree } from "@/components/FileTree";
 import { FileActions } from "@/components/FileActions";
 import { FileTabs, SETTINGS_TAB_PATH } from "@/components/FileTabs";
@@ -22,8 +23,9 @@ import { BigChatMessage } from "@/components/BigChatMessage";
 import { SmallChatMessage } from "@/components/SmallChatMessage";
 import { ChatTelemetry } from "@/components/ChatTelemetry";
 import { ProjectDropdown } from "@/components/ProjectDropdown";
-import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload } from "@/components/Icons";
+import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload, IconWifi, IconWifiOff, IconLock, IconUsers } from "@/components/Icons";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { WebRTCStatus } from "@/components/WebRTCStatus";
 import { ToolsPanel } from "@/components/ToolsPanel";
 import { diffLines } from "diff";
 import { ResizableDivider } from "@/components/ResizableDivider";
@@ -185,6 +187,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [summaryContent, setSummaryContent] = useState("");
   const [summaryData, setSummaryData] = useState<any>(null);
   const [isFormatting, setIsFormatting] = useState(false);
+  const [webrtcConfig, setWebrtcConfig] = useState<WebRTCSignalingConfig>(getWebRTCSignalingConfig());
   const fsRef = useRef<any>(null);
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [editorFraction, setEditorFraction] = useState(0.5);
@@ -712,8 +715,33 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         
         // Create WebRTC provider for collaboration (shared across all files)
         const doc = new Y.Doc();
-        const prov = new WebrtcProvider(id, doc);
-        yjsLogger.info("Created WebRTC provider", { roomId: id, docGuid: doc.guid });
+        const webrtcConfig = getWebRTCSignalingConfig();
+        
+        // Configure WebRTC provider based on user settings
+        const providerOptions: any = {};
+        if (webrtcConfig.enabled) {
+          if (webrtcConfig.customServers.length > 0) {
+            providerOptions.signaling = webrtcConfig.customServers;
+          }
+          if (webrtcConfig.password) {
+            providerOptions.password = webrtcConfig.password;
+          }
+          providerOptions.maxConns = webrtcConfig.maxConnections;
+        } else {
+          // Disable WebRTC by setting empty signaling array
+          providerOptions.signaling = [];
+          providerOptions.maxConns = 0;
+        }
+        
+        const prov = new WebrtcProvider(id, doc, providerOptions);
+        yjsLogger.info("Created WebRTC provider", { 
+          roomId: id, 
+          docGuid: doc.guid,
+          enabled: webrtcConfig.enabled,
+          customServers: webrtcConfig.customServers.length,
+          hasPassword: !!webrtcConfig.password,
+          maxConnections: webrtcConfig.maxConnections
+        });
         prov.on("status", (event: any) => {
           yjsLogger.info("Global WebRTC provider status", {
             roomId: id,
@@ -2699,8 +2727,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       <aside style={{ width: sidebarWidth, minWidth: sidebarWidth > 0 ? 180 : 0, maxWidth: 480, transition: "width 0.15s ease-out" }} className="border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden">
         <div className="h-12 flex items-center justify-between gap-2 px-3 border-b border-[var(--border)] shrink-0">
           <Link href="/" className="text-xs text-[var(--muted)] hover:text-[var(--foreground)] truncate min-w-0">
-            ← Dashboard
+            ←
           </Link>
+          <WebRTCStatus provider={provider} config={webrtcConfig} />
           <button
             onClick={openOrSelectSettingsTab}
             className="shrink-0 text-[var(--muted)] hover:text-[var(--foreground)] p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
@@ -3082,6 +3111,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           onAiTopPChange={setAiTopPState}
                           onPromptAskChange={setPromptAskState}
                           onPromptCreateChange={setPromptCreateState}
+                          onWebRTCSignalingConfigChange={setWebrtcConfig}
                           onResetRequested={() => {
                             setLatexEngineState(getLatexEngine());
                             setEditorFontSizeState(getEditorFontSize());
@@ -3094,6 +3124,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                             setAiTopPState(getAiTopP());
                             setPromptAskState(getPromptAsk());
                             setPromptCreateState(getPromptCreate());
+                            setWebrtcConfig(getWebRTCSignalingConfig());
                           }}
                         />
                       </div>

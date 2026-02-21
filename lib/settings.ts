@@ -249,6 +249,56 @@ export const THEME_LABELS: Record<Theme, string> = {
   sepia: "Sepia",
 };
 
+// --- WebRTC Signaling ---
+export interface WebRTCSignalingConfig {
+  enabled: boolean;
+  customServers: string[];
+  password: string;
+  maxConnections: number;
+}
+
+const DEFAULT_WEBRTC_CONFIG: WebRTCSignalingConfig = {
+  enabled: true,
+  customServers: [],
+  password: "",
+  maxConnections: 35,
+};
+
+export function getWebRTCSignalingConfig(): WebRTCSignalingConfig {
+  try {
+    const stored = localStorage.getItem(PREFIX + "webrtcSignalingConfig");
+    if (!stored) return DEFAULT_WEBRTC_CONFIG;
+    const config = JSON.parse(stored);
+    return {
+      enabled: Boolean(config.enabled),
+      customServers: Array.isArray(config.customServers) ? config.customServers : [],
+      password: String(config.password || ""),
+      maxConnections: Number(config.maxConnections) || DEFAULT_WEBRTC_CONFIG.maxConnections,
+    };
+  } catch {
+    return DEFAULT_WEBRTC_CONFIG;
+  }
+}
+
+export function setWebRTCSignalingConfig(config: WebRTCSignalingConfig): void {
+  if (typeof window === "undefined") return;
+  try {
+    const validConfig = {
+      enabled: Boolean(config.enabled),
+      customServers: Array.isArray(config.customServers) ? config.customServers.filter(s => typeof s === 'string' && s.trim()) : [],
+      password: String(config.password || ""),
+      maxConnections: Math.max(1, Math.min(100, Number(config.maxConnections) || DEFAULT_WEBRTC_CONFIG.maxConnections)),
+    };
+    localStorage.setItem(PREFIX + "webrtcSignalingConfig", JSON.stringify(validConfig));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function resetWebRTCSignalingToDefaults(): void {
+  setWebRTCSignalingConfig(DEFAULT_WEBRTC_CONFIG);
+}
+
 // --- Reset all to defaults ---
 export function resetAllSettingsToDefaults(): void {
   if (typeof window === "undefined") return;

@@ -36,7 +36,9 @@ import {
   Maximize2,
   Minimize2,
   Shield,
+  Wifi,
   WifiOff,
+  Lock,
   Zap,
   LayoutDashboard,
   Eye,
@@ -102,7 +104,9 @@ export const IconSettings = () => <Settings {...iconProps} />;
 export const IconMaximize2 = () => <Maximize2 {...iconProps} />;
 export const IconMinimize2 = () => <Minimize2 {...iconProps} />;
 export const IconShield = () => <Shield {...iconProps} />;
+export const IconWifi = () => <Wifi {...iconProps} />;
 export const IconWifiOff = () => <WifiOff {...iconProps} />;
+export const IconLock = () => <Lock {...iconProps} />;
 export const IconZap = () => <Zap {...iconProps} />;
 export const IconLayoutDashboard = () => <LayoutDashboard {...iconProps} />;
 export const IconEye = () => <Eye {...iconProps} />;
