@@ -1,7 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { IconFolder, IconFileText, IconServer, IconTrash2 } from "./Icons";
+import { useRouter } from "next/navigation";
+import {
+  IconLayoutDashboard,
+  IconFolder,
+  IconTrash2,
+  IconSettings,
+  IconPlus,
+  IconServer,
+  IconAntiprism,
+  IconFileText,
+} from "./Icons";
 
 type NavItem = "all" | "projects" | "servers" | "trash";
 
@@ -11,14 +21,19 @@ interface DashboardSidebarProps {
 }
 
 export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarProps) {
+  const router = useRouter();
+  
   return (
     <aside className="w-56 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0">
-      <Link
-        href="/features"
-        className="h-14 flex items-center px-4 font-semibold text-lg border-b border-[var(--border)] text-[var(--foreground)] shrink-0 hover:opacity-90 transition-opacity"
-      >
-        Antiprism
-      </Link>
+      <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-[var(--border)] relative z-10">
+        <div 
+          onClick={() => router.push("/features")}
+          className="flex items-center gap-2 px-1 hover:opacity-80 transition-opacity cursor-pointer"
+        >
+          <IconAntiprism className="w-5 h-5 text-[var(--foreground)]" />
+          <span className="font-semibold text-[var(--foreground)]">Antiprism</span>
+        </div>
+      </div>
       <nav className="p-2 space-y-0.5">
         <button
           onClick={() => onNavChange("all")}

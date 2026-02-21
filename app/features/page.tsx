@@ -14,6 +14,7 @@ import {
   IconGitBranch,
   IconCheckSquare,
   IconX,
+  IconAntiprism,
 } from "@/components/Icons";
 
 type MockupKey =
@@ -109,7 +110,8 @@ export default function FeaturesPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <Link href="/features" className="font-semibold tracking-tight">
+          <Link href="/features" className="flex items-center gap-2 font-semibold tracking-tight">
+            <IconAntiprism className="w-5 h-5" />
             Antiprism
           </Link>
           <nav className="flex items-center gap-2">
