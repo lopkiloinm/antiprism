@@ -3,16 +3,20 @@
 import { useState, useRef, useEffect } from "react";
 import {
   IconSearch,
-  IconList,
-  IconLayoutGrid,
-  IconChevronDown,
   IconPlus,
-  IconTrash2,
-  IconDownload,
-  IconRotateCcw,
-  IconX,
+  IconUpload,
+  IconFolderOpen,
+  IconLayoutGrid,
+  IconList,
   IconMaximize2,
   IconMinimize2,
+  IconTrash2,
+  IconDownload,
+  IconRestore,
+  IconRotateCcw,
+  IconChevronDown,
+  IconMenu,
+  IconX,
 } from "./Icons";
 
 type NavItem = "all" | "projects" | "recently-opened" | "templates" | "servers" | "trash";
@@ -43,6 +47,8 @@ interface DashboardHeaderProps {
   onBulkRestore?: () => void;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  isMobile?: boolean;
+  onMenuClick?: () => void;
 }
 
 export function DashboardHeader({
@@ -62,9 +68,13 @@ export function DashboardHeader({
   onBulkRestore,
   isFullscreen = false,
   onToggleFullscreen,
+  isMobile = false,
+  onMenuClick,
 }: DashboardHeaderProps) {
   const [importOpen, setImportOpen] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const importRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -76,12 +86,88 @@ export function DashboardHeader({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Auto-focus search input when expanded on mobile
+  useEffect(() => {
+    if (searchExpanded && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchExpanded]);
+
   return (
-    <div className="h-14 flex items-center justify-between px-4 border-b border-[var(--border)] bg-[var(--background)] shrink-0">
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold text-[var(--foreground)]">{TITLES[activeNav]}</h1>
+    <div className="h-14 flex items-center justify-between px-4 border-b border-[var(--border)] bg-[var(--background)] shrink-0 relative">
+      {/* Mobile Expanded Search Overlay */}
+      {isMobile && searchExpanded && (
+        <div className="absolute inset-0 z-10 flex items-center bg-[var(--background)] px-4 gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none">
+              <IconSearch />
+            </span>
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search…"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pl-10 pr-3 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
+            />
+          </div>
+          <button 
+            onClick={() => {
+              setSearchExpanded(false);
+              onSearchChange("");
+            }}
+            className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+          >
+            <IconX />
+          </button>
+        </div>
+      )}
+
+      <div className={`flex-1 flex items-center justify-between ${isMobile && searchExpanded ? 'invisible' : ''}`}>
+        <div className="flex items-center gap-3">
+          {isMobile && onMenuClick && (
+            <button
+              onClick={onMenuClick}
+              className="p-2 -ml-2 text-[var(--muted)] hover:text-[var(--foreground)] rounded-md transition-colors"
+            >
+              <IconMenu />
+            </button>
+          )}
+          <h1 className="text-xl font-semibold capitalize tracking-tight">
+            {TITLES[activeNav]}
+          </h1>
+        </div>
+        {isMobile && !searchExpanded && (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setSearchExpanded(true)}
+              className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+            >
+              <IconSearch />
+            </button>
+            <button
+              onClick={activeNav === "servers" ? onNewServer : onNewProject}
+              className="flex items-center gap-2 p-2 rounded-md bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors shadow-sm"
+            >
+              <IconPlus />
+            </button>
+          </div>
+        )}
       </div>
-      <div className="flex items-center gap-3">
+      <div className={`flex items-center gap-3 ${isMobile ? 'hidden' : ''}`}>
+        {/* Search */}
+        <div className={`relative ${isMobile ? 'flex-1' : 'w-64'}`}>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none">
+            <IconSearch />
+          </span>
+          <input
+            type="text"
+            placeholder="Search…"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-full pl-10 pr-3 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
+          />
+        </div>
         {selectedCount > 0 && activeNav !== "servers" && (
           <div
             className="flex items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--background))] shadow-sm overflow-hidden"

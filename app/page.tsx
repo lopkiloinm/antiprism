@@ -27,11 +27,15 @@ import { ProjectList } from "@/components/ProjectList";
 import { SignalingServerList } from "@/components/SignalingServerList";
 import { NameModal } from "@/components/NameModal";
 import { TemplateGallery } from "@/components/TemplateGallery";
+import { useResponsive } from "@/hooks/useResponsive";
+import { IconLayoutDashboard, IconFolder, IconFileText, IconHistory, IconCopy, IconServer, IconTrash2, IconMenu, IconX } from "@/components/Icons";
 
 type NavItem = "all" | "projects" | "recently-opened" | "templates" | "servers" | "trash";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { isMobile } = useResponsive();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const signalingServerListRef = useRef<{ handleNewServer: () => void }>(null);
   const [activeNav, setActiveNav] = useState<NavItem>("projects");
   const [viewMode, setViewMode] = useState<"list" | "icons">("list");
@@ -41,6 +45,11 @@ export default function DashboardPage() {
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Close mobile menu when nav changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [activeNav]);
 
   const loadItems = useCallback(() => {
     let list: Project[];
@@ -358,26 +367,47 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[var(--background)] text-[var(--foreground)]">
-      <DashboardSidebar activeNav={activeNav} onNavChange={setActiveNav} />
-      <div className="flex-1 flex flex-col min-w-0">
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] relative">
+      {/* Mobile Sidebar Overlay */}
+      {isMobile && mobileMenuOpen && (
+        <div 
+          className="absolute inset-0 bg-black/50 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={`
+        ${isMobile ? 'absolute inset-y-0 left-0 z-50 transform transition-transform duration-300' : ''}
+        ${isMobile && !mobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}
+      `}>
+        <DashboardSidebar
+          activeNav={activeNav}
+          onNavChange={setActiveNav}
+          isMobile={isMobile}
+        />
+      </div>
+
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 relative">
         <DashboardHeader
           activeNav={activeNav}
-          onNewProject={handleNewProject}
-          onNewServer={handleNewServer}
-          onImportZip={handleImportZip}
-          onImportFolder={handleImportFolder}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onNewProject={handleNewProject}
+          onImportZip={handleImportZip}
+          onImportFolder={handleImportFolder}
+          onNewServer={handleNewServer}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
           selectedCount={selectedItems.length}
           onClearSelection={handleClearSelection}
           onBulkDelete={handleBulkDelete}
-          onBulkDownload={activeNav === "trash" ? undefined : handleBulkDownload}
-          onBulkRestore={activeNav === "trash" ? handleBulkRestore : undefined}
-          isFullscreen={isFullscreen}
-          onToggleFullscreen={toggleFullscreen}
+          onBulkDownload={handleBulkDownload}
+          onBulkRestore={handleBulkRestore}
+          isMobile={isMobile}
+          onMenuClick={() => setMobileMenuOpen(true)}
         />
         {activeNav === "servers" ? (
           <SignalingServerList 
@@ -401,7 +431,7 @@ export default function DashboardPage() {
             onSelectionChange={handleSelectionChange}
           />
         )}
-      </div>
+      </main>
       <NameModal
         isOpen={renameModalOpen}
         title={projectToRename?.isRoom ? "Rename room" : "Rename project"}

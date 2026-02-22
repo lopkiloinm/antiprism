@@ -23,11 +23,12 @@ import { useTheme } from "@/contexts/ThemeContext";
 type NavItem = "all" | "projects" | "recently-opened" | "servers" | "templates" | "trash";
 
 interface DashboardSidebarProps {
-  activeNav: NavItem;
-  onNavChange: (nav: NavItem) => void;
+  activeNav: string;
+  onNavChange: (nav: any) => void;
+  isMobile?: boolean;
 }
 
-export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarProps) {
+export function DashboardSidebar({ activeNav, onNavChange, isMobile = false }: DashboardSidebarProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [themeOpen, setThemeOpen] = useState(false);

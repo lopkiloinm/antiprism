@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
+import dynamic from "next/dynamic.js";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { mount } from "@wwog/idbfs";
@@ -2873,6 +2873,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           <div className="h-full relative pb-10">
             <FileTree
               fs={fs}
+              basePath={basePath}
               currentPath={currentPath}
               refreshTrigger={refreshTrigger}
               onFileSelect={handleTabSelect}

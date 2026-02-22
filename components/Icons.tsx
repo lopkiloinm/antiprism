@@ -70,10 +70,12 @@ import {
   Sun,
   Moon,
   Home,
+  Menu,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
 
+export const IconMenu = () => <Menu {...iconProps} />;
 export const IconSearch = () => <Search {...iconProps} />;
 export const IconChevronDown = () => <ChevronDown {...iconProps} />;
 export const IconChevronUp = () => <ChevronUp {...iconProps} />;
