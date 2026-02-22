@@ -82,6 +82,13 @@ export function MobileProjectLayout({
   const addMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-switch to code tab when a file is opened
+  useEffect(() => {
+    if (activeFile && activeTab === "files") {
+      setActiveTab("code");
+    }
+  }, [activeFile]); // purposely omit activeTab to only trigger on activeFile change
+
   // Handle click outside for add menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -217,7 +224,13 @@ export function MobileProjectLayout({
             )}
           </div>
           <div className="flex-1 overflow-auto p-2">
-            {filesPanel(searchQuery)}
+            <div onClick={() => {
+              // The FileTree will handle actual selection logic.
+              // We'll rely on an effect to watch activeFile changes
+              // and auto-switch to the code tab if a file is opened.
+            }}>
+              {filesPanel(searchQuery)}
+            </div>
           </div>
         </div>
 
@@ -257,10 +270,10 @@ export function MobileProjectLayout({
       </div>
 
       {/* Bottom Navigation */}
-      <div className="h-14 flex items-center justify-around border-t border-[var(--border)] shrink-0 bg-[var(--background)] safe-area-bottom z-20">
+      <div className="flex items-center justify-around border-t border-[var(--border)] shrink-0 bg-[var(--background)] z-50 pb-[env(safe-area-inset-bottom)]">
         <button
           onClick={() => setActiveTab("files")}
-          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
+          className={`flex flex-col items-center justify-center w-full h-14 gap-1 transition-colors ${
             activeTab === "files" 
               ? "text-[var(--accent)]" 
               : "text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -272,7 +285,7 @@ export function MobileProjectLayout({
         
         <button
           onClick={() => setActiveTab("code")}
-          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors relative ${
+          className={`flex flex-col items-center justify-center w-full h-14 gap-1 transition-colors relative ${
             activeTab === "code" 
               ? "text-[var(--accent)]" 
               : "text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -289,7 +302,7 @@ export function MobileProjectLayout({
         
         <button
           onClick={() => setActiveTab("preview")}
-          className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors relative ${
+          className={`flex flex-col items-center justify-center w-full h-14 gap-1 transition-colors relative ${
             activeTab === "preview" 
               ? "text-[var(--accent)]" 
               : "text-[var(--muted)] hover:text-[var(--foreground)]"
