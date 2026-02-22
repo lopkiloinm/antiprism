@@ -155,8 +155,8 @@ export function DashboardHeader({
         )}
       </div>
       <div className={`flex items-center gap-3 ${isMobile ? 'hidden' : ''}`}>
-        {/* Search */}
-        <div className={`relative ${isMobile ? 'flex-1' : 'w-64'}`}>
+        {/* Desktop Search */}
+        <div className="relative w-64">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none">
             <IconSearch />
           </span>
