@@ -277,7 +277,7 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
   };
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] border-l border-[var(--border)]">
+    <div ref={containerRef} className={`h-full flex flex-col bg-[var(--background)] text-[var(--foreground)] ${isFullscreen ? "" : "border-l border-[var(--border)]"}`}>
       {/* Toolbar: Compile left | Page center | Zoom % + controls + Download + Fullscreen right */}
       <div className="h-12 flex items-center justify-between px-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] shrink-0">
         <div className="flex items-center gap-2">
