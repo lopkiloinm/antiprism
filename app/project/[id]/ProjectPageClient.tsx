@@ -3064,7 +3064,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         isOpen={mobileAddModalType !== null}
         title={mobileAddModalType === "folder" ? "New folder" : "New file"}
         initialValue=""
-        placeholder={`Enter ${mobileAddModalType} name`}
+        placeholder={mobileAddModalType === "folder" ? "folder-name" : "filename.txt"}
+        submitLabel="Create"
         onClose={() => setMobileAddModalType(null)}
         onConfirm={handleMobileAdd}
       />
