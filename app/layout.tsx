@@ -20,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="h-screen w-screen overflow-hidden antialiased bg-[var(--background)] text-[var(--foreground)]">
+      <body className="h-dvh w-screen overflow-hidden antialiased bg-[var(--background)] text-[var(--foreground)]">
         <ThemeProvider>
           <ContextMenuProvider>
             {children}

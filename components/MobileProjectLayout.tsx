@@ -114,7 +114,7 @@ export function MobileProjectLayout({
   }, [searchExpanded]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex flex-col fixed inset-0 overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       {/* Top Bar */}
       <div className="h-14 flex items-center justify-between px-3 border-b border-[var(--border)] shrink-0 bg-[var(--background)] z-20">
         <Link 

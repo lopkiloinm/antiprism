@@ -83,6 +83,11 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
     return () => ro.disconnect();
   }, []);
 
+  // Touch event states for pinch-to-zoom
+  const touchStartDistRef = useRef<number | null>(null);
+  const touchStartScaleRef = useRef<number | null>(null);
+  const touchStartCenterRef = useRef<{ x: number; y: number } | null>(null);
+
   // Measure zoom wrapper height so scroll area can reserve scaled height (transform doesn't affect layout)
   useEffect(() => {
     const el = zoomContentRef.current;
@@ -105,11 +110,78 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
       pinchRafId.current = null;
       setScale(scaleRef.current);
     };
+
+    const getTouchDistance = (touches: TouchList) => {
+      if (touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const getTouchCenter = (touches: TouchList) => {
+      if (touches.length < 2) return { x: touches[0].clientX, y: touches[0].clientY };
+      return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2
+      };
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault(); // Prevent default browser zoom
+        touchStartDistRef.current = getTouchDistance(e.touches);
+        touchStartScaleRef.current = scaleRef.current;
+        touchStartCenterRef.current = getTouchCenter(e.touches);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && touchStartDistRef.current !== null && touchStartScaleRef.current !== null && touchStartCenterRef.current !== null) {
+        e.preventDefault(); // Prevent default browser zoom
+        
+        const currentDist = getTouchDistance(e.touches);
+        // Calculate scale factor relative to start distance
+        const distRatio = currentDist / touchStartDistRef.current;
+        const targetScale = touchStartScaleRef.current * distRatio;
+        
+        const nextScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.round(targetScale * 100) / 100));
+        
+        if (nextScale !== scaleRef.current) {
+          const scrollEl = scrollContainerRef.current;
+          if (scrollEl) {
+            const rect = scrollEl.getBoundingClientRect();
+            // Anchor to the initial touch center
+            zoomAnchorRef.current = {
+              x: touchStartCenterRef.current.x - rect.left,
+              y: touchStartCenterRef.current.y - rect.top,
+              scrollLeft: scrollEl.scrollLeft,
+              scrollTop: scrollEl.scrollTop,
+              scaleBefore: scaleRef.current,
+            };
+          }
+          
+          scaleRef.current = nextScale;
+          if (pinchRafId.current === null) {
+            pinchRafId.current = requestAnimationFrame(flushScale);
+          }
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        touchStartDistRef.current = null;
+        touchStartScaleRef.current = null;
+        touchStartCenterRef.current = null;
+      }
+    };
+
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         const delta = -e.deltaY > 0 ? PINCH_ZOOM_STEP : -PINCH_ZOOM_STEP;
         const nextScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.round((scaleRef.current + delta) * 100) / 100));
+        
         const scrollEl = scrollContainerRef.current;
         if (scrollEl) {
           const rect = scrollEl.getBoundingClientRect();
@@ -121,15 +193,26 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
             scaleBefore: scaleRef.current,
           };
         }
+        
         scaleRef.current = nextScale;
         if (pinchRafId.current === null) {
           pinchRafId.current = requestAnimationFrame(flushScale);
         }
       }
     };
+    
     el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd);
+    el.addEventListener("touchcancel", onTouchEnd);
+    
     return () => {
       el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
       if (pinchRafId.current !== null) cancelAnimationFrame(pinchRafId.current);
     };
   }, []);
