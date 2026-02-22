@@ -378,7 +378,7 @@ export default function DashboardPage() {
 
       {/* Sidebar */}
       <div className={`
-        ${isMobile ? 'absolute inset-y-0 left-0 z-50 transform transition-transform duration-300 w-64 h-full' : 'relative z-10 w-56 shrink-0'}
+        ${isMobile ? 'fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 w-64' : 'relative z-10 w-56 shrink-0'}
         ${isMobile && !mobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}
       `}>
         <DashboardSidebar
