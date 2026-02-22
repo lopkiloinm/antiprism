@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 
 export function useResponsive() {
   const [isMobile, setIsMobile] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const checkMobile = () => {
       // 768px is the standard md breakpoint in Tailwind
       setIsMobile(window.innerWidth < 768);
@@ -20,5 +22,6 @@ export function useResponsive() {
     };
   }, []);
 
-  return { isMobile };
+  // Return false on server/initial render to avoid hydration mismatch
+  return { isMobile: mounted ? isMobile : false };
 }
