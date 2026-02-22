@@ -114,7 +114,7 @@ export default function FeaturesPage() {
             <IconAntiprism className="w-5 h-5" />
             Antiprism
           </Link>
-          <nav className="flex items-center gap-2">
+          <nav className="hidden sm:flex items-center gap-2">
             <Link
               href="/"
               className="rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700"
@@ -465,7 +465,7 @@ effects (p < .05).
             tools that are private, fast, and work where you do—without locking
             you into a cloud or a single device.
           </p>
-          <div className="mt-12 grid grid-cols-4 gap-x-8 gap-y-0">
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-8">
             {VALUES.map(({ title, description, Icon }) => (
               <div key={title} className="flex flex-col items-start gap-3">
                 <span className="flex h-12 w-12 items-center justify-center text-zinc-400 [&>svg]:h-12 [&>svg]:w-12">
