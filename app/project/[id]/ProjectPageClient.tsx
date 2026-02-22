@@ -137,7 +137,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   // With middleware rewrite, pathname stays as /project/:id in browser; params.id may be "new"
   const match = pathname?.match(/\/project\/([^/]+)/);
   const idFromPath = match?.[1];
-  const id = idOverride ?? idFromPath ?? (params?.id as string);
+  const id = idOverride ?? idFromPath ?? params?.id as string ?? new URLSearchParams(window.location.search).get("id") ?? "new";
   const basePath = id ? `/projects/${id}` : "/";
 
   const [projectName, setProjectName] = useState<string>("Project");

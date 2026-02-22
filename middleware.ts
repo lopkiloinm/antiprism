@@ -13,8 +13,9 @@ export function middleware(request: NextRequest) {
   if (match && match[1] !== PRERENDERED_ID) {
     const projectId = match[1];
     const rewriteUrl = new URL(request.url);
+    // Rewrite to the prerendered page with the project ID in the URL
     rewriteUrl.pathname = `${base}/project/${PRERENDERED_ID}`;
-    rewriteUrl.searchParams.set("__id", projectId);
+    rewriteUrl.searchParams.set("id", projectId);
     // Use rewrite instead of redirect to avoid the browser seeing the URL change
     return NextResponse.rewrite(rewriteUrl);
   }
