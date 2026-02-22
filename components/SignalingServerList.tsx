@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
 import { getWebRTCSignalingConfig, setWebRTCSignalingConfig } from "@/lib/settings";
-import { IconTrash2, IconSquare, IconCheckSquare } from "./Icons";
+import { IconTrash2, IconSquare, IconCheckSquare, IconServer } from "./Icons";
 import { SignalingServerModal } from "./SignalingServerModal";
+import { DashboardView, DashboardItemProps } from "./DashboardView";
 
 interface SignalingServer {
   id: string;
@@ -117,127 +118,51 @@ export const SignalingServerList = forwardRef<{ handleNewServer: () => void }, S
     server.url.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (filteredServers.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[var(--muted)] text-sm">
-        No signaling servers found. Add one with + New.
-      </div>
-    );
-  }
-
-  if (viewMode === "list") {
-    return (
-      <>
-        <div className="flex-1 overflow-auto">
-          <div className="divide-y divide-[var(--border)]">
-            {filteredServers.map((server) => (
-              <div
-                key={server.id}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] group"
-              >
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Toggle server enabled/disabled state
-                      handleToggleServer(server.id);
-                    }}
-                    className={`p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors ${
-                    server.enabled ? "text-[var(--accent)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
-                  }`}
-                  >
-                    {server.enabled ? <IconCheckSquare /> : <IconSquare />}
-                  </button>
-                  <div>
-                    <div className="text-sm font-medium text-[var(--foreground)]">{server.url}</div>
-                    <div className="text-xs text-[var(--muted)]">
-                      {server.id.startsWith('custom') ? 'Custom server' : 'Public server'} · {server.enabled ? 'Active' : 'Inactive'}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  {server.id.startsWith('custom') && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDeleteServer(server.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity"
-                      title="Delete server"
-                    >
-                      <IconTrash2 />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+  const dashboardItems: DashboardItemProps[] = filteredServers.map((server) => {
+    return {
+      id: server.id,
+      title: server.url,
+      subtitle: `${server.id.startsWith('custom') ? 'Custom server' : 'Public server'} · ${server.enabled ? 'Active' : 'Inactive'}`,
+      icon: <IconServer />,
+      leftAccessory: (
+        <div
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleToggleServer(server.id);
+          }}
+          className={`p-1.5 -m-1.5 rounded transition-colors cursor-pointer ${
+            server.enabled ? "hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)]" : "hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"
+          }`}
+        >
+          {server.enabled ? <IconCheckSquare /> : <IconSquare />}
         </div>
-        <SignalingServerModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onConfirm={handleAddServer}
-        />
-      </>
-    );
-  }
+      ),
+      topRightAccessory: server.id.startsWith('custom') ? (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleDeleteServer(server.id);
+          }}
+          className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer"
+          title="Delete server"
+        >
+          <IconTrash2 />
+        </div>
+      ) : undefined,
+    };
+  });
 
-  // Icons view
   return (
     <>
-      <div className="flex-1 overflow-auto p-6">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
-          {filteredServers.map((server) => {
-            return (
-              <div
-                key={server.id}
-                className="flex flex-col items-center p-4 rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_30%,transparent)] transition-colors group relative"
-              >
-                <div className="absolute top-2 left-2">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Toggle server enabled/disabled state
-                      handleToggleServer(server.id);
-                    }}
-                    className={`p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors ${
-                    server.enabled ? "text-[var(--accent)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"
-                  }`}
-                  >
-                    {server.enabled ? <IconCheckSquare /> : <IconSquare />}
-                  </button>
-                </div>
-                <div className="absolute top-2 right-2">
-                  {server.id.startsWith('custom') && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDeleteServer(server.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-opacity"
-                      title="Delete server"
-                    >
-                      <IconTrash2 />
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-col items-center mt-8">
-                  <span className="text-sm font-medium text-[var(--foreground)] text-center">
-                    {server.url}
-                  </span>
-                  <span className="text-xs text-[var(--muted)] mt-1">
-                    {server.id.startsWith('custom') ? 'Custom server' : 'Public server'}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <DashboardView 
+        items={dashboardItems}
+        viewMode={viewMode}
+        emptyContent="No signaling servers found. Add one with + New."
+      />
       <SignalingServerModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { mount } from "@wwog/idbfs";
 import { createProject } from "@/lib/projects";
-import {
-  IconFileText,
-  IconPlus,
-} from "./Icons";
+import { mount } from "@wwog/idbfs";
+import { IconFileText, IconPlus } from "./Icons";
+import { DashboardView, DashboardItemProps } from "./DashboardView";
 
 interface Template {
   id: string;
@@ -121,98 +119,75 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
     }
   };
 
-  if (filteredTemplates.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[var(--muted)] text-sm">
-        <IconFileText />
-        <p className="mt-2">No templates found.</p>
-      </div>
-    );
-  }
-
-  if (viewMode === "list") {
-    return (
-      <div className="flex-1 overflow-auto">
-        <div className="divide-y divide-[var(--border)]">
-          {filteredTemplates.map((template) => (
-            <div
-              key={template.id}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="shrink-0 text-[var(--accent)]">
-                  <IconFileText />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-[var(--foreground)] truncate">
-                    {template.name}
-                  </div>
-                  <div className="text-xs text-[var(--muted)] truncate">
-                    {template.description}
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => handleCreateFromTemplate(template)}
-                disabled={isCreating !== null}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[var(--accent)] text-white rounded hover:opacity-90 disabled:opacity-50 transition-opacity"
-              >
-                {isCreating === template.id ? (
-                  <span className="animate-pulse">Creating...</span>
-                ) : (
-                  <>
-                    <IconPlus />
-                    Use
-                  </>
-                )}
-              </button>
-            </div>
-          ))}
+  const dashboardItems: DashboardItemProps[] = filteredTemplates.map(template => {
+    return {
+      id: template.id,
+      title: template.name,
+      subtitle: template.description,
+      icon: <IconFileText />,
+      listRightAccessory: (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            if (isCreating !== null) return;
+            e.preventDefault();
+            e.stopPropagation();
+            handleCreateFromTemplate(template);
+          }}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[var(--accent)] text-white rounded transition-opacity cursor-pointer ${
+            isCreating !== null ? "opacity-50 pointer-events-none" : "hover:opacity-90"
+          }`}
+        >
+          {isCreating === template.id ? (
+            <span className="animate-pulse">Creating...</span>
+          ) : (
+            <>
+              <IconPlus />
+              Use
+            </>
+          )}
         </div>
-      </div>
-    );
-  }
+      ),
+      bottomAccessory: (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            if (isCreating !== null) return;
+            e.preventDefault();
+            e.stopPropagation();
+            handleCreateFromTemplate(template);
+          }}
+          className={`w-full flex items-center justify-center gap-2 py-2 bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)] rounded-lg transition-colors cursor-pointer ${
+            isCreating !== null ? "opacity-50 pointer-events-none" : "hover:bg-[var(--accent)] hover:text-white"
+          }`}
+        >
+          {isCreating === template.id ? (
+            <span className="animate-pulse">Creating...</span>
+          ) : (
+            <>
+              <div className="[&>svg]:w-4 [&>svg]:h-4 flex items-center">
+                <IconPlus />
+              </div>
+              Use Template
+            </>
+          )}
+        </div>
+      )
+    };
+  });
 
   return (
-    <div className="flex-1 overflow-auto p-6">
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
-        {filteredTemplates.map((template) => (
-          <div
-            key={template.id}
-            className="group relative flex flex-col items-center p-4 rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_30%,transparent)] transition-colors"
-          >
-            <div className="w-12 h-12 rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)] flex items-center justify-center mb-4 mt-8 shrink-0 [&>svg]:w-6 [&>svg]:h-6">
-              <IconFileText />
-            </div>
-            
-            <div className="flex-1 min-w-0 flex flex-col items-center mb-4 w-full">
-              <span className="text-sm font-medium text-[var(--foreground)] text-center truncate w-full">
-                {template.name}
-              </span>
-              <span className="text-xs text-[var(--muted)] text-center line-clamp-2 mt-1">
-                {template.description}
-              </span>
-            </div>
-            
-            <button
-              onClick={() => handleCreateFromTemplate(template)}
-              disabled={isCreating !== null}
-              className="w-full flex items-center justify-center gap-2 py-2 bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)] rounded-lg hover:bg-[var(--accent)] hover:text-white transition-colors disabled:opacity-50"
-            >
-              {isCreating === template.id ? (
-                <span className="animate-pulse">Creating...</span>
-              ) : (
-                <>
-                  <div className="[&>svg]:w-4 [&>svg]:h-4 flex items-center">
-                    <IconPlus />
-                  </div>
-                  Use Template
-                </>
-              )}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
+    <DashboardView 
+      items={dashboardItems}
+      viewMode={viewMode}
+      emptyContent={
+        <div className="flex flex-col items-center gap-2 text-[var(--muted)] text-sm">
+          <IconFileText />
+          <p>No templates found.</p>
+        </div>
+      }
+    />
   );
 }
