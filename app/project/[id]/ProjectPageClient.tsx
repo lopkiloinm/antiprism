@@ -2880,6 +2880,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           pdfUrl={pdfUrl}
           activeFile={activeTabPath}
           openTabsCount={openTabs.length}
+          fs={fs}
           onAddFile={() => {
             setSidebarTab("files");
             setMobileAddModalType("file");

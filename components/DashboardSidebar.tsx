@@ -17,6 +17,7 @@ import {
   IconSun,
   IconMoon,
   IconBookOpen,
+  IconX,
 } from "./Icons";
 import { useTheme } from "@/contexts/ThemeContext";
 
@@ -26,9 +27,11 @@ interface DashboardSidebarProps {
   activeNav: string;
   onNavChange: (nav: any) => void;
   isMobile?: boolean;
+  mobileMenuOpen?: boolean;
+  onClose?: () => void;
 }
 
-export function DashboardSidebar({ activeNav, onNavChange, isMobile = false }: DashboardSidebarProps) {
+export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mobileMenuOpen = false, onClose }: DashboardSidebarProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [themeOpen, setThemeOpen] = useState(false);
@@ -39,7 +42,7 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false }: D
   }, []);
   
   return (
-    <aside className={`border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0 ${isMobile ? 'w-full h-full shadow-2xl overflow-y-auto' : 'w-56 h-screen'}`}>
+    <aside className={`border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0 h-full ${isMobile ? 'w-64' : 'w-56'}`}>
       <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-[var(--border)] relative z-10">
         <div 
           onClick={() => router.push("/features")}
@@ -48,6 +51,14 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false }: D
           <IconAntiprism className="w-5 h-5 text-[var(--foreground)]" />
           <span className="font-semibold text-[var(--foreground)]">Antiprism</span>
         </div>
+        {isMobile && onClose && (
+          <button 
+            onClick={onClose}
+            className="p-1.5 -mr-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
+          >
+            <IconX />
+          </button>
+        )}
       </div>
       <nav className="p-2 space-y-0.5">
         <button
