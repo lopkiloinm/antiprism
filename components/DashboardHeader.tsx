@@ -15,12 +15,13 @@ import {
   IconMinimize2,
 } from "./Icons";
 
-type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
+type NavItem = "all" | "projects" | "recently-opened" | "templates" | "servers" | "trash";
 
 const TITLES: Record<NavItem, string> = {
   all: "All Projects",
   projects: "Your Projects",
   "recently-opened": "Recently Opened",
+  templates: "Templates",
   servers: "Signaling Servers",
   trash: "Trashed Projects",
 };

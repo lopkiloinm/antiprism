@@ -26,8 +26,9 @@ import { DashboardHeader } from "@/components/DashboardHeader";
 import { ProjectList } from "@/components/ProjectList";
 import { SignalingServerList } from "@/components/SignalingServerList";
 import { NameModal } from "@/components/NameModal";
+import { TemplateGallery } from "@/components/TemplateGallery";
 
-type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
+type NavItem = "all" | "projects" | "recently-opened" | "templates" | "servers" | "trash";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -385,6 +386,8 @@ export default function DashboardPage() {
             viewMode={viewMode}
             onNewServer={handleNewServer}
           />
+        ) : activeNav === "templates" ? (
+          <TemplateGallery viewMode={viewMode} searchQuery={searchQuery} />
         ) : (
           <ProjectList
             items={items}

@@ -1,0 +1,133 @@
+%% book_template.tex
+%%
+%% This template provides a verbose starting point for writing books in LaTeX.
+%% It demonstrates front matter, main matter, back matter, chapter structure,
+%% equations, tables, figures, indexing, and cross-referencing.
+
+%--------------------------------------------------------------------------------------------------
+% 1) Document class and page layout
+%--------------------------------------------------------------------------------------------------
+\documentclass[11pt]{book}
+
+% Geometry controls page margins. Typical book-like margins are often wider
+% on the inside edge for binding; this simple template uses symmetric margins.
+\usepackage[margin=1in]{geometry}
+
+%--------------------------------------------------------------------------------------------------
+% 2) Core packages
+%--------------------------------------------------------------------------------------------------
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{makeidx}
+
+% Enables index generation. Compile with:
+% pdflatex -> makeindex -> pdflatex -> pdflatex
+\makeindex
+
+%--------------------------------------------------------------------------------------------------
+% 3) Metadata
+%--------------------------------------------------------------------------------------------------
+\title{The Title of the Book}
+\author{Author Name}
+\date{\today}
+
+%--------------------------------------------------------------------------------------------------
+% 4) Document body
+%--------------------------------------------------------------------------------------------------
+\begin{document}
+
+% FRONT MATTER uses roman page numbers and is typically unnumbered in chapters.
+\frontmatter
+\maketitle
+
+\chapter*{Dedication}
+This optional unnumbered page is often used for a dedication.
+
+\chapter*{Preface}
+The preface introduces the motivation and audience for the book. It can also
+explain how chapters are organized and suggest reading paths for different
+types of readers.
+
+\tableofcontents
+
+% MAIN MATTER switches to arabic page numbers and numbered chapters.
+\mainmatter
+
+\chapter{Foundations}
+\section{Why this topic matters}
+This chapter introduces core ideas and notation used throughout the book. Use
+clear definitions early so readers can follow later arguments efficiently.
+
+\subsection{A first mathematical example}
+Displayed equations are ideal for central formulas:
+\begin{equation}
+S_n = \sum_{k=1}^{n} k = \frac{n(n+1)}{2}
+\label{eq:sum-formula}
+\end{equation}
+Equation~\ref{eq:sum-formula} will be automatically numbered and can be
+referenced anywhere in the text.
+
+\section{Including figures}
+Figures help communicate complex structures quickly.
+\begin{figure}[htbp]
+  \centering
+  % Replace this placeholder with your own file, e.g.:
+  % \includegraphics[width=0.7\textwidth]{chapter1-diagram.pdf}
+  \fbox{\rule{0pt}{1.6in}\rule{0.75\textwidth}{0pt}}
+  \caption{Placeholder figure for a chapter diagram or conceptual map.}
+  \label{fig:chapter-figure}
+\end{figure}
+
+\section{Including tables}
+Tables are useful for concise comparisons.
+\begin{table}[htbp]
+  \centering
+  \caption{Example comparison table used in a book chapter.}
+  \label{tab:comparison}
+  \begin{tabular}{lcc}
+    \toprule
+    Method & Accuracy (\%) & Time (s) \\
+    \midrule
+    Baseline & 81.2 & 5.4 \\
+    Improved & 88.9 & 3.7 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\chapter{Applications}
+\section{Case Study}
+This chapter demonstrates how foundational concepts apply in practice. Use
+subsections for datasets, methodology, results, and discussion.
+
+\subsection{Cross-references and indexing}
+Cross-referencing improves readability in long documents. For example, see
+Figure~\ref{fig:chapter-figure} and Table~\ref{tab:comparison}.
+
+Important terms can be indexed for quick lookup, such as
+\emph{cross-referencing}\index{cross-referencing},
+\emph{book structure}\index{book structure}, and
+\emph{chapter organization}\index{chapter organization}.
+
+\chapter{Advanced Topics}
+\section{Advice for scaling your manuscript}
+As your manuscript grows, keep one chapter per file and include them with
+\verb|\include{chapter-name}| or \verb|\input{chapter-name}| from a central
+\texttt{main.tex}. This keeps compilation and collaboration manageable.
+
+% BACK MATTER typically contains appendices, bibliography, and index.
+\backmatter
+
+\chapter{Appendix A: Supplementary Material}
+Use appendices for proofs, implementation details, or large tables that would
+interrupt the flow of the main chapters.
+
+\chapter*{Bibliography Notes}
+For production documents, use BibTeX or biblatex instead of manual references.
+This template omits a full bibliography block to keep the structure focused.
+
+% Prints the generated index.
+\printindex
+
+\end{document}

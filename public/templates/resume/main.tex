@@ -1,0 +1,117 @@
+%% resume_template.tex
+%%
+%% This template is a verbose curriculum vitae / resume starter using moderncv.
+%% It includes detailed comments and examples for key sections so that users
+%% can adapt the structure for internships, graduate applications, and jobs.
+
+%--------------------------------------------------------------------------------------------------
+% 1) Document class and visual style
+%--------------------------------------------------------------------------------------------------
+% moderncv is purpose-built for resumes and CVs.
+% Class options here:
+%   - 11pt: base font size
+%   - a4paper: page size (change to letterpaper if needed)
+%   - sans: sans-serif body style
+\documentclass[11pt,a4paper,sans]{moderncv}
+
+% Common styles: casual, classic, banking, oldstyle, fancy
+\moderncvstyle{classic}
+
+% Common colors: blue, orange, green, red, purple, grey, black
+\moderncvcolor{blue}
+
+% Adjust page scaling/margins. Smaller scale -> larger margins.
+\usepackage[scale=0.75]{geometry}
+
+%--------------------------------------------------------------------------------------------------
+% 2) Personal information block
+%--------------------------------------------------------------------------------------------------
+\firstname{John}
+\familyname{Doe}
+\title{Curriculum Vitae}
+\address{123 Main Street}{City, State 12345}
+\phone[mobile]{+1~(234)~567~890}
+\email{john.doe@example.com}
+\social[github]{johndoe}
+\social[linkedin]{john-doe}
+
+% Optional photo (uncomment and replace file path)
+% \photo[64pt][0.4pt]{profile.jpg}
+
+%--------------------------------------------------------------------------------------------------
+% 3) Document body
+%--------------------------------------------------------------------------------------------------
+\begin{document}
+
+% Generates the title block from metadata above.
+\makecvtitle
+
+%--------------------------------------------------------------------------------------------------
+% Education
+%--------------------------------------------------------------------------------------------------
+\section{Education}
+\cventry{2020--2024}{B.S. in Computer Science}{University Name}{City}{}{%
+  GPA: 3.8/4.0 \\
+  Relevant coursework: Algorithms, Operating Systems, Databases, Machine Learning
+}
+
+\cventry{2016--2020}{High School Diploma}{High School Name}{City}{}{%
+  Honors: Valedictorian, Mathematics Award
+}
+
+%--------------------------------------------------------------------------------------------------
+% Experience
+%--------------------------------------------------------------------------------------------------
+\section{Experience}
+
+\cventry{2023--Present}{Software Engineer Intern}{Company Name}{City}{}{%
+\begin{itemize}
+  \item Developed web applications using React and Node.js for internal tools.
+  \item Improved database query performance by 20\% via indexing and query refactoring.
+  \item Added automated tests and CI checks, reducing regressions during releases.
+\end{itemize}}
+
+\cventry{2022--2023}{Research Assistant}{University Lab}{City}{}{%
+\begin{itemize}
+  \item Implemented data processing scripts in Python for experimental datasets.
+  \item Produced publication-quality figures and summaries for weekly reports.
+  \item Collaborated with graduate students on reproducible experiment workflows.
+\end{itemize}}
+
+%--------------------------------------------------------------------------------------------------
+% Projects
+%--------------------------------------------------------------------------------------------------
+\section{Projects}
+\cvitem{Realtime Collaboration Editor}{Built a browser-based editor with
+peer-to-peer synchronization, version history, and offline-first support.}
+\cvitem{LaTeX Automation Toolkit}{Created scripts to lint, build, and package
+academic manuscripts for faster iteration and consistent formatting.}
+
+%--------------------------------------------------------------------------------------------------
+% Publications / Talks (optional but common for CVs)
+%--------------------------------------------------------------------------------------------------
+\section{Publications}
+\cvitem{2024}{J. Doe and A. Collaborator, ``Title of Paper,'' \emph{Conference Name}, 2024.}
+
+\section{Talks}
+\cvitem{2024}{``Engineering Reproducible Research Workflows,'' Department Seminar, University Name.}
+
+%--------------------------------------------------------------------------------------------------
+% Skills
+%--------------------------------------------------------------------------------------------------
+\section{Skills}
+\cvitem{Languages}{Python, JavaScript, C++, Java, TypeScript}
+\cvitem{Technologies}{React, Node.js, Docker, Git, Linux}
+\cvitem{Tools}{\LaTeX, VS Code, PostgreSQL, Bash, CI/CD}
+
+%--------------------------------------------------------------------------------------------------
+% Certifications / Awards / Interests (optional sections)
+%--------------------------------------------------------------------------------------------------
+\section{Awards}
+\cvitem{2023}{Dean's List (All Semesters)}
+\cvitem{2022}{Undergraduate Research Fellowship}
+
+\section{Interests}
+\cvitem{}{Technical writing, open-source software, scientific computing, mentorship}
+
+\end{document}

@@ -1,0 +1,143 @@
+%% homework_template.tex
+%%
+%% This template is a verbose starting point for mathematics, physics, and
+%% engineering homework submissions. It includes:
+%%   - A reusable header block
+%%   - Problem and solution formatting
+%%   - Proof environments
+%%   - Enumerated sub-parts
+%%   - Aligned equations
+
+%--------------------------------------------------------------------------------------------------
+% 1) Document class and packages
+%--------------------------------------------------------------------------------------------------
+\documentclass[12pt]{article}
+
+% Page layout and core math packages.
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amsthm,amssymb}
+\usepackage{enumitem}
+\usepackage{mathtools}
+
+%--------------------------------------------------------------------------------------------------
+% 2) Theorem-like environments and custom helpers
+%--------------------------------------------------------------------------------------------------
+\newtheorem*{remark}{Remark}
+
+% Keep all assignment metadata in one place for easy reuse.
+\newcommand{\hwname}{John Doe}
+\newcommand{\hwcourse}{Math 101}
+\newcommand{\hwnum}{1}
+\newcommand{\hwdate}{\today}
+
+% Optional helper to visually separate problems.
+\newcommand{\problemsep}{\vspace{0.6cm}\hrule\vspace{0.6cm}}
+
+%--------------------------------------------------------------------------------------------------
+% 3) Document body
+%--------------------------------------------------------------------------------------------------
+\begin{document}
+
+% Header block (course, assignment number, student, date)
+\begin{center}
+  {\Large\textbf{\hwcourse: Homework \hwnum}} \\
+  {\large\hwname} \\
+  {\large\hwdate}
+\end{center}
+
+% Add any submission notes here, such as collaboration policy.
+\noindent\textbf{Submission notes:} Show complete work, justify each step,
+and cite any external references used.
+
+\problemsep
+
+%--------------------------------------------------------------------------------------------------
+% Problem 1: Proof-based question
+%--------------------------------------------------------------------------------------------------
+\section*{Problem 1}
+\textbf{Prompt.} Prove that $\sqrt{2}$ is irrational.
+
+\textbf{Solution.}
+\begin{proof}
+Suppose, for contradiction, that $\sqrt{2}$ is rational. Then there exist
+integers $a,b$ with $b\neq 0$ and $\gcd(a,b)=1$ such that
+\[
+\sqrt{2} = \frac{a}{b}.
+\]
+Squaring both sides gives
+\[
+2 = \frac{a^2}{b^2}
+\quad\Longrightarrow\quad
+a^2 = 2b^2.
+\]
+Hence $a^2$ is even, so $a$ is even. Write $a=2k$ for some integer $k$. Then
+\[
+(2k)^2 = 2b^2
+\quad\Longrightarrow\quad
+4k^2 = 2b^2
+\quad\Longrightarrow\quad
+b^2 = 2k^2.
+\]
+Thus $b^2$ is even, so $b$ is even. This implies both $a$ and $b$ are even,
+contradicting $\gcd(a,b)=1$. Therefore $\sqrt{2}$ is irrational.
+\end{proof}
+
+\begin{remark}
+This structure (assume rational, derive contradiction via parity) is a common
+proof strategy for irrationality of square roots of nonsquare integers.
+\end{remark}
+
+\problemsep
+
+%--------------------------------------------------------------------------------------------------
+% Problem 2: Computation with aligned equations
+%--------------------------------------------------------------------------------------------------
+\section*{Problem 2}
+\textbf{Prompt.} Compute the derivative of $f(x)=x^2\sin(x)$.
+
+\textbf{Solution.}
+Use the product rule $\frac{d}{dx}[uv]=u'v+uv'$ with
+$u(x)=x^2$ and $v(x)=\sin(x)$:
+\begin{align*}
+f'(x)
+  &= \frac{d}{dx}[x^2]\,\sin(x) + x^2\,\frac{d}{dx}[\sin(x)] \\
+  &= 2x\sin(x) + x^2\cos(x).
+\end{align*}
+
+\problemsep
+
+%--------------------------------------------------------------------------------------------------
+% Problem 3: Multi-part example
+%--------------------------------------------------------------------------------------------------
+\section*{Problem 3}
+\textbf{Prompt.} Let $g(x)=e^{2x}$. Answer the following:
+\begin{enumerate}[label=(\alph*)]
+  \item Compute $g'(x)$.
+  \item Find the equation of the tangent line at $x=0$.
+\end{enumerate}
+
+\textbf{Solution.}
+\begin{enumerate}[label=(\alph*)]
+  \item By the chain rule,
+  \[
+  g'(x)=2e^{2x}.
+  \]
+
+  \item First compute the point and slope at $x=0$:
+  \[
+  g(0)=e^0=1,
+  \qquad
+  g'(0)=2e^0=2.
+  \]
+  Using point-slope form,
+  \[
+  y-1=2(x-0)
+  \quad\Longrightarrow\quad
+  y=2x+1.
+  \]
+\end{enumerate}
+
+%--------------------------------------------------------------------------------------------------
+% End of document
+%--------------------------------------------------------------------------------------------------
+\end{document}

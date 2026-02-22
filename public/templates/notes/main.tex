@@ -1,0 +1,141 @@
+%% notes_template.tex
+%%
+%% This template provides a verbose lecture-notes structure for courses in
+%% mathematics, computer science, and engineering. It demonstrates:
+%%   - Chapter and section organization
+%%   - Definitions, lemmas, and theorems
+%%   - Highlighted note boxes
+%%   - Equations and proof-style writing
+
+%--------------------------------------------------------------------------------------------------
+% 1) Document class and packages
+%--------------------------------------------------------------------------------------------------
+\documentclass[11pt]{report}
+
+% Geometry controls margins. One-inch margins are a practical default.
+\usepackage[margin=1in]{geometry}
+
+% Core math packages.
+\usepackage{amsmath,amsthm,amssymb}
+
+% Colored boxes for emphasis notes and reminders.
+\usepackage{tcolorbox}
+\usepackage{xcolor}
+
+% Hyperlinks in PDF output (table of contents entries, references, URLs).
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+%--------------------------------------------------------------------------------------------------
+% 2) Theorem environments and note box definition
+%--------------------------------------------------------------------------------------------------
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{definition}[theorem]{Definition}
+
+% Reusable highlighted note box.
+\newtcolorbox{note}[1][]{
+  colback=gray!5,
+  colframe=gray!55,
+  fonttitle=\bfseries,
+  title=#1
+}
+
+%--------------------------------------------------------------------------------------------------
+% 3) Metadata
+%--------------------------------------------------------------------------------------------------
+\title{Lecture Notes}
+\author{Your Name}
+\date{Fall 2024}
+
+%--------------------------------------------------------------------------------------------------
+% 4) Document body
+%--------------------------------------------------------------------------------------------------
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\chapter{Introduction}
+\section{How to Use These Notes}
+These notes are designed to be both a reference and a learning guide. Each
+chapter introduces ideas, states formal definitions, and develops intuition
+with examples and short proofs.
+
+\begin{note}[Study Tip]
+When reviewing, focus first on definitions and theorem statements, then return
+to proofs and examples to internalize why each result is true.
+\end{note}
+
+\section{Foundational Example}
+\begin{definition}[Vector Space]
+A vector space over a field $F$ is a set $V$ equipped with vector addition and
+scalar multiplication satisfying closure, associativity, commutativity of
+addition, additive identity and inverses, and compatibility with scalar
+multiplication.
+\end{definition}
+
+\begin{proposition}
+If $u,v\in V$ for a vector space $V$, then $u+v\in V$.
+\end{proposition}
+
+\begin{proof}
+This is immediate from the closure axiom of vector addition in the definition
+of a vector space.
+\end{proof}
+
+\chapter{Core Results}
+\section{A Classical Geometric Theorem}
+\begin{theorem}[Pythagorean Theorem]
+In a right triangle with legs $a,b$ and hypotenuse $c$,
+\[
+a^2+b^2=c^2.
+\]
+\end{theorem}
+
+\begin{note}[Interpretation]
+The theorem relates lengths in Euclidean geometry and appears in algebra,
+trigonometry, and numerical methods.
+\end{note}
+
+\section{Algebraic Lemma Example}
+\begin{lemma}
+For any real numbers $x,y$, we have
+\[
+(x+y)^2 = x^2 + 2xy + y^2.
+\]
+\end{lemma}
+
+\begin{proof}
+Expand directly:
+\[
+(x+y)^2=(x+y)(x+y)=x^2+xy+yx+y^2=x^2+2xy+y^2.
+\]
+\end{proof}
+
+\chapter{Worked Practice}
+\section{Short Guided Example}
+Suppose $f(x)=x^3-3x$. Then
+\[
+f'(x)=3x^2-3=3(x^2-1).
+\]
+Critical points occur when $f'(x)=0$, i.e., at $x=\pm1$. This style of short,
+step-by-step calculation is useful for revision notes.
+
+\begin{note}[Template Extension]
+You can split these notes into multiple files using
+\texttt{\textbackslash include\{chapter1\}} and
+\texttt{\textbackslash include\{chapter2\}} when the document grows.
+\end{note}
+
+\chapter*{Appendix: Common Commands}
+\addcontentsline{toc}{chapter}{Appendix: Common Commands}
+\begin{itemize}
+  \item Inline math: \verb|$a^2+b^2=c^2$|
+  \item Display math: \verb|\[ ... \]| or \verb|\begin{equation} ... \end{equation}|
+  \item Theorems: \verb|\begin{theorem} ... \end{theorem}|
+  \item References: \verb|\label{key}| and \verb|\ref{key}|
+\end{itemize}
+
+\end{document}

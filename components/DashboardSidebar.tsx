@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   IconLayoutDashboard,
@@ -16,10 +16,11 @@ import {
   IconChevronUp,
   IconSun,
   IconMoon,
+  IconBookOpen,
 } from "./Icons";
 import { useTheme } from "@/contexts/ThemeContext";
 
-type NavItem = "all" | "projects" | "recently-opened" | "servers" | "trash";
+type NavItem = "all" | "projects" | "recently-opened" | "servers" | "templates" | "trash";
 
 interface DashboardSidebarProps {
   activeNav: NavItem;
@@ -30,6 +31,11 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [themeOpen, setThemeOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   return (
     <aside className="w-56 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0">
@@ -77,6 +83,17 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
           Recently Opened
         </button>
         <button
+          onClick={() => onNavChange("templates")}
+          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+            activeNav === "templates"
+              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
+              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+          }`}
+        >
+          <IconBookOpen />
+          Templates
+        </button>
+        <button
           onClick={() => onNavChange("servers")}
           className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
             activeNav === "servers"
@@ -108,8 +125,12 @@ export function DashboardSidebar({ activeNav, onNavChange }: DashboardSidebarPro
               : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
           }`}
         >
-          {(theme === "light" || theme === "sepia") ? <IconSun /> : <IconMoon />}
-          <span className="capitalize">{theme}</span>
+          {mounted ? (
+            (theme === "light" || theme === "sepia") ? <IconSun /> : <IconMoon />
+          ) : (
+            <IconSun />
+          )}
+          <span className="capitalize">{mounted ? (theme === "dark-purple" ? "Dark Purple" : theme) : "light"}</span>
           <div className="ml-auto">
             {themeOpen ? <IconChevronUp /> : <IconChevronDown />}
           </div>
