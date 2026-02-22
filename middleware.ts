@@ -15,6 +15,7 @@ export function middleware(request: NextRequest) {
     const rewriteUrl = new URL(request.url);
     rewriteUrl.pathname = `${base}/project/${PRERENDERED_ID}`;
     rewriteUrl.searchParams.set("__id", projectId);
+    // Use rewrite instead of redirect to avoid the browser seeing the URL change
     return NextResponse.rewrite(rewriteUrl);
   }
 

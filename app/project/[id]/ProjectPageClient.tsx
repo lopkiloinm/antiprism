@@ -2999,6 +2999,27 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               ) : (
                 <div className="absolute inset-0 overflow-hidden">
                   {(() => {
+                    // Handle binary files (images, PDFs) first
+                    if (activeTab?.type === "image") {
+                      if (activeTabPath.endsWith(".pdf")) {
+                        const pdfBlobUrl = imageUrlCache.get(activeTabPath) ?? null;
+                        return pdfBlobUrl ? (
+                          <PdfPreview pdfUrl={pdfBlobUrl} onCompile={() => {}} isCompiling={false} isFullscreen={isFullscreen} />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
+                            Loading PDF…
+                          </div>
+                        );
+                      }
+                      return (
+                        <ImageViewer
+                          imageUrl={imageUrlCache.get(activeTabPath) ?? null}
+                          alt={activeTabPath.split("/").pop() ?? "Image"}
+                        />
+                      );
+                    }
+
+                    // Only try to get YText for text files
                     const currentYText = getCurrentYText();
                     
                     if (!currentYText) {
