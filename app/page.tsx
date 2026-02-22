@@ -369,16 +369,16 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] relative">
       {/* Mobile Sidebar Overlay */}
-      {isMobile && mobileMenuOpen && (
+      {isMobile && (
         <div 
-          className="absolute inset-0 bg-black/50 z-40"
+          className={`absolute inset-0 bg-black/50 z-40 transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <div className={`
-        ${isMobile ? 'absolute inset-y-0 left-0 z-50 transform transition-transform duration-300 w-56 h-full' : 'relative z-10 w-56 shrink-0'}
+        ${isMobile ? 'absolute inset-y-0 left-0 z-50 transform transition-transform duration-300 w-64 h-full' : 'relative z-10 w-56 shrink-0'}
         ${isMobile && !mobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}
       `}>
         <DashboardSidebar
