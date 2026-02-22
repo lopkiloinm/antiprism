@@ -36,6 +36,12 @@ export default function DashboardPage() {
   const router = useRouter();
   const { isMobile } = useResponsive();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Ensure mobile menu is closed when component mounts
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, []);
+  
   const signalingServerListRef = useRef<{ handleNewServer: () => void }>(null);
   const [activeNav, setActiveNav] = useState<NavItem>("projects");
   const [viewMode, setViewMode] = useState<"list" | "icons">("list");
