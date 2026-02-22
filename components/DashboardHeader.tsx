@@ -221,18 +221,6 @@ export function DashboardHeader({
             </div>
           </div>
         )}
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none">
-            <IconSearch />
-          </span>
-          <input
-            type="text"
-            placeholder="Search…"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10 pr-3 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] w-64"
-          />
-        </div>
         {activeNav !== "servers" && activeNav !== "recently-opened" && (
           <>
             <div className="flex items-center border border-[var(--border)] rounded overflow-hidden">

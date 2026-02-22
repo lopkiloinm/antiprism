@@ -39,7 +39,7 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false }: D
   }, []);
   
   return (
-    <aside className="w-56 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0">
+    <aside className={`w-56 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0 ${isMobile ? 'h-full shadow-2xl' : 'h-screen'}`}>
       <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-[var(--border)] relative z-10">
         <div 
           onClick={() => router.push("/features")}
