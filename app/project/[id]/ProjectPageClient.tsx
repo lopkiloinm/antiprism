@@ -13,6 +13,7 @@ import { FileTree } from "@/components/FileTree";
 import { FileActions } from "@/components/FileActions";
 import { FileTabs, SETTINGS_TAB_PATH } from "@/components/FileTabs";
 import type { Tab } from "@/components/FileTabs";
+import { NameModal } from "@/components/NameModal";
 import { ImageViewer } from "@/components/ImageViewer";
 import { EditorPanel, type EditorPanelHandle } from "@/components/EditorPanel";
 import { ChatInput } from "@/components/ChatInput";
@@ -2834,42 +2835,68 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
   const { isMobile } = useResponsive();
   const [mounted, setMounted] = useState(false);
+  const [mobileAddModalType, setMobileAddModalType] = useState<"file" | "folder" | null>(null);
   
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  const handleMobileAdd = async (name: string) => {
+    if (!fs) return;
+    const type = mobileAddModalType;
+    setMobileAddModalType(null);
+    
+    const trimmed = name.trim().replace(/^\//, "").replace(/\/$/, "");
+    if (!trimmed) return;
+    
+    // For mobile, we just add to the root directory for simplicity unless there's a selected folder
+    // But since we don't track selected folder explicitly for mobile UI yet, we'll use basePath
+    const basePath = `/projects/${id}`;
+    const newPath = `${basePath}/${trimmed}`;
+    
+    try {
+      if (type === "folder") {
+        await fs.mkdir(newPath);
+      } else {
+        const emptyBuf = new Uint8Array(0).buffer as ArrayBuffer;
+        await fs.writeFile(newPath, emptyBuf, { mimeType: "text/plain" });
+        handleTabSelect(newPath); // Auto-open new files
+      }
+      setRefreshTrigger(t => t + 1);
+    } catch (e) {
+      console.error("Failed to create file/folder:", e);
+    }
+  };
+
   if (mounted && isMobile) {
     return (
-      <MobileProjectLayout
-        projectName={projectName}
-        projectId={id}
-        isCompiling={isCompiling}
-        compilerReady={compilerReady}
-        onCompile={handleCompile}
-        pdfUrl={pdfUrl}
-        activeFile={activeTabPath}
-        openTabsCount={openTabs.length}
-        onAddFile={() => {
-          setSidebarTab("files");
-          // Re-use the desktop modal trigger logic if available, or just log for now
-          const customEvent = new CustomEvent('open-new-file-modal');
-          window.dispatchEvent(customEvent);
-        }}
-        onAddFolder={() => {
-          setSidebarTab("files");
-          const customEvent = new CustomEvent('open-new-folder-modal');
-          window.dispatchEvent(customEvent);
-        }}
-        onUploadFile={() => {
-          setSidebarTab("files");
-          document.querySelector<HTMLInputElement>('input[type="file"]:not([webkitdirectory])')?.click();
-        }}
-        onUploadDirectory={() => {
-          setSidebarTab("files");
-          document.querySelector<HTMLInputElement>('input[webkitdirectory]')?.click();
-        }}
-        filesPanel={
+      <>
+        <MobileProjectLayout
+          projectName={projectName}
+          projectId={id}
+          isCompiling={isCompiling}
+          compilerReady={compilerReady}
+          onCompile={handleCompile}
+          pdfUrl={pdfUrl}
+          activeFile={activeTabPath}
+          openTabsCount={openTabs.length}
+          onAddFile={() => {
+            setSidebarTab("files");
+            setMobileAddModalType("file");
+          }}
+          onAddFolder={() => {
+            setSidebarTab("files");
+            setMobileAddModalType("folder");
+          }}
+          onUploadFile={() => {
+            setSidebarTab("files");
+            document.querySelector<HTMLInputElement>('input[type="file"]:not([webkitdirectory])')?.click();
+          }}
+          onUploadDirectory={() => {
+            setSidebarTab("files");
+            document.querySelector<HTMLInputElement>('input[webkitdirectory]')?.click();
+          }}
+          filesPanel={
           <div className="h-full relative pb-10">
             <FileTree
               fs={fs}
@@ -3033,8 +3060,17 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           </div>
         }
       />
-    );
-  }
+      <NameModal
+        isOpen={mobileAddModalType !== null}
+        title={mobileAddModalType === "folder" ? "New folder" : "New file"}
+        initialValue=""
+        placeholder={`Enter ${mobileAddModalType} name`}
+        onClose={() => setMobileAddModalType(null)}
+        onConfirm={handleMobileAdd}
+      />
+    </>
+  );
+}
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
