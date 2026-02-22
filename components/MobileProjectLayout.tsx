@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { ProjectDropdown } from "./ProjectDropdown";
 import {
   IconHome,
   IconPlus,
@@ -98,63 +99,15 @@ export function MobileProjectLayout({
         </Link>
         
         <div className="flex items-center gap-2">
-          {/* Add Dropdown */}
-          <div className="relative" ref={addMenuRef}>
-            <button 
-              onClick={() => setShowAddMenu(!showAddMenu)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors"
-            >
-              <span className="flex items-center justify-center w-4 h-4"><IconPlus /></span>
-              <span className="text-sm font-medium">Add</span>
-              <span className="flex items-center justify-center w-3 h-3 opacity-70"><IconChevronDown /></span>
-            </button>
-            
-            {showAddMenu && (
-              <div className="absolute right-0 top-full mt-1 w-48 bg-[var(--background)] border border-[var(--border)] shadow-lg rounded-md overflow-hidden z-50 py-1">
-                <button 
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] cursor-pointer text-left"
-                  onClick={() => {
-                    setShowAddMenu(false);
-                    onAddFile?.();
-                  }}
-                >
-                  <span className="flex items-center justify-center w-4 h-4 text-[var(--muted)]"><IconFilePlus /></span>
-                  Add File
-                </button>
-                <button 
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] cursor-pointer text-left"
-                  onClick={() => {
-                    setShowAddMenu(false);
-                    onAddFolder?.();
-                  }}
-                >
-                  <span className="flex items-center justify-center w-4 h-4 text-[var(--muted)]"><IconFolderPlus /></span>
-                  Add Folder
-                </button>
-                <div className="h-px bg-[var(--border)] my-1" />
-                <button 
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] cursor-pointer text-left"
-                  onClick={() => {
-                    setShowAddMenu(false);
-                    onUploadFile?.();
-                  }}
-                >
-                  <span className="flex items-center justify-center w-4 h-4 text-[var(--muted)]"><IconUpload /></span>
-                  Upload File
-                </button>
-                <button 
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] cursor-pointer text-left"
-                  onClick={() => {
-                    setShowAddMenu(false);
-                    onUploadDirectory?.();
-                  }}
-                >
-                  <span className="flex items-center justify-center w-4 h-4 text-[var(--muted)]"><IconFolderOpen /></span>
-                  Upload Directory
-                </button>
-              </div>
-            )}
-          </div>
+          <ProjectDropdown
+            projectId={projectId}
+            projectName={projectName}
+            isRoom={false} // Currently we don't have isRoom in mobile props, defaulting to false
+            fs={null} // We don't have fs in this component, but it's only needed for download/export which we might not support on mobile yet
+            onRename={() => {}} // Might need to pass this down if we want rename support
+          >
+            {projectName}
+          </ProjectDropdown>
           
           {/* Compile Button */}
           <button 
