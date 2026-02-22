@@ -2904,7 +2904,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                 basePath={basePath}
                 currentPath={currentPath}
                 refreshTrigger={refreshTrigger}
-                onFileSelect={handleTabSelect}
+                onFileSelect={handleFileSelect}
                 onRefresh={() => setRefreshTrigger(t => t + 1)}
                 searchQuery={searchQuery}
               />
