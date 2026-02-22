@@ -106,7 +106,7 @@ export function ProjectList({
     return {
       id: item.id,
       title: item.name,
-      subtitle: item.isRoom ? "Room" : `Modified ${item.createdAt}`,
+      subtitle: item.isRoom ? "Room" : `Modified ${new Date(item.createdAt).toLocaleDateString()}`,
       icon: item.isRoom ? <IconFolder /> : <IconFile />,
       href: `/project/${item.id}`,
       leftAccessory: (
