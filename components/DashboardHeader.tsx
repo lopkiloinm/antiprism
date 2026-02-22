@@ -170,7 +170,7 @@ export function DashboardHeader({
         </div>
         {selectedCount > 0 && activeNav !== "servers" && (
           <div
-            className="flex items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--background))] shadow-sm overflow-hidden"
+            className={`${isMobile ? "flex" : searchExpanded ? "flex" : "hidden"} items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--background))] shadow-sm overflow-hidden`}
             role="toolbar"
             aria-label="Bulk actions"
           >

@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Project } from "@/lib/projects";
 import { IconDownload, IconRestore, IconTrash2, IconCheckSquare, IconSquare, IconPencil, IconFolder, IconFile } from "./Icons";
 import { DashboardView, DashboardItemProps } from "./DashboardView";
+import { useResponsive } from "@/hooks/useResponsive";
 
 interface ProjectListProps {
   items: Project[];
@@ -14,8 +15,9 @@ interface ProjectListProps {
   onRename?: (item: Project, newName: string) => void;
   deleteTitle?: string;
   downloadTitle?: string;
-  selectedItems: string[];
-  onSelectionChange: (selectedIds: string[]) => void;
+  restoreTitle?: string;
+  selectedItems?: string[];
+  onSelectionChange?: (selectedIds: string[]) => void;
 }
 
 export function ProjectList({
@@ -26,23 +28,16 @@ export function ProjectList({
   onRestore,
   onRename,
   deleteTitle = "Move to trash",
-  downloadTitle = "Download ZIP",
-  selectedItems,
+  downloadTitle = "Download",
+  restoreTitle = "Restore",
+  selectedItems = [],
   onSelectionChange,
 }: ProjectListProps) {
+  const { isMobile } = useResponsive();
+  
   const dashboardItems: DashboardItemProps[] = items.map((item) => {
-    const isSelected = selectedItems.includes(item.id);
+    const isSelected = selectedItems?.includes(item.id) || false;
     
-    const handleToggleSelect = (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (isSelected) {
-        onSelectionChange(selectedItems.filter(id => id !== item.id));
-      } else {
-        onSelectionChange([...selectedItems, item.id]);
-      }
-    };
-
     const rightAccessories = (
       <>
         {onRename && (
@@ -54,7 +49,7 @@ export function ProjectList({
               e.stopPropagation();
               onRename(item, item.name);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer"
+            className={`${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"} p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer`}
             title="Rename"
           >
             <IconPencil />
@@ -69,25 +64,10 @@ export function ProjectList({
               e.stopPropagation();
               onRestore(item);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer"
+            className={`${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"} p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer`}
             title="Restore"
           >
             <IconRestore />
-          </div>
-        )}
-        {!item.isRoom && !onRestore && onDownload && (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDownload(item);
-            }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer"
-            title={downloadTitle}
-          >
-            <IconDownload />
           </div>
         )}
         {onDelete && (
@@ -99,10 +79,25 @@ export function ProjectList({
               e.stopPropagation();
               onDelete(item);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer"
+            className={`${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"} p-1.5 text-red-300 hover:bg-red-500/10 rounded transition-opacity cursor-pointer`}
             title={deleteTitle}
           >
             <IconTrash2 />
+          </div>
+        )}
+        {!item.isRoom && onDownload && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDownload(item);
+            }}
+            className={`${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"} p-1.5 text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] rounded transition-opacity cursor-pointer`}
+            title={downloadTitle}
+          >
+            <IconDownload />
           </div>
         )}
       </>
@@ -111,19 +106,26 @@ export function ProjectList({
     return {
       id: item.id,
       title: item.name,
-      subtitle: `${item.isRoom ? "Room" : "Project"} · ${new Date(item.createdAt).toLocaleDateString()}`,
+      subtitle: item.isRoom ? "Room" : `Modified ${item.createdAt}`,
       icon: item.isRoom ? <IconFolder /> : <IconFile />,
-      href: isSelected ? undefined : `/project/${item.id}`,
-      onClick: isSelected ? () => onSelectionChange(selectedItems.filter((id) => id !== item.id)) : undefined,
-      isActive: isSelected,
+      href: `/project/${item.id}`,
       leftAccessory: (
         <div
-          onClick={handleToggleSelect}
-          className={`p-1.5 -m-1.5 rounded transition-colors cursor-pointer ${
-            isSelected 
-              ? "hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)]" 
-              : "hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"
-          }`}
+          role="button"
+          tabIndex={0}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (onSelectionChange) {
+              const isSelected = selectedItems?.includes(item.id) || false;
+              if (isSelected) {
+                onSelectionChange(selectedItems.filter(id => id !== item.id));
+              } else {
+                onSelectionChange([...selectedItems, item.id]);
+              }
+            }
+          }}
+          className="cursor-pointer"
         >
           {isSelected ? <IconCheckSquare /> : <IconSquare />}
         </div>
