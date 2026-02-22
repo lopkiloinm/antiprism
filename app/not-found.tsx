@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation";
 import ProjectPageClient from "@/app/project/[id]/ProjectPageClient";
-import { useEffect, useState } from "react";
 
 export default function NotFound() {
   const pathname = usePathname();
@@ -10,23 +9,6 @@ export default function NotFound() {
   const path = pathname.replace(base || "", "") || "/";
   const match = path.match(/^\/project\/([^/]+)\/?$/);
   const projectId = match?.[1];
-  const [showContent, setShowContent] = useState(false);
-
-  // Add a small delay to prevent flash of 404 during middleware rewrite
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowContent(true);
-    }, 50);
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!showContent) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center p-8 gap-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
 
   if (projectId) {
     return <ProjectPageClient idOverride={projectId} />;
