@@ -2897,49 +2897,50 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             setSidebarTab("files");
             document.querySelector<HTMLInputElement>('input[webkitdirectory]')?.click();
           }}
-          filesPanel={
-          <div className="h-full relative pb-10">
-            <FileTree
-              fs={fs}
-              basePath={basePath}
-              currentPath={currentPath}
-              refreshTrigger={refreshTrigger}
-              onFileSelect={handleTabSelect}
-              onRefresh={() => setRefreshTrigger(t => t + 1)}
-            />
-            {/* Hidden file inputs for upload actions handled by FileTree implicitly, 
-                we just trigger them via DOM queries in the callbacks */}
-          </div>
-        }
-        editorPanel={
-          <div className="flex flex-col h-full min-h-0 relative bg-[var(--background)]">
-            {/* Editor Top Bar */}
-            <div className="shrink-0 border-b border-[var(--border)] overflow-x-auto hide-scrollbar bg-[color-mix(in_srgb,var(--border)_10%,transparent)]">
-              <div className="flex h-10 min-w-min px-1">
-                {openTabs.map((tab) => (
-                  <button
-                    key={tab.path}
-                    onClick={() => handleTabSelect(tab.path)}
-                    className={`flex items-center gap-2 px-3 py-1.5 my-1 mx-0.5 rounded-md text-sm whitespace-nowrap transition-colors ${
-                      tab.path === activeTabPath
-                        ? "bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-[var(--accent)]"
-                        : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:text-[var(--foreground)]"
-                    }`}
-                  >
-                    <span className="max-w-[120px] truncate">{tab.path.split("/").pop()}</span>
-                    <div 
-                      className="p-0.5 rounded-sm hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleTabClose(tab.path);
-                      }}
-                    >
-                      <IconX />
-                    </div>
-                  </button>
-                ))}
-              </div>
+          filesPanel={(searchQuery: string) => (
+            <div className="h-full relative pb-10">
+              <FileTree
+                fs={fs}
+                basePath={basePath}
+                currentPath={currentPath}
+                refreshTrigger={refreshTrigger}
+                onFileSelect={handleTabSelect}
+                onRefresh={() => setRefreshTrigger(t => t + 1)}
+                searchQuery={searchQuery}
+              />
+              {/* Hidden file inputs for upload actions handled by FileTree implicitly, 
+                  we just trigger them via DOM queries in the callbacks */}
             </div>
+          )}
+          editorPanel={
+            <div className="flex flex-col h-full min-h-0 relative bg-[var(--background)]">
+              {/* Editor Top Bar */}
+              <div className="shrink-0 border-b border-[var(--border)] overflow-x-auto hide-scrollbar bg-[color-mix(in_srgb,var(--border)_10%,transparent)]">
+                <div className="flex h-10 min-w-min px-1">
+                  {openTabs.map((tab) => (
+                    <button
+                      key={tab.path}
+                      onClick={() => handleTabSelect(tab.path)}
+                      className={`flex items-center gap-2 px-3 py-1.5 my-1 mx-0.5 rounded-md text-sm whitespace-nowrap transition-colors ${
+                        tab.path === activeTabPath
+                          ? "bg-[color-mix(in_srgb,var(--accent)_20%,transparent)] text-[var(--accent)]"
+                          : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:text-[var(--foreground)]"
+                      }`}
+                    >
+                      <span className="max-w-[120px] truncate">{tab.path.split("/").pop()}</span>
+                      <div 
+                        className="p-0.5 rounded-sm hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTabClose(tab.path);
+                        }}
+                      >
+                        <IconX />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             
             {/* Editor Content */}
             <div className="flex-1 min-h-0 relative">

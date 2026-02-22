@@ -38,7 +38,7 @@ interface MobileProjectLayoutProps {
   fs: IdbfsFs | null;
   
   // Tab panels
-  filesPanel: (searchQuery: string) => React.ReactNode;
+  filesPanel: (searchQuery: string) => React.ReactElement | null;
   editorPanel: React.ReactNode;
   pdfPanel: React.ReactNode;
   
