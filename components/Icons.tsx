@@ -69,6 +69,7 @@ import {
   MessageSquare,
   Sun,
   Moon,
+  Home,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -140,6 +141,7 @@ export const IconMessageSquare = () => <MessageSquare {...iconProps} />;
 export const IconHistory = () => <History {...iconProps} />;
 export const IconSun = () => <Sun {...iconProps} />;
 export const IconMoon = () => <Moon {...iconProps} />;
+export const IconHome = () => <Home {...iconProps} />;
 export const IconAntiprism = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
