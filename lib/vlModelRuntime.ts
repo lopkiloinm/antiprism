@@ -8,7 +8,7 @@ const HIDDEN = VL.hiddenSize ?? 2048;
 const KV_HEADS = VL.numKVHeads ?? 8;
 const HEAD_DIM = VL.headDim ?? 64;
 const SF = VL.sessionFiles ?? { embedTokens: "embed_tokens_fp16", embedImages: "embed_images_fp16", decoder: "decoder_q4" };
-const TILE = 512, MEAN = [0.485, 0.456, 0.406], STD = [0.229, 0.224, 0.225];
+const TILE = 512, MEAN = [0.5, 0.5, 0.5], STD = [0.5, 0.5, 0.5];
 
 function cacheNameForVL(): string {
   const prefix = VL.label
@@ -312,6 +312,32 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 // --- Embeddings ---
+function toHalf(val: number) {
+  const floatView = new Float32Array(1);
+  const int32View = new Int32Array(floatView.buffer);
+  floatView[0] = val;
+  const x = int32View[0];
+  const bits = (x >> 16) & 0x8000;
+  let m = (x >> 12) & 0x07ff;
+  const e = (x >> 23) & 0xff;
+  if (e < 103) return bits;
+  if (e > 142) {
+    let res = bits | 0x7c00;
+    if (e === 255 && (x & 0x007fffff)) res |= 1;
+    return res;
+  }
+  if (e < 113) {
+    m |= 0x0800;
+    const shift = 114 - e;
+    let res = bits | (m >> shift);
+    if ((m >> (shift - 1)) & 1) res += 1;
+    return res;
+  }
+  let res = bits | ((e - 112) << 10) | (m >> 1);
+  if (m & 1) res += 1;
+  return res;
+}
+
 async function runEmbedTok(ids: number[]) {
   const t = new ort.Tensor("int64", new BigInt64Array(ids.map(BigInt)), [1, ids.length]);
   const out = await etS.run({ input_ids: t });
@@ -319,19 +345,36 @@ async function runEmbedTok(ids: number[]) {
 }
 
 async function runEmbedImg(inp: any) {
-  const pv = new ort.Tensor("float32", inp.pv, inp.pvD);
+  let pv = new ort.Tensor("float32", inp.pv, inp.pvD);
   const pam = new ort.Tensor("int64", inp.pam, inp.pamD);
   const ss = new ort.Tensor("int64", inp.ss, inp.ssD);
-  const out = await eiS.run({ pixel_values: pv, pixel_attention_mask: pam, spatial_shapes: ss });
-  return out[eiS.outputNames[0]];
+  
+  try {
+    const out = await eiS.run({ pixel_values: pv, pixel_attention_mask: pam, spatial_shapes: ss });
+    return out[eiS.outputNames[0]];
+  } catch (e: any) {
+    if (e.message && e.message.includes("float16")) {
+      const pv16 = new Uint16Array(inp.pv.length);
+      for (let i = 0; i < inp.pv.length; i++) {
+        pv16[i] = toHalf(inp.pv[i]);
+      }
+      pv = new ort.Tensor("float16", pv16, inp.pvD);
+      const out = await eiS.run({ pixel_values: pv, pixel_attention_mask: pam, spatial_shapes: ss });
+      return out[eiS.outputNames[0]];
+    }
+    throw e;
+  }
 }
 
 function mergeImg(ids: number[], tokEmb: any, imgEmb: any) {
   if (imgTok < 0) return tokEmb;
 
   const h = tokEmb.dims[2];
-  const outData = new Float32Array(tokEmb.data);
-  const imgData = new Float32Array(imgEmb.data);
+  
+  // Preserve the original data type (e.g., float16 -> Uint16Array)
+  const DataType = tokEmb.data.constructor as any;
+  const outData = new DataType(tokEmb.data);
+  const imgData = imgEmb.data;
 
   const imagePositions: number[] = [];
   for (let i = 0; i < ids.length; i++) {
@@ -348,7 +391,7 @@ function mergeImg(ids: number[], tokEmb: any, imgEmb: any) {
     outData.set(imgData.subarray(i * h, (i + 1) * h), pos * h);
   }
 
-  return new ort.Tensor("float32", outData, tokEmb.dims);
+  return new ort.Tensor(tokEmb.type, outData, tokEmb.dims);
 }
 
 // --- Decoding ---
