@@ -353,16 +353,15 @@ async function runEmbedImg(inp: any) {
     const out = await eiS.run({ pixel_values: pv, pixel_attention_mask: pam, spatial_shapes: ss });
     return out[eiS.outputNames[0]];
   } catch (e: any) {
-    if (e.message && e.message.includes("float16")) {
-      const pv16 = new Uint16Array(inp.pv.length);
-      for (let i = 0; i < inp.pv.length; i++) {
-        pv16[i] = toHalf(inp.pv[i]);
-      }
-      pv = new ort.Tensor("float16", pv16, inp.pvD);
-      const out = await eiS.run({ pixel_values: pv, pixel_attention_mask: pam, spatial_shapes: ss });
-      return out[eiS.outputNames[0]];
+    // ONNX WebGPU error messages can be inconsistent or misleading (e.g. "Invalid rank for input")
+    // If float32 fails, always try float16 fallback for vision models
+    const pv16 = new Uint16Array(inp.pv.length);
+    for (let i = 0; i < inp.pv.length; i++) {
+      pv16[i] = toHalf(inp.pv[i]);
     }
-    throw e;
+    pv = new ort.Tensor("float16", pv16, inp.pvD);
+    const out = await eiS.run({ pixel_values: pv, pixel_attention_mask: pam, spatial_shapes: ss });
+    return out[eiS.outputNames[0]];
   }
 }
 
