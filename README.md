@@ -32,13 +32,66 @@
 
 ### AI Chat Modes
 
-| Mode | Purpose | Context |
-|------|---------|---------|
-| **Ask** | Q&A about the current document | Reference document + conversation history |
-| **Agent** | Generate new LaTeX papers | Conversation history only (no reference doc) |
+| Mode | Purpose | Context | Model Used |
+|------|---------|---------|------------|
+| **Ask** | Q&A about the current document | Reference document + conversation history | LFM2.5-1.2B Q4 (Instruct) |
+| **Agent** | Generate new LaTeX papers | Conversation history only (no reference doc) | LFM2.5-1.2B Q4 (Instruct) |
+| **Vision** | Process images with text | Image + text prompts | LFM2.5-VL-1.6B (Vision) |
+
+#### AI Models Overview
+
+Antiprism uses three specialized LiquidAI models running entirely in your browser via WebGPU:
+
+**1. LFM2.5-1.2B Q4 (Instruct Model)**
+- **Purpose**: Text generation for chat, LaTeX assistance, and document creation
+- **Architecture**: 1.2 billion parameters, 4-bit quantized for efficient browser execution
+- **Processing**: Converts text tokens to embeddings, generates responses autoregressively
+- **Specialization**: Instruction-following chat model trained for academic and technical writing
+- **Runtime**: ONNX WebGPU inference with ~2GB memory usage
+- **Use Cases**: 
+  - Answering questions about your LaTeX document
+  - Explaining LaTeX syntax and concepts
+  - Generating new content in markdown format (converted to LaTeX via pandoc-wasm)
+
+**2. LFM2.5-VL-1.6B (Vision Model)**
+- **Purpose**: Multimodal understanding of images combined with text
+- **Architecture**: 1.6 billion parameters with vision encoder and language model
+- **Processing Pipeline**:
+  1. **Image Preprocessing**: Splits images into 512×512 tiles, extracts 16×16 patches
+  2. **Patch Encoding**: Each patch flattened to 768 values, normalized to [-1, 1]
+  3. **Vision Encoder**: Processes patches through transformer layers
+  4. **Multimodal Fusion**: Combines image embeddings with text token embeddings
+- **Technical Details**:
+  - Input shapes: `pixel_values: [num_tiles, 1024, 768]`, `attention_mask: [num_tiles, 1024]`
+  - Supports up to 10 tiles + thumbnail for high-resolution images
+  - Float16 precision for efficient GPU computation
+- **Use Cases**:
+  - Analyzing diagrams, charts, and mathematical figures
+  - Explaining screenshots and visual content
+  - Converting handwritten equations to LaTeX
+
+**3. LFM2.5-1.2B (Thinking Model)**
+- **Purpose**: Enhanced reasoning and step-by-step problem solving
+- **Architecture**: Same 1.2B parameter base with specialized reasoning training
+- **Processing**: Uses chain-of-thought prompting for complex problem decomposition
+- **Specialization**: Trained for mathematical reasoning, proof generation, and logical deduction
+- **Use Cases**:
+  - Solving mathematical problems step-by-step
+  - Generating proof structures and logical arguments
+  - Debugging complex LaTeX code with reasoning
+
+#### Model Integration
+
+All three models share the same WebGPU runtime infrastructure:
+- **ONNX Runtime Web**: Executes models directly in browser GPU
+- **Cache API**: Models cached locally after first download (~500MB total)
+- **Memory Management**: Efficient tensor operations with automatic cleanup
+- **Type Handling**: Supports both float32 and float16 precision
+- **Streaming**: Real-time token generation for responsive chat experience
 
 - **Ask**: Uses the open document as context. Good for editing, debugging, and explaining LaTeX.
 - **Agent**: Model outputs markdown; pandoc-wasm converts to LaTeX. New files are named from the first `#` heading. Conversation history uses markdown (not LaTeX) so the model stays in its trained format.
+- **Vision**: Attach images to chat messages for multimodal understanding. The vision encoder processes images alongside text for comprehensive analysis.
 
 ---
 
