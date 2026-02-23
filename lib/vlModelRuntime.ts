@@ -275,33 +275,236 @@ function buildPrompt(msgs: VLMessage[]) {
 }
 
 // --- Image Preprocessing ---
-function computeGrid(w: number, h: number): [number, number] {
-  if (w <= TILE && h <= TILE) return [1, 1];
-  const a = w / h;
-  if (a > 1.5) return [1, 2];
-  if (a < 0.67) return [2, 1];
-  return [2, 2];
+const CONFIG = {
+  tileSize: 512,
+  maxTiles: 10,
+  minTiles: 2,
+  patchSize: 16,
+  patchesPerTile: 32,
+  downsampleFactor: 2,
+  minImageTokens: 64,
+  maxImageTokens: 256,
+  useThumbnail: true
+};
+
+const NORM_SCALE = 1 / 127.5;
+const NORM_OFFSET = -1.0;
+
+function roundByFactor(number: number, factor: number) {
+  return Math.round(number / factor) * factor;
+}
+
+function ceilByFactor(number: number, factor: number) {
+  return Math.ceil(number / factor) * factor;
+}
+
+function floorByFactor(number: number, factor: number) {
+  return Math.floor(number / factor) * factor;
+}
+
+function smartResize(width: number, height: number) {
+  const { patchSize, downsampleFactor, minImageTokens, maxImageTokens } = CONFIG;
+  const totalFactor = patchSize * downsampleFactor;
+  const minPixels = minImageTokens * (patchSize ** 2) * (downsampleFactor ** 2);
+  const maxPixels = maxImageTokens * (patchSize ** 2) * (downsampleFactor ** 2);
+
+  let hBar = Math.max(totalFactor, roundByFactor(height, totalFactor));
+  let wBar = Math.max(totalFactor, roundByFactor(width, totalFactor));
+
+  if (hBar * wBar > maxPixels) {
+    const beta = Math.sqrt((height * width) / maxPixels);
+    hBar = Math.max(totalFactor, floorByFactor(height / beta, totalFactor));
+    wBar = Math.max(totalFactor, floorByFactor(width / beta, totalFactor));
+  } else if (hBar * wBar < minPixels) {
+    const beta = Math.sqrt(minPixels / (height * width));
+    hBar = ceilByFactor(height * beta, totalFactor);
+    wBar = ceilByFactor(width * beta, totalFactor);
+  }
+
+  return { width: wBar, height: hBar };
+}
+
+function findClosestAspectRatio(aspectRatio: number, targetRatios: number[][], width: number, height: number, imageSize: number) {
+  let bestRatioDiff = Infinity;
+  let bestArea = 0;
+  let closestRatio = targetRatios[0];
+
+  for (const ratio of targetRatios) {
+    const targetAspect = ratio[0] / ratio[1];
+    const ratioDiff = Math.abs(aspectRatio - targetAspect);
+
+    if (ratioDiff < bestRatioDiff) {
+      bestRatioDiff = ratioDiff;
+      bestArea = ratio[0] * ratio[1] * imageSize * imageSize;
+      closestRatio = ratio;
+    } else if (ratioDiff === bestRatioDiff) {
+      const area = ratio[0] * ratio[1] * imageSize * imageSize;
+      if (Math.abs(area - width * height) < Math.abs(bestArea - width * height)) {
+        bestRatioDiff = ratioDiff;
+        bestArea = area;
+        closestRatio = ratio;
+      }
+    }
+  }
+  return closestRatio;
+}
+
+function calculateTileGrid(width: number, height: number) {
+  const { tileSize, minTiles, maxTiles } = CONFIG;
+  const aspectRatio = width / height;
+
+  const targetRatios: number[][] = [];
+  for (let n = minTiles; n <= maxTiles; n++) {
+    for (let w = 1; w <= n; w++) {
+      for (let h = 1; h <= n; h++) {
+        if (w * h >= minTiles && w * h <= maxTiles) {
+          if (!targetRatios.some(r => r[0] === w && r[1] === h)) {
+            targetRatios.push([w, h]);
+          }
+        }
+      }
+    }
+  }
+  targetRatios.sort((a, b) => (a[0] * a[1]) - (b[0] * b[1]));
+
+  if (targetRatios.length === 0) return { rows: 1, cols: 1 };
+  const [gridWidth, gridHeight] = findClosestAspectRatio(aspectRatio, targetRatios, width, height, tileSize);
+  return { rows: gridHeight, cols: gridWidth };
+}
+
+function isImageTooLarge(width: number, height: number) {
+  const { patchSize, downsampleFactor, maxImageTokens } = CONFIG;
+  const totalFactor = patchSize * downsampleFactor;
+  const maxPixels = maxImageTokens * (patchSize ** 2) * (downsampleFactor ** 2);
+  const hBar = Math.max(totalFactor, roundByFactor(height, totalFactor));
+  const wBar = Math.max(totalFactor, roundByFactor(width, totalFactor));
+  return hBar * wBar > maxPixels;
+}
+
+function extractPatches(imageData: ImageData, pixelValues: Float32Array, attentionMask: BigInt64Array, tileIdx: number, patchesH: number, patchesW: number, maxPatchesPerTile: number) {
+  const patchSize = CONFIG.patchSize;
+  const patchDim = patchSize * patchSize * 3;
+  const imageWidth = imageData.width;
+  const pixels = imageData.data;
+  const tileOffset = tileIdx * maxPatchesPerTile * patchDim;
+  const maskOffset = tileIdx * maxPatchesPerTile;
+  const actualPatches = patchesH * patchesW;
+
+  let patchIdx = 0;
+  for (let py = 0; py < patchesH; py++) {
+    for (let px = 0; px < patchesW; px++) {
+      const patchStartX = px * patchSize;
+      const patchStartY = py * patchSize;
+
+      attentionMask[maskOffset + patchIdx] = 1n;
+      const patchOffset = tileOffset + patchIdx * patchDim;
+      let outIdx = 0;
+
+      for (let dy = 0; dy < patchSize; dy++) {
+        const rowOffset = (patchStartY + dy) * imageWidth;
+        for (let dx = 0; dx < patchSize; dx++) {
+          const srcIdx = (rowOffset + patchStartX + dx) * 4;
+          pixelValues[patchOffset + outIdx++] = pixels[srcIdx] * NORM_SCALE + NORM_OFFSET;
+          pixelValues[patchOffset + outIdx++] = pixels[srcIdx + 1] * NORM_SCALE + NORM_OFFSET;
+          pixelValues[patchOffset + outIdx++] = pixels[srcIdx + 2] * NORM_SCALE + NORM_OFFSET;
+        }
+      }
+      patchIdx++;
+    }
+  }
+
+  for (let i = actualPatches; i < maxPatchesPerTile; i++) {
+    attentionMask[maskOffset + i] = 0n;
+  }
 }
 
 async function prepImg(dataUrl: string) {
   const img = await loadImage(dataUrl);
-  const [gh, gw] = computeGrid(img.width, img.height);
-  const tw = gw * TILE, th = gh * TILE, nt = gh * gw;
-  const cv = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(tw, th) : document.createElement("canvas");
-  cv.width = tw; cv.height = th;
-  const ctx = cv.getContext("2d")! as any;
-  ctx.drawImage(img, 0, 0, tw, th);
-  const pv = new Float32Array(nt * 3 * TILE * TILE);
-  const pam = new BigInt64Array(nt * TILE * TILE).fill(1n);
-  for (let ty = 0; ty < gh; ty++) for (let tx = 0; tx < gw; tx++) {
-    const ti = ty * gw + tx;
-    const d = ctx.getImageData(tx * TILE, ty * TILE, TILE, TILE).data;
-    for (let c = 0; c < 3; c++) for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
-      pv[ti * 3 * TILE * TILE + c * TILE * TILE + y * TILE + x] = (d[(y * TILE + x) * 4 + c] / 255 - MEAN[c]) / STD[c];
+  const width = img.width;
+  const height = img.height;
+
+  const { tileSize, patchSize, useThumbnail } = CONFIG;
+  const patchesPerSide = CONFIG.patchesPerTile;
+  const maxPatchesPerTile = patchesPerSide * patchesPerSide; // 1024
+  const patchDim = patchSize * patchSize * 3; // 768
+
+  const needsSplitting = isImageTooLarge(width, height);
+
+  if (needsSplitting) {
+    const { rows, cols } = calculateTileGrid(width, height);
+    const totalGridTiles = rows * cols;
+
+    if (totalGridTiles > 1) {
+      const numTiles = totalGridTiles + (useThumbnail ? 1 : 0);
+      const pixelValues = new Float32Array(numTiles * maxPatchesPerTile * patchDim);
+      const attentionMask = new BigInt64Array(numTiles * maxPatchesPerTile);
+      const spatialShapes = new BigInt64Array(numTiles * 2);
+
+      const targetWidth = tileSize * cols;
+      const targetHeight = tileSize * rows;
+
+      const cv = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(targetWidth, targetHeight) : document.createElement("canvas");
+      cv.width = targetWidth; cv.height = targetHeight;
+      const ctx = cv.getContext("2d")! as any;
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+      let tileIdx = 0;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const tileData = ctx.getImageData(col * tileSize, row * tileSize, tileSize, tileSize);
+          extractPatches(tileData, pixelValues, attentionMask, tileIdx, patchesPerSide, patchesPerSide, maxPatchesPerTile);
+          spatialShapes[tileIdx * 2] = BigInt(patchesPerSide);
+          spatialShapes[tileIdx * 2 + 1] = BigInt(patchesPerSide);
+          tileIdx++;
+        }
+      }
+
+      if (useThumbnail) {
+        const thumbCanvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(tileSize, tileSize) : document.createElement("canvas");
+        thumbCanvas.width = tileSize; thumbCanvas.height = tileSize;
+        const thumbCtx = thumbCanvas.getContext("2d")! as any;
+        thumbCtx.drawImage(img, 0, 0, tileSize, tileSize);
+        const thumbData = thumbCtx.getImageData(0, 0, tileSize, tileSize);
+        extractPatches(thumbData, pixelValues, attentionMask, tileIdx, patchesPerSide, patchesPerSide, maxPatchesPerTile);
+        spatialShapes[tileIdx * 2] = BigInt(patchesPerSide);
+        spatialShapes[tileIdx * 2 + 1] = BigInt(patchesPerSide);
+      }
+
+      return {
+        pv: pixelValues, pam: attentionMask, ss: spatialShapes,
+        pvD: [numTiles, maxPatchesPerTile, patchDim],
+        pamD: [numTiles, maxPatchesPerTile],
+        ssD: [numTiles, 2]
+      };
     }
   }
-  return { pv, pam, ss: BigInt64Array.from([BigInt(gh), BigInt(gw)]),
-    pvD: [1, nt, 3, TILE, TILE], pamD: [1, nt, TILE, TILE], ssD: [1, 2] };
+
+  // Standard resize path (no tiling)
+  const resized = smartResize(width, height);
+  const actualPatchesH = Math.floor(resized.height / patchSize);
+  const actualPatchesW = Math.floor(resized.width / patchSize);
+
+  const cv = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(resized.width, resized.height) : document.createElement("canvas");
+  cv.width = resized.width; cv.height = resized.height;
+  const ctx = cv.getContext("2d")! as any;
+  ctx.drawImage(img, 0, 0, resized.width, resized.height);
+  const imageData = ctx.getImageData(0, 0, resized.width, resized.height);
+
+  const numTiles = 1;
+  const pixelValues = new Float32Array(numTiles * maxPatchesPerTile * patchDim);
+  const attentionMask = new BigInt64Array(numTiles * maxPatchesPerTile);
+  const spatialShapes = new BigInt64Array(numTiles * 2);
+
+  extractPatches(imageData, pixelValues, attentionMask, 0, actualPatchesH, actualPatchesW, maxPatchesPerTile);
+  spatialShapes[0] = BigInt(actualPatchesH);
+  spatialShapes[1] = BigInt(actualPatchesW);
+
+  return {
+    pv: pixelValues, pam: attentionMask, ss: spatialShapes,
+    pvD: [numTiles, maxPatchesPerTile, patchDim],
+    pamD: [numTiles, maxPatchesPerTile],
+    ssD: [numTiles, 2]
+  };
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
