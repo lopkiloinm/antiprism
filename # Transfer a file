@@ -1,0 +1,29 @@
+# Transfer a file
+
+
+# [WebRTC samples](https://webrtc.github.io/samples/) Transfer a file
+[WebRTC samples](https://webrtc.github.io/samples/)
+This page shows how to transfer a file via WebRTC datachannels.
+To accomplish this in an interoperable way, the file is split into chunks which are then transferred via the datachannel. The datachannel is reliable and ordered by default which is well-suited to filetransfers.
+Send and receive progress is monitored using HTML5 progress elements.
+At the receiver, the file is reassembled using the Blob API and made available for download.
+Note: real-world applications require a file transfer protocol to send metadata about the file (such as the filename, type, size, last modification date, hash, ...).This information can be conveyed either via the signaling channel or in-band. The demo elides this by assuming knowledge of the file size at the receiver and closes both the datachannel and the peerconnection when the correct amount of bytes has been received.
+View the console to see logging.
+The RTCPeerConnection objects pc1 and pc2 are in global scope, so you can inspect them in the console as well.
+
+```
+RTCPeerConnection
+```
+
+
+```
+pc1
+```
+
+
+```
+pc2
+```
+
+For more information about RTCDataChannel, see [Getting Started With WebRTC](http://www.html5rocks.com/en/tutorials/webrtc/basics/).
+[View source on GitHub](https://github.com/webrtc/samples/tree/gh-pages/src/content/datachannel/filetransfer)

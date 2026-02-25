@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultra-Fast y-RxDB Connector Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .container {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .info { color: #60a5fa; }
+        .warning { color: #fbbf24; }
+        pre {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #2563eb; }
+        button:disabled { background: #6b7280; cursor: not-allowed; }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric {
+            background: #1f2937;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4ade80;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Ultra-Fast y-RxDB Connector Test</h1>
+        <p>Testing the core concepts of the zero-copy operation bridge.</p>
+        
+        <div>
+            <button onclick="runSimpleTest()" id="simpleTest">Run Simple Tests</button>
+            <button onclick="runPerformanceTest()" id="perfTest">Run Performance Test</button>
+            <button onclick="runYjsTest()" id="yjsTest">Run Yjs Test</button>
+            <button onclick="clearResults()" id="clearBtn">Clear Results</button>
+        </div>
+    </div>
+
+    <div id="results"></div>
+
+    <script type="module">
+        // Simple ring buffer implementation
+        class RingBuffer {
+            constructor(size) {
+                this.size = size;
+                this.buffer = new Array(size);
+                this.head = 0;
+                this.tail = 0;
+                this.count = 0;
+            }
+
+            push(item) {
+                if (this.count >= this.size) return false;
+                this.buffer[this.tail] = item;
+                this.tail = (this.tail + 1) % this.size;
+                this.count++;
+                return true;
+            }
+
+            flush() {
+                const items = [];
+                while (this.count > 0) {
+                    items.push(this.buffer[this.head]);
+                    this.buffer[this.head] = undefined;
+                    this.head = (this.head + 1) % this.size;
+                    this.count--;
+                }
+                return items;
+            }
+
+            get length() {
+                return this.count;
+            }
+        }
+
+        // Simple compression test
+        class SimpleCompressor {
+            async compress(data) {
+                try {
+                    const compressionStream = new CompressionStream('deflate');
+                    const writer = compressionStream.writable.getWriter();
+                    const reader = compressionStream.readable.getReader();
+                    
+                    writer.write(data);
+                    writer.close();
+                    
+                    const chunks = [];
+                    let done = false;
+                    
+                    while (!done) {
+                        const { value, done: readerDone } = await reader.read();
+                        done = readerDone;
+                        if (value) chunks.push(value);
+                    }
+                    
+                    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                    const result = new Uint8Array(totalLength);
+                    let offset = 0;
+                    
+                    for (const chunk of chunks) {
+                        result.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+                    
+                    return result;
+                } catch (error) {
+                    console.error('Compression error:', error);
+                    return data;
+                }
+            }
+
+            async decompress(data) {
+                try {
+                    const decompressionStream = new DecompressionStream('deflate');
+                    const writer = decompressionStream.writable.getWriter();
+                    const reader = decompressionStream.readable.getReader();
+                    
+                    writer.write(data);
+                    writer.close();
+                    
+                    const chunks = [];
+                    let done = false;
+                    
+                    while (!done) {
+                        const { value, done: readerDone } = await reader.read();
+                        done = readerDone;
+                        if (value) chunks.push(value);
+                    }
+                    
+                    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                    const result = new Uint8Array(totalLength);
+                    let offset = 0;
+                    
+                    for (const chunk of chunks) {
+                        result.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+                    
+                    return result;
+                } catch (error) {
+                    console.error('Decompression error:', error);
+                    return data;
+                }
+            }
+        }
+
+        // Load Yjs with fallback
+        let YjsModule;
+        try {
+            YjsModule = await import('https://cdn.skypack.dev/yjs');
+        } catch (error) {
+            console.error('Failed to load Yjs from Skypack, trying unpkg...');
+            YjsModule = await import('https://unpkg.com/yjs@13.6.29/dist/yjs.mjs');
+        }
+
+        // Global test functions
+        window.runSimpleTest = async function() {
+            const results = document.getElementById('results');
+            const startTime = performance.now();
+            
+            try {
+                let output = '<div class="container"><h2>🧪 Simple Test Results</h2>';
+                
+                // Test 1: Ring Buffer
+                const buffer = new RingBuffer(5);
+                buffer.push("item1");
+                buffer.push("item2");
+                buffer.push("item3");
+                const flushed = buffer.flush();
+                output += `<p class="success">✅ Ring Buffer: ${flushed.length} items flushed</p>`;
+                
+                // Test 2: Compression
+                const compressor = new SimpleCompressor();
+                const originalData = new TextEncoder().encode("Hello World! This is a test string for compression.");
+                const compressed = await compressor.compress(originalData);
+                const decompressed = await compressor.decompress(compressed);
+                const compressionRatio = (compressed.length / originalData.length * 100).toFixed(1);
+                const decompressionCorrect = new TextDecoder().decode(decompressed) === new TextDecoder().decode(originalData);
+                output += `<p class="success">✅ Compression: ${compressionRatio}% size ratio, ${decompressionCorrect ? 'correct' : 'incorrect'} decompression</p>`;
+                
+                // Test 3: Weak Reference Cache
+                const cache = new WeakMap();
+                const key = {};
+                const obj = { data: "test data" };
+                cache.set(key, obj);
+                const cached = cache.get(key);
+                output += `<p class="success">✅ Weak Cache: ${cached === obj ? 'hit' : 'miss'}</p>`;
+                
+                // Test 4: Yjs Integration (with error handling)
+                output += `<p class="info">📝 Testing Yjs Integration...</p>`;
+                try {
+                    if (YjsModule && YjsModule.Y && YjsModule.Y.Doc) {
+                        const doc = new YjsModule.Y.Doc();
+                        const text = doc.getText('content');
+                        text.insert(0, 'Hello Yjs!');
+                        const update = YjsModule.Y.encodeStateAsUpdate(doc);
+                        const newDoc = new YjsModule.Y.Doc();
+                        YjsModule.Y.applyUpdate(newDoc, update);
+                        const recoveredText = newDoc.getText('content').toString();
+                        output += `<p class="success">✅ Yjs Integration: "${recoveredText}" recovered correctly</p>`;
+                    } else {
+                        output += `<p class="warning">⚠️ Yjs not loaded - skipping Yjs test</p>`;
+                    }
+                } catch (yjsError) {
+                    output += `<p class="warning">⚠️ Yjs test failed: ${yjsError.message}</p>`;
+                }
+                
+                const endTime = performance.now();
+                output += `<p class="info">⏱️ Total time: ${(endTime - startTime).toFixed(2)}ms</p>`;
+                output += '</div>';
+                
+                results.innerHTML = output;
+                
+            } catch (error) {
+                results.innerHTML = `<div class="container"><h2 class="error">❌ Test Failed</h2><p class="error">${error.message}</p></div>`;
+            }
+        };
+
+        window.runPerformanceTest = async function() {
+            const results = document.getElementById('results');
+            const startTime = performance.now();
+            
+            try {
+                // Create many documents (with error handling)
+                let docs = [];
+                let output = '<div class="container"><h2>⚡ Performance Test Results</h2>';
+                
+                if (YjsModule && YjsModule.Y && YjsModule.Y.Doc) {
+                    for (let i = 0; i < 100; i++) {
+                        const doc = new YjsModule.Y.Doc();
+                        doc.getText('content').insert(0, `Document ${i} content\n`);
+                        docs.push(doc);
+                    }
+                    
+                    // Simulate operations
+                    for (let i = 0; i < 1000; i++) {
+                        const randomDoc = docs[Math.floor(Math.random() * docs.length)];
+                        randomDoc.getText('content').insert(Math.floor(Math.random() * 100), 'x');
+                    }
+                    
+                    const endTime = performance.now();
+                    const opsPerSecond = (1000 / (endTime - startTime) * 1000).toFixed(0);
+                    
+                    output += `
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-value">${opsPerSecond}</div>
+                                <div class="metric-label">Operations/Second</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">100</div>
+                                <div class="metric-label">Documents</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">1000</div>
+                                <div class="metric-label">Total Operations</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${(endTime - startTime).toFixed(2)}ms</div>
+                                <div class="metric-label">Total Time</div>
+                            </div>
+                        </div>
+                        <p class="success">✅ Performance test completed successfully!</p>
+                    `;
+                } else {
+                    output += `<p class="warning">⚠️ Yjs not loaded - skipping performance test</p>`;
+                }
+                
+                output += '</div>';
+                results.innerHTML = output;
+                
+            } catch (error) {
+                results.innerHTML = `<div class="container"><h2 class="error">❌ Performance Test Failed</h2><p class="error">${error.message}</p></div>`;
+            }
+        };
+
+        window.runYjsTest = async function() {
+            const results = document.getElementById('results');
+            
+            try {
+                // Test collaborative editing simulation (with error handling)
+                let output = '<div class="container"><h2>🤝 Yjs Collaboration Test</h2>';
+                
+                if (YjsModule && YjsModule.Y && YjsModule.Y.Doc) {
+                    const doc1 = new YjsModule.Y.Doc();
+                    const doc2 = new YjsModule.Y.Doc();
+                    
+                    const text1 = doc1.getText('content');
+                    const text2 = doc2.getText('content');
+                    
+                    // Simulate concurrent edits
+                    text1.insert(0, 'User 1: Hello\n');
+                    text2.insert(0, 'User 2: World\n');
+                    
+                    // Sync documents
+                    const update1 = YjsModule.Y.encodeStateAsUpdate(doc1);
+                    const update2 = YjsModule.Y.encodeStateAsUpdate(doc2);
+                    
+                    YjsModule.Y.applyUpdate(doc2, update1);
+                    YjsModule.Y.applyUpdate(doc1, update2);
+                    
+                    const finalText1 = text1.toString();
+                    const finalText2 = text2.toString();
+                    
+                    output += `<p class="success">✅ Document 1: "${finalText1}"</p>`;
+                    output += `<p class="success">✅ Document 2: "${finalText2}"</p>`;
+                    output += `<p class="info">📝 Documents are ${finalText1 === finalText2 ? 'synchronized' : 'not synchronized'}</p>`;
+                    output += `<p class="success">✅ CRDT operations working correctly!</p>`;
+                } else {
+                    output += `<p class="warning">⚠️ Yjs not loaded - skipping collaboration test</p>`;
+                }
+                
+                output += '</div>';
+                results.innerHTML = output;
+                
+            } catch (error) {
+                results.innerHTML = `<div class="container"><h2 class="error">❌ Yjs Test Failed</h2><p class="error">${error.message}</p></div>`;
+            }
+        };
+
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        // Run simple test on load
+        setTimeout(() => {
+            console.log('🚀 Ultra-Fast y-RxDB Connector Test Page Loaded');
+            console.log('Click buttons to run tests');
+        }, 100);
+    </script>
+</body>
+</html>

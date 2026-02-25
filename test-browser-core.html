@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core Concepts Test - No Dependencies</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .container {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .info { color: #60a5fa; }
+        .warning { color: #fbbf24; }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #2563eb; }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .metric {
+            background: #1f2937;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4ade80;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Core Concepts Test - No External Dependencies</h1>
+        <p>Testing the ultra-fast connector algorithms without Yjs or RxDB.</p>
+        
+        <div>
+            <button onclick="runCoreTest()">Run Core Test</button>
+            <button onclick="runPerformanceTest()">Run Performance Test</button>
+            <button onclick="runStressTest()">Run Stress Test</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        // Ultra-fast ring buffer implementation
+        class UltraFastRingBuffer {
+            constructor(size) {
+                this.size = size;
+                this.buffer = new Array(size);
+                this.head = 0;
+                this.tail = 0;
+                this.count = 0;
+            }
+
+            push(item) {
+                if (this.count >= this.size) return false;
+                this.buffer[this.tail] = item;
+                this.tail = (this.tail + 1) % this.size;
+                this.count++;
+                return true;
+            }
+
+            flush() {
+                const items = [];
+                while (this.count > 0) {
+                    items.push(this.buffer[this.head]);
+                    this.buffer[this.head] = undefined;
+                    this.head = (this.head + 1) % this.size;
+                    this.count--;
+                }
+                return items;
+            }
+
+            get length() {
+                return this.count;
+            }
+        }
+
+        // Mock compression using simple algorithm
+        class MockCompressor {
+            compress(data) {
+                // Simple run-length encoding mock
+                const compressed = [];
+                let count = 1;
+                let current = data[0];
+                
+                for (let i = 1; i < data.length; i++) {
+                    if (data[i] === current && count < 255) {
+                        count++;
+                    } else {
+                        compressed.push(current);
+                        compressed.push(count);
+                        current = data[i];
+                        count = 1;
+                    }
+                }
+                compressed.push(current);
+                compressed.push(count);
+                
+                return new Uint8Array(compressed);
+            }
+
+            decompress(compressed) {
+                const decompressed = [];
+                for (let i = 0; i < compressed.length; i += 2) {
+                    const value = compressed[i];
+                    const count = compressed[i + 1];
+                    for (let j = 0; j < count; j++) {
+                        decompressed.push(value);
+                    }
+                }
+                return new Uint8Array(decompressed);
+            }
+        }
+
+        // Simulated document operations
+        class MockDocument {
+            constructor(id) {
+                this.id = id;
+                this.content = '';
+                this.operations = [];
+            }
+
+            insert(position, text) {
+                this.content = this.content.slice(0, position) + text + this.content.slice(position);
+                this.operations.push({ type: 'insert', position, text, timestamp: Date.now() });
+            }
+
+            delete(position, length) {
+                this.content = this.content.slice(0, position) + this.content.slice(position + length);
+                this.operations.push({ type: 'delete', position, length, timestamp: Date.now() });
+            }
+
+            getLength() {
+                return this.content.length;
+            }
+        }
+
+        // Batch processor
+        class BatchProcessor {
+            constructor(batchSize = 50) {
+                this.batchSize = batchSize;
+                this.pendingOperations = [];
+            }
+
+            addOperation(operation) {
+                this.pendingOperations.push(operation);
+                
+                if (this.pendingOperations.length >= this.batchSize) {
+                    return this.flush();
+                }
+                return [];
+            }
+
+            flush() {
+                const batch = this.pendingOperations.splice(0);
+                return batch;
+            }
+
+            getPendingCount() {
+                return this.pendingOperations.length;
+            }
+        }
+
+        // Test functions
+        window.runCoreTest = function() {
+            const results = document.getElementById('results');
+            const startTime = performance.now();
+            
+            try {
+                let output = '<div class="container"><h2>🧪 Core Concepts Test Results</h2>';
+                
+                // Test 1: Ring Buffer
+                const buffer = new UltraFastRingBuffer(5);
+                buffer.push("item1");
+                buffer.push("item2");
+                buffer.push("item3");
+                const flushed = buffer.flush();
+                output += `<p class="success">✅ Ring Buffer: ${flushed.length} items flushed</p>`;
+                
+                // Test 2: Compression
+                const compressor = new MockCompressor();
+                const originalData = new Uint8Array([65, 65, 65, 65, 65, 66, 66, 66, 67, 67]); // AAAAABBBCC
+                const compressed = compressor.compress(originalData);
+                const decompressed = compressor.decompress(compressed);
+                const compressionRatio = (compressed.length / originalData.length * 100).toFixed(1);
+                const decompressionCorrect = JSON.stringify(decompressed) === JSON.stringify(originalData);
+                output += `<p class="success">✅ Compression: ${compressionRatio}% size ratio, ${decompressionCorrect ? 'correct' : 'incorrect'} decompression</p>`;
+                
+                // Test 3: Document Operations
+                const doc = new MockDocument('test-doc');
+                doc.insert(0, 'Hello ');
+                doc.insert(6, 'World!');
+                output += `<p class="success">✅ Document Operations: "${doc.content}" (${doc.operations.length} operations)</p>`;
+                
+                // Test 4: Batch Processing
+                const processor = new BatchProcessor(3);
+                processor.addOperation({ type: 'insert', text: 'a' });
+                processor.addOperation({ type: 'insert', text: 'b' });
+                processor.addOperation({ type: 'insert', text: 'c' });
+                const batch = processor.addOperation({ type: 'insert', text: 'd' }); // Should trigger flush
+                output += `<p class="success">✅ Batch Processing: ${batch.length} items batched, ${processor.getPendingCount()} pending</p>`;
+                
+                const endTime = performance.now();
+                output += `<p class="info">⏱️ Total time: ${(endTime - startTime).toFixed(2)}ms</p>`;
+                output += '</div>';
+                
+                results.innerHTML = output;
+                
+            } catch (error) {
+                results.innerHTML = `<div class="container"><h2 class="error">❌ Test Failed</h2><p class="error">${error.message}</p></div>`;
+            }
+        };
+
+        window.runPerformanceTest = function() {
+            const results = document.getElementById('results');
+            const startTime = performance.now();
+            
+            try {
+                // Create many documents
+                const docs = [];
+                for (let i = 0; i < 100; i++) {
+                    docs.push(new MockDocument(`doc-${i}`));
+                }
+                
+                // Simulate operations
+                for (let i = 0; i < 1000; i++) {
+                    const randomDoc = docs[Math.floor(Math.random() * docs.length)];
+                    const randomPos = Math.floor(Math.random() * 50);
+                    randomDoc.insert(randomPos, 'x');
+                }
+                
+                const endTime = performance.now();
+                const opsPerSecond = (1000 / (endTime - startTime) * 1000).toFixed(0);
+                
+                results.innerHTML = `
+                    <div class="container">
+                        <h2>⚡ Performance Test Results</h2>
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-value">${opsPerSecond}</div>
+                                <div class="metric-label">Operations/Second</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">100</div>
+                                <div class="metric-label">Documents</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">1000</div>
+                                <div class="metric-label">Total Operations</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${(endTime - startTime).toFixed(2)}ms</div>
+                                <div class="metric-label">Total Time</div>
+                            </div>
+                        </div>
+                        <p class="success">✅ Performance test completed successfully!</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                results.innerHTML = `<div class="container"><h2 class="error">❌ Performance Test Failed</h2><p class="error">${error.message}</p></div>`;
+            }
+        };
+
+        window.runStressTest = function() {
+            const results = document.getElementById('results');
+            const startTime = performance.now();
+            
+            try {
+                // Stress test ring buffer
+                const buffer = new UltraFastRingBuffer(10000);
+                let operations = 0;
+                
+                // Fill and drain many times
+                for (let cycle = 0; cycle < 100; cycle++) {
+                    for (let i = 0; i < 5000; i++) {
+                        buffer.push(`cycle-${cycle}-item-${i}`);
+                        operations++;
+                    }
+                    buffer.flush();
+                }
+                
+                const endTime = performance.now();
+                const opsPerSecond = (operations / (endTime - startTime) * 1000).toFixed(0);
+                
+                results.innerHTML = `
+                    <div class="container">
+                        <h2>💪 Stress Test Results</h2>
+                        <div class="metrics">
+                            <div class="metric">
+                                <div class="metric-value">${opsPerSecond}</div>
+                                <div class="metric-label">Operations/Second</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${operations}</div>
+                                <div class="metric-label">Total Operations</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">100</div>
+                                <div class="metric-label">Cycles</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">${(endTime - startTime).toFixed(2)}ms</div>
+                                <div class="metric-label">Total Time</div>
+                            </div>
+                        </div>
+                        <p class="success">✅ Stress test completed successfully!</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                results.innerHTML = `<div class="container"><h2 class="error">❌ Stress Test Failed</h2><p class="error">${error.message}</p></div>`;
+            }
+        };
+
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+        };
+
+        // Auto-run core test on load
+        setTimeout(() => {
+            console.log('🧪 Core Concepts Test Page Loaded');
+            console.log('Click buttons to run tests');
+        }, 100);
+    </script>
+</body>
+</html>

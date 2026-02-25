@@ -7,7 +7,15 @@ const HF = "https://huggingface.co";
 const HIDDEN = AUDIO_MODEL.hiddenSize ?? 2048;
 const KV_HEADS = AUDIO_MODEL.numKVHeads ?? 8;
 const HEAD_DIM = AUDIO_MODEL.headDim ?? 64;
-const SF = AUDIO_MODEL.sessionFiles ?? { 
+
+// Type assertion for audio model session files
+const SF = (AUDIO_MODEL.sessionFiles as unknown) as { 
+  decoder: string;
+  audioEncoder: string;
+  audioEmbedding: string;
+  audioDetokenizer: string;
+  vocoderDepthformer: string;
+} ?? { 
   decoder: "decoder_q4",
   audioEncoder: "audio_encoder_q4",
   audioEmbedding: "audio_embedding_q4",
