@@ -115,21 +115,29 @@ async function headLen(url: string) {
 async function downloadFile(url: string, onProg: (l: number, s: number) => void) {
   const r = await fetch(url);
   if (!r.ok || !r.body) throw new Error(`Download fail: ${url}`);
-  const reader = r.body.getReader();
-  const chunks: Uint8Array[] = [];
   let loaded = 0, lastTime = performance.now(), lastLoaded = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loaded += value.length;
-    const now = performance.now(), dt = now - lastTime;
-    if (dt >= 500) {
-      onProg(loaded, ((loaded - lastLoaded) / dt) * 1000);
-      lastTime = now; lastLoaded = loaded;
+  const reader = r.body.getReader();
+  const stream = new ReadableStream({
+    async start(controller) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          controller.close();
+          break;
+        }
+        loaded += value.length;
+        const now = performance.now();
+        const dt = now - lastTime;
+        if (dt >= 500) {
+          onProg(loaded, ((loaded - lastLoaded) / dt) * 1000);
+          lastTime = now;
+          lastLoaded = loaded;
+        }
+        controller.enqueue(value);
+      }
     }
-  }
-  return new Response(new Blob(chunks as BlobPart[]), { headers: r.headers, status: r.status, statusText: r.statusText });
+  });
+  return new Response(stream, { headers: r.headers, status: r.status, statusText: r.statusText });
 }
 
 async function ensureCached(files: string[]) {
@@ -171,11 +179,6 @@ async function getMissingCachedFiles(files: string[]): Promise<string[]> {
     if (!cached || !cached.ok) {
       missing.push(file);
       continue;
-    }
-    try {
-      await cached.clone().arrayBuffer();
-    } catch {
-      missing.push(file);
     }
   }
 
