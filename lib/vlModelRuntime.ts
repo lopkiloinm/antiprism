@@ -21,14 +21,13 @@ function cacheNameForVL(): string {
 export interface VLMessage { role: "user"|"assistant"|"system"; content: string; image?: string; }
 
 export async function listVLModelFiles(): Promise<string[]> {
-  const stems = [SF.embedTokens, SF.decoder, SF.embedImages].filter(Boolean) as string[];
-  const files = new Set<string>();
+  const stems = [SF.embedTokens, SF.embedImages, SF.decoder].filter(Boolean) as string[];
+  const files = [];
   for (const stem of stems) {
-    files.add(`onnx/${stem}.onnx`);
-    const dataFiles = await discoverData(stem);
-    for (const f of dataFiles) files.add(f);
+    files.push(`onnx/${stem}.onnx`);
+    files.push(`onnx/${stem}.onnx_data`);
   }
-  return Array.from(files);
+  return files;
 }
 export interface VLStreamCallbacks {
   onChunk: (t: string) => void;
@@ -102,18 +101,6 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
 
 // --- Loading ---
 function fUrl(n: string) { return `${HF}/${VL.hfId}/resolve/${VL.revision}/onnx/${n}`; }
-
-async function discoverData(stem: string) {
-  try {
-    const r = await fetch(`${HF}/api/models/${VL.hfId}?revision=${encodeURIComponent(VL.revision)}`);
-    if (!r.ok) throw 0;
-    const sibs: string[] = ((await r.json()).siblings ?? []).map((s: any) => s.rfilename).filter(Boolean);
-    const pre = `onnx/${stem}.onnx_data`;
-    const f = sibs.filter((x: string) => x.startsWith(pre));
-    f.sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true }));
-    return f.length ? f : [pre];
-  } catch { return [`onnx/${stem}.onnx_data`]; }
-}
 
 async function headLen(url: string) {
   try {
@@ -197,7 +184,7 @@ async function getMissingCachedFiles(files: string[]): Promise<string[]> {
 
 async function makeSess(o: any, stem: string, label: string) {
   const onnxPath = `onnx/${stem}.onnx`;
-  const dataFiles = await discoverData(stem);
+  const dataFiles = [`onnx/${stem}.onnx_data`];
   const files = [onnxPath, ...dataFiles];
   await ensureCached(files);
   
