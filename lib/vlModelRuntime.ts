@@ -185,20 +185,39 @@ async function getMissingCachedFiles(files: string[]): Promise<string[]> {
   return missing;
 }
 
+async function getCachedBlobUrl(url: string, cache: Cache) {
+  const res = await cache.match(url);
+  if (!res) throw new Error(`File not found in cache: ${url}`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 async function makeSess(o: any, stem: string, label: string) {
   const onnxPath = `onnx/${stem}.onnx`;
   const dataFiles = [`onnx/${stem}.onnx_data`];
   const files = [onnxPath, ...dataFiles];
   await ensureCached(files);
   
-  const ext = dataFiles.map((f: string) => ({ path: f.replace("onnx/",""), data: fUrl(f.replace("onnx/","")) }));
+  const cache = await caches.open(cacheNameForVL());
+  
+  const ext = [];
+  for (const f of dataFiles) {
+    const dataUrl = fUrl(f.replace("onnx/",""));
+    ext.push({ 
+      path: f.replace("onnx/",""), 
+      data: await getCachedBlobUrl(dataUrl, cache) 
+    });
+  }
+  
   const url = fUrl(`${stem}.onnx`);
-  console.log(`[VL] ${label} loading:`, { url, dataFiles, externalData: ext });
+  const onnxBlobUrl = await getCachedBlobUrl(url, cache);
+  
+  console.log(`[VL] ${label} loading from cache blobs:`, { url, dataFiles, externalData: ext });
   try {
-    return await o.InferenceSession.create(url, { executionProviders: ["webgpu"], externalData: ext });
+    return await o.InferenceSession.create(onnxBlobUrl, { executionProviders: ["webgpu"], externalData: ext });
   } catch (e) {
     console.warn(`[VL] ${label} webgpu fail, wasm:`, e);
-    return await o.InferenceSession.create(url, { executionProviders: ["wasm"], externalData: ext });
+    return await o.InferenceSession.create(onnxBlobUrl, { executionProviders: ["wasm"], externalData: ext });
   }
 }
 
