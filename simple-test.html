@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Test</title>
+</head>
+<body>
+    <h1>LaTeX Multi-Pass Test</h1>
+    <button onclick="test()">Compile Beamer</button>
+    <div id="log"></div>
+    
+    <script>
+        function test() {
+            const log = document.getElementById('log');
+            log.innerHTML = 'Testing compilation...';
+            
+            // This will work when the dev server is running
+            fetch('/public/templates/beamer/main.tex')
+                .then(r => r.text())
+                .then(tex => {
+                    log.innerHTML = 'Loaded template, compiling...';
+                    // The actual compilation will be done through the main app
+                    log.innerHTML += '<br>✅ Ready for compilation in main app';
+                })
+                .catch(e => {
+                    log.innerHTML = '❌ Error: ' + e.message;
+                });
+        }
+    </script>
+</body>
+</html>

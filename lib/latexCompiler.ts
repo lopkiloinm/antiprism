@@ -88,7 +88,7 @@ export async function compileLatexToPdf(
   
   const result = await eng.compile({
     input: source,
-    bibtex: false,
+    bibtex: true,  // Enable to trigger multi-pass compilation for TOC/cross-references
     verbose: "debug",  // ✅ Get full logs (correct type)
     additionalFiles: files as { path: string; content: string }[],
   });

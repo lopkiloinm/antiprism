@@ -39,8 +39,10 @@ class Logger {
       categoryLogs.splice(0, categoryLogs.length - this.maxLogsPerCategory);
     }
 
-    // Notify listeners
-    this.listeners.forEach(listener => listener(category, categoryLogs));
+    // Notify listeners (defer to avoid setState during render)
+    setTimeout(() => {
+      this.listeners.forEach(listener => listener(category, categoryLogs));
+    }, 0);
 
     // Also log to console for debugging (but only in development)
     if (process.env.NODE_ENV === 'development') {
