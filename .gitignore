@@ -6,3 +6,4 @@ public/core/*
 .DS_Store
 out/*
 docs/*
+Qwen3.5-0.8B-ONNX/*

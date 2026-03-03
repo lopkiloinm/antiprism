@@ -1,26 +1,39 @@
 "use client";
 import { getModelById } from "./modelConfig";
-import { fireProgressCallback } from "./localModel";
+import { fireProgressCallback, getActiveModelId } from "./localModel";
 
-const VL = getModelById("lfm25-vl-1.6b");
+function getVLModelDef() {
+  const activeId = getActiveModelId();
+  const activeDef = getModelById(activeId);
+  // Only use dedicated VLM models, not omnimodal models like Qwen3.5
+  if (activeDef.isDedicatedVLM) {
+    return activeDef;
+  }
+  // Always fallback to lfm25-vl-1.6b for VLM tasks
+  return getModelById("lfm25-vl-1.6b");
+}
+
 const HF = "https://huggingface.co";
-const HIDDEN = VL.hiddenSize ?? 2048;
-const KV_HEADS = VL.numKVHeads ?? 8;
-const HEAD_DIM = VL.headDim ?? 64;
-const SF = VL.sessionFiles ?? { embedTokens: "embed_tokens_fp16", embedImages: "embed_images_fp16", decoder: "decoder_q4" };
+// Some config defaults will be pulled dynamically based on the active model
 const TILE = 512, MEAN = [0.5, 0.5, 0.5], STD = [0.5, 0.5, 0.5];
 
 function cacheNameForVL(): string {
+  const VL = getVLModelDef();
   const prefix = VL.label
     .replace(/[^a-zA-Z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .toLowerCase();
-  return `antiprism-model-${prefix}-${VL.revision}-v2`;
+  // Using v3 for all new model caches to avoid conflicts with older versions
+  return `antiprism-model-${prefix}-${VL.revision}-v3`;
 }
 
 export interface VLMessage { role: "user"|"assistant"|"system"; content: string; image?: string; }
 
 export async function listVLModelFiles(): Promise<string[]> {
+  const VL = getVLModelDef();
+  const SF = VL.sessionFiles;
+  if (!SF) return [];
+  
   const stems = [SF.embedTokens, SF.embedImages, SF.decoder].filter(Boolean) as string[];
   const files = [];
   for (const stem of stems) {
@@ -29,6 +42,7 @@ export async function listVLModelFiles(): Promise<string[]> {
   }
   return files;
 }
+
 export interface VLStreamCallbacks {
   onChunk: (t: string) => void;
   onTokensPerSec?: (tps: number, total: number, elapsed: number) => void;
@@ -100,7 +114,10 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
 }
 
 // --- Loading ---
-function fUrl(n: string) { return `${HF}/${VL.hfId}/resolve/${VL.revision}/onnx/${n}`; }
+function fUrl(n: string) { 
+  const VL = getVLModelDef();
+  return `${HF}/${VL.hfId}/resolve/${VL.revision}/onnx/${n}`; 
+}
 
 async function headLen(url: string) {
   try {
@@ -221,9 +238,13 @@ async function makeSess(o: any, stem: string, label: string) {
   }
 }
 
-async function doLoad() {
+async function doLoad(): Promise<void> {
   if (loading) return; loading = true;
   try {
+    const VL = getVLModelDef();
+    const SF = VL.sessionFiles;
+    if (!SF) throw new Error("No session files defined for VL model");
+
     if (typeof navigator === "undefined" || !("gpu" in navigator)) throw new Error("No WebGPU");
     if (!(await (navigator as any).gpu.requestAdapter())) throw new Error("No adapter");
     updateProgress(0, "Init ONNX...");
@@ -607,6 +628,11 @@ function mergeImg(ids: number[], tokEmb: any, imgEmb: any) {
 
 // --- Decoding ---
 async function runDecode(emb: any, seqLen: number, cb?: VLStreamCallbacks, maxTok = 512) {
+  const VL = getVLModelDef();
+  const HIDDEN = VL.hiddenSize ?? 2048;
+  const KV_HEADS = VL.numKVHeads ?? 8;
+  const HEAD_DIM = VL.headDim ?? 64;
+
   // Init KV cache based exactly on model input requirements
   const cache: Record<string, any> = {};
   for (const name of decS.inputNames) {

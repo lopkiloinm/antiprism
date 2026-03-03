@@ -72,6 +72,8 @@ import {
   getAiMaxNewTokens,
   getAiTemperature,
   getAiTopP,
+  getAiContextWindow,
+  getAiVisionEnabled,
   getPromptAsk,
   getPromptCreate,
   getTheme,
@@ -221,6 +223,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [aiMaxNewTokens, setAiMaxNewTokensState] = useState(() => getAiMaxNewTokens());
   const [aiTemperature, setAiTemperatureState] = useState(() => getAiTemperature());
   const [aiTopP, setAiTopPState] = useState(() => getAiTopP());
+  const [aiContextWindow, setAiContextWindowState] = useState(() => getAiContextWindow());
+  const [aiVisionEnabled, setAiVisionEnabledState] = useState(() => getAiVisionEnabled());
   const [promptAsk, setPromptAskState] = useState(() => getPromptAsk());
   const [promptCreate, setPromptCreateState] = useState(() => getPromptCreate());
   const [autoCompileDebounceMs, setAutoCompileDebounceMsState] = useState(() =>
@@ -2956,6 +2960,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     aiMaxNewTokens={aiMaxNewTokens}
                     aiTemperature={aiTemperature}
                     aiTopP={aiTopP}
+                    aiContextWindow={aiContextWindow}
+                    aiVisionEnabled={aiVisionEnabled}
                     promptAsk={promptAsk}
                     promptCreate={promptCreate}
                     theme={theme}
@@ -2968,6 +2974,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     onAiMaxNewTokensChange={setAiMaxNewTokensState}
                     onAiTemperatureChange={setAiTemperatureState}
                     onAiTopPChange={setAiTopPState}
+                    onAiContextWindowChange={setAiContextWindowState}
+                    onAiVisionEnabledChange={setAiVisionEnabledState}
                     onPromptAskChange={setPromptAskState}
                     onPromptCreateChange={setPromptCreateState}
                     onThemeChange={setTheme}
@@ -2982,6 +2990,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       setAiMaxNewTokensState(getAiMaxNewTokens());
                       setAiTemperatureState(getAiTemperature());
                       setAiTopPState(getAiTopP());
+                      setAiContextWindowState(getAiContextWindow());
+                      setAiVisionEnabledState(getAiVisionEnabled());
                       setPromptAskState(getPromptAsk());
                       setPromptCreateState(getPromptCreate());
                       setTheme(getTheme());
@@ -3470,6 +3480,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           aiMaxNewTokens={aiMaxNewTokens}
                           aiTemperature={aiTemperature}
                           aiTopP={aiTopP}
+                          aiContextWindow={aiContextWindow}
+                          aiVisionEnabled={aiVisionEnabled}
                           promptAsk={promptAsk}
                           promptCreate={promptCreate}
                           theme={theme}
@@ -3483,6 +3495,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           onAiMaxNewTokensChange={setAiMaxNewTokensState}
                           onAiTemperatureChange={setAiTemperatureState}
                           onAiTopPChange={setAiTopPState}
+                          onAiContextWindowChange={setAiContextWindowState}
+                          onAiVisionEnabledChange={setAiVisionEnabledState}
                           onPromptAskChange={setPromptAskState}
                           onPromptCreateChange={setPromptCreateState}
                           onWebRTCSignalingConfigChange={setWebrtcConfig}
@@ -3496,6 +3510,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                             setAiMaxNewTokensState(getAiMaxNewTokens());
                             setAiTemperatureState(getAiTemperature());
                             setAiTopPState(getAiTopP());
+                            setAiContextWindowState(getAiContextWindow());
+                            setAiVisionEnabledState(getAiVisionEnabled());
                             setPromptAskState(getPromptAsk());
                             setPromptCreateState(getPromptCreate());
                             setWebrtcConfig(getWebRTCSignalingConfig());

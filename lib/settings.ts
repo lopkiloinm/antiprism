@@ -152,6 +152,31 @@ export function setAiTopP(value: number): void {
 
 export const AI_TOP_P_LIMITS = { min: AI_TOP_P_MIN, max: AI_TOP_P_MAX } as const;
 
+// --- AI Context Window ---
+const AI_CONTEXT_WINDOW_DEFAULT = "32768";
+
+export function getAiContextWindow(): number {
+  const v = get("aiContextWindow", AI_CONTEXT_WINDOW_DEFAULT, (s) => {
+    const n = parseInt(s, 10);
+    return !Number.isNaN(n) && (n === 32768 || n === 65536 || n === 131072) ? s : null;
+  });
+  return parseInt(v, 10);
+}
+
+export function setAiContextWindow(value: number): void {
+  const n = [32768, 65536, 131072].includes(value) ? value : parseInt(AI_CONTEXT_WINDOW_DEFAULT, 10);
+  set("aiContextWindow", String(n));
+}
+
+// --- AI Vision Processing ---
+export function getAiVisionEnabled(): boolean {
+  return get("aiVisionEnabled", "true", (v) => (v === "true" || v === "false" ? v : null)) === "true";
+}
+
+export function setAiVisionEnabled(enabled: boolean): void {
+  set("aiVisionEnabled", enabled ? "true" : "false");
+}
+
 // --- AI system prompts (empty = use built-in default) ---
 const PROMPT_ASK_KEY = "promptAsk";
 const PROMPT_CREATE_KEY = "promptCreate";

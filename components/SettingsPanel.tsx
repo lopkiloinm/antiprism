@@ -28,6 +28,10 @@ import {
   getAiTopP,
   setAiTopP,
   AI_TOP_P_LIMITS,
+  getAiContextWindow,
+  setAiContextWindow,
+  getAiVisionEnabled,
+  setAiVisionEnabled,
   getPromptAsk,
   setPromptAsk,
   getPromptCreate,
@@ -55,6 +59,8 @@ interface SettingsPanelProps {
   aiMaxNewTokens: number;
   aiTemperature: number;
   aiTopP: number;
+  aiContextWindow: number;
+  aiVisionEnabled: boolean;
   promptAsk: string;
   promptCreate: string;
   theme: Theme;
@@ -68,6 +74,8 @@ interface SettingsPanelProps {
   onAiMaxNewTokensChange: (v: number) => void;
   onAiTemperatureChange: (v: number) => void;
   onAiTopPChange: (v: number) => void;
+  onAiContextWindowChange: (v: number) => void;
+  onAiVisionEnabledChange: (v: boolean) => void;
   onPromptAskChange: (v: string) => void;
   onPromptCreateChange: (v: string) => void;
   onWebRTCSignalingConfigChange: (v: WebRTCSignalingConfig) => void;
@@ -135,6 +143,8 @@ export function SettingsPanel({
   aiMaxNewTokens,
   aiTemperature,
   aiTopP,
+  aiContextWindow,
+  aiVisionEnabled,
   promptAsk,
   promptCreate,
   theme,
@@ -148,6 +158,8 @@ export function SettingsPanel({
   onAiMaxNewTokensChange,
   onAiTemperatureChange,
   onAiTopPChange,
+  onAiContextWindowChange,
+  onAiVisionEnabledChange,
   onPromptAskChange,
   onPromptCreateChange,
   onWebRTCSignalingConfigChange,
@@ -362,6 +374,43 @@ export function SettingsPanel({
             />
             <span className="text-sm text-[var(--muted)] w-10 tabular-nums">{aiTopP.toFixed(2)}</span>
           </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label 
+            id="settings-context-window" 
+            label="Context Window Size" 
+            hint="Maximum context length for conversations (Qwen3.5 supports up to 128K)" 
+          />
+          <Select
+            id="settings-context-window"
+            value={String(aiContextWindow)}
+            onChange={(value) => {
+              const v = parseInt(value, 10);
+              setAiContextWindow(v);
+              onAiContextWindowChange(v);
+            }}
+            options={[
+              { value: "32768", label: "32K (Standard)" },
+              { value: "65536", label: "64K (Extended)" },
+              { value: "131072", label: "128K (Maximum)" }
+            ]}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Label 
+            id="settings-qwen-vision" 
+            label="Enable Vision Processing" 
+            hint="Allow image analysis with Qwen3.5 model" 
+          />
+          <Toggle
+            id="settings-qwen-vision"
+            checked={aiVisionEnabled}
+            onToggle={() => {
+              const next = !aiVisionEnabled;
+              setAiVisionEnabled(next);
+              onAiVisionEnabledChange(next);
+            }}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label

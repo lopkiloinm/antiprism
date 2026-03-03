@@ -60,6 +60,20 @@ function dtypeToModelStem(dtype: string): string {
 }
 
 async function listModelFiles(dtype: string = MODEL_DTYPE()): Promise<string[]> {
+  // Handle Qwen3.5 unified model structure
+  if (activeModelDef.hfId.includes("Qwen3.5")) {
+    const isQ4F16 = dtype === "q4f16";
+    const stem = isQ4F16 ? "q4f16" : dtype;
+    return [
+      `onnx/decoder_model_merged_${stem}.onnx`,
+      `onnx/decoder_model_merged_${stem}.onnx_data`,
+      `onnx/embed_tokens_${stem}.onnx`, 
+      `onnx/embed_tokens_${stem}.onnx_data`,
+      `onnx/vision_encoder_${stem}.onnx`,
+      `onnx/vision_encoder_${stem}.onnx_data`
+    ];
+  }
+
   // Prefer dynamic discovery so we handle upstream changes (e.g. multiple onnx_data shards).
   // HuggingFace model API returns siblings list.
   const apiUrl = `${HF_CDN_BASE}/api/models/${MODEL_ID()}?revision=${encodeURIComponent(MODEL_REVISION())}`;
@@ -143,7 +157,7 @@ function MODEL_ID() { return activeModelDef.hfId; }
 function MODEL_DTYPE() { return activeModelDef.dtype; }
 function MODEL_REVISION() { return activeModelDef.revision; }
 
-const MODEL_CACHE_VERSION = 2;
+const MODEL_CACHE_VERSION = 3; // Bump to v3 for Qwen3.5 multi-modal support
 
 const HF_CDN_BASE = "https://huggingface.co";
 

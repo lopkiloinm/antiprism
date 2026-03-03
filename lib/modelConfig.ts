@@ -31,6 +31,8 @@ export interface ModelDef {
   reservedTokens: number;
   thinking?: boolean;
   vision?: boolean;
+  /** True if this is a dedicated VLM model (like Liquid VLM), false for omnimodal models (like Qwen3.5) */
+  isDedicatedVLM?: boolean;
   /** Files needed for multi-session VL models */
   sessionFiles?: {
     embedTokens: string;
@@ -66,7 +68,7 @@ export const AVAILABLE_MODELS: ModelDef[] = [
   },
   {
     id: "lfm25-vl-1.6b",
-    label: "LFM2.5 VL 1.6B (Vision)",
+    label: "LFM2.5 VL 1.6B",
     hfId: "LiquidAI/LFM2.5-VL-1.6B-ONNX",
     dtype: "q4",
     revision: "main",
@@ -77,10 +79,31 @@ export const AVAILABLE_MODELS: ModelDef[] = [
     maxContextTokens: 32_768,
     reservedTokens: 4096,
     vision: true,
+    isDedicatedVLM: true,
     sessionFiles: {
       embedTokens: "embed_tokens_fp16",
       embedImages: "embed_images_fp16",
       decoder: "decoder_q4",
+    },
+  },
+  {
+    id: "qwen3.5-0.8b-instruct",
+    label: "Qwen3.5 0.8B Instruct",
+    hfId: "onnx-community/Qwen3.5-0.8B-ONNX",
+    dtype: "q4f16",
+    revision: "main",
+    hiddenSize: 1024,
+    numKVHeads: 2,
+    headDim: 256,
+    maxNewTokens: 2048,
+    maxContextTokens: 131_072,
+    reservedTokens: 4096,
+    vision: true,
+    isDedicatedVLM: false,
+    sessionFiles: {
+      embedTokens: "embed_tokens_q4f16",
+      embedImages: "vision_encoder_q4f16",
+      decoder: "decoder_model_merged_q4f16",
     },
   },
 ];
