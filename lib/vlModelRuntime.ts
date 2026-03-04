@@ -1,5 +1,5 @@
 "use client";
-import { getModelById } from "./modelConfig";
+import { getModelById, ModelDef } from "./modelConfig";
 import { fireProgressCallback, getActiveModelId } from "./localModel";
 
 function getVLModelDef() {
