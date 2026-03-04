@@ -37,9 +37,55 @@ export function ChatInput({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !onImageChange) return;
-    const reader = new FileReader();
-    reader.onload = () => onImageChange(reader.result as string);
-    reader.readAsDataURL(file);
+    
+    // Compress image before storing
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      
+      // Calculate new dimensions (max 800px width/height)
+      const MAX_SIZE = 800;
+      let { width, height } = img;
+      
+      if (width > MAX_SIZE || height > MAX_SIZE) {
+        if (width > height) {
+          height = (height * MAX_SIZE) / width;
+          width = MAX_SIZE;
+        } else {
+          width = (width * MAX_SIZE) / height;
+          height = MAX_SIZE;
+        }
+      }
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Try JPEG first (smaller), fallback to PNG
+      let dataUrl: string;
+      try {
+        dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      } catch {
+        dataUrl = canvas.toDataURL('image/png', 0.8);
+      }
+      
+      // Check if still too large, compress more
+      if (dataUrl.length > 200_000) {
+        try {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        } catch {
+          dataUrl = canvas.toDataURL('image/png', 0.6);
+        }
+      }
+      
+      onImageChange(dataUrl);
+    };
+    
+    img.src = URL.createObjectURL(file);
     e.target.value = "";
   };
 
