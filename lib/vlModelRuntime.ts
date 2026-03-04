@@ -419,14 +419,34 @@ async function doLoad(): Promise<void> {
       const processor = await AutoProcessor.from_pretrained(VL.hfId);
       
       updateProgress(40, "Loading model...");
-      const model = await Qwen3_5ForConditionalGeneration.from_pretrained(VL.hfId, {
-        dtype: {
-          embed_tokens: "q4",
-          vision_encoder: "fp16",
-          decoder_model_merged: "q4",
-        },
-        device: "webgpu",
-      });
+      let model;
+      try {
+        // Try fp16 first (more efficient)
+        model = await Qwen3_5ForConditionalGeneration.from_pretrained(VL.hfId, {
+          dtype: {
+            embed_tokens: "q4",
+            vision_encoder: "fp16",
+            decoder_model_merged: "q4",
+          },
+          device: "webgpu",
+        });
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("fp16")) {
+          console.warn("[VL] fp16 not supported, falling back to fp32");
+          updateProgress(40, "Loading model (fp32 fallback)...");
+          // Fallback to fp32 for compatibility
+          model = await Qwen3_5ForConditionalGeneration.from_pretrained(VL.hfId, {
+            dtype: {
+              embed_tokens: "q4",
+              vision_encoder: "fp32",
+              decoder_model_merged: "q4",
+            },
+            device: "webgpu",
+          });
+        } else {
+          throw e; // Re-throw other errors
+        }
+      }
       
       updateProgress(80, "Loading tokenizer...");
       const { AutoTokenizer } = await import("@huggingface/transformers");
