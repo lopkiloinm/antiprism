@@ -37,10 +37,11 @@
 | **Ask** | Q&A about the current document | Reference document + conversation history | LFM2.5-1.2B Q4 (Instruct) |
 | **Agent** | Generate new LaTeX papers | Conversation history only (no reference doc) | LFM2.5-1.2B Q4 (Instruct) |
 | **Vision** | Process images with text | Image + text prompts | LFM2.5-VL-1.6B (Vision) |
+| **Multimodal** | Advanced vision-language understanding | Images + text with enhanced reasoning | Qwen3.5-0.8B (Multimodal) |
 
 #### AI Models Overview
 
-Antiprism uses three specialized LiquidAI models running entirely in your browser via WebGPU:
+Antiprism uses three specialized LiquidAI models plus Alibaba's Qwen3.5 for multimodal understanding, all running entirely in your browser via WebGPU:
 
 **1. LFM2.5-1.2B Q4 (Instruct Model)**
 - **Purpose**: Text generation for chat, LaTeX assistance, and document creation
@@ -80,11 +81,35 @@ Antiprism uses three specialized LiquidAI models running entirely in your browse
   - Generating proof structures and logical arguments
   - Debugging complex LaTeX code with reasoning
 
+**4. Qwen3.5-0.8B (Alibaba Multimodal Model)**
+- **Purpose**: Advanced vision-language understanding with enhanced reasoning capabilities
+- **Architecture**: 0.8 billion parameters with unified vision-language foundation from Alibaba's Qwen team
+- **Processing Pipeline**:
+  1. **Vision Encoder**: Processes images through 16×16 patch extraction and transformer layers
+  2. **Multimodal Fusion**: Early fusion of vision and language tokens for comprehensive understanding
+  3. **Gated Delta Networks**: Efficient hybrid architecture with sparse Mixture-of-Experts
+  4. **Enhanced Reasoning**: Built-in thinking capabilities for complex problem solving
+- **Technical Details**:
+  - Supports up to 262,144 token context length natively
+  - Float16 precision for vision encoder, 4-bit quantized for text components
+  - WebGPU-optimized with per-component dtype configuration
+- **Multimodal Capabilities**:
+  - Analyzing complex diagrams, charts, and mathematical figures
+  - Understanding screenshots with detailed visual reasoning
+  - Converting handwritten equations and diagrams to LaTeX
+  - Processing multiple images in conversation context
+- **Vision Support**:
+  - Image preprocessing with 448×448 resizing
+  - Multi-tile processing for high-resolution images
+  - Visual token integration with text tokens
+  - Cross-generational parity with text-only performance
+
 #### Model Integration
 
-All three models share the same WebGPU runtime infrastructure:
+All four models share the same WebGPU runtime infrastructure:
 - **ONNX Runtime Web**: Executes models directly in browser GPU
-- **Cache API**: Models cached locally after first download (~500MB total)
+- **Transformers.js**: Advanced model loading with per-component optimization
+- **Cache API**: Models cached locally after first download (~800MB total)
 - **Memory Management**: Efficient tensor operations with automatic cleanup
 - **Type Handling**: Supports both float32 and float16 precision
 - **Streaming**: Real-time token generation for responsive chat experience
@@ -92,6 +117,7 @@ All three models share the same WebGPU runtime infrastructure:
 - **Ask**: Uses the open document as context. Good for editing, debugging, and explaining LaTeX.
 - **Agent**: Model outputs markdown; pandoc-wasm converts to LaTeX. New files are named from the first `#` heading. Conversation history uses markdown (not LaTeX) so the model stays in its trained format.
 - **Vision**: Attach images to chat messages for multimodal understanding. The vision encoder processes images alongside text for comprehensive analysis.
+- **Multimodal**: Advanced Qwen3.5 model processes images and text with enhanced reasoning. Supports complex visual understanding, mathematical figure analysis, and detailed image-to-LaTeX conversion with built-in thinking capabilities.
 
 ---
 
@@ -118,7 +144,7 @@ All three models share the same WebGPU runtime infrastructure:
 - **Yjs + y-webrtc**: Real-time collaborative editing; edits sync peer-to-peer.
 - **✅ Autosave**: Automatic persistence with IndexedDB via `y-indexeddb` - never lose work!
 - **PDF preview**: Scrollable multi-page view, zoom, download.
-- **AI assistant**: In-browser chat with two modes—**Ask** (Q&A about the current document) and **Agent** (generates new papers from markdown, converted to LaTeX via pandoc-wasm).
+- **AI assistant**: In-browser chat with four modes—**Ask** (Q&A about the current document), **Agent** (generates new papers from markdown, converted to LaTeX via pandoc-wasm), **Vision** (process images with text), and **Multimodal** (advanced Qwen3.5 vision-language understanding with enhanced reasoning).
 - **🎯 Tools Panel**: Comprehensive logging and debugging panel (Cmd+Shift+T).
   - **Summary**: Document statistics and analysis.
   - **AI Logs**: AI model interaction logs.
@@ -267,7 +293,7 @@ After enabling, push to `main` or run the workflow manually from the **Actions**
 | **Storage** | @wwog/idbfs (IndexedDB filesystem) |
 | **Version Control** | Custom git implementation with IndexedDB |
 | **LaTeX** | texlyre-busytex (WASM), pandoc-wasm (md→tex), wasm-latex-tools |
-| **AI** | @huggingface/transformers (LFM2.5-1.2B Q4 ONNX) |
+| **AI** | @huggingface/transformers (LFM2.5-1.2B Q4 ONNX, LFM2.5-VL-1.6B, Qwen3.5-0.8B) |
 | **PDF** | react-pdf |
 | **Styling** | Tailwind CSS |
 | **Utilities** | diff (for git diffs), exifreader (image metadata) |
