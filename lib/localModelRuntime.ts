@@ -170,7 +170,7 @@ function cachePrefixFor(def: ModelDef): string {
 }
 
 function cacheNameFor(def: ModelDef): string {
-  return `${cachePrefixFor(def)}-v${MODEL_CACHE_VERSION}`;
+  return cachePrefixFor(def);
 }
 
 export function getActiveModelId(): string {
@@ -273,20 +273,17 @@ async function loadTransformers(modelDefForCache?: ModelDef) {
   // Always reconfigure cache to prevent cross-contamination
   const def = modelDefForCache ?? activeModelDef;
   await cleanupOldModelCachesFor(def);
+  // Each model gets its own cache
   const cache = await openModelCacheFor(def);
   if (cache) {
     transformers.env.useCustomCache = true;
     transformers.env.customCache = cache;
-    console.info("[model] using Cache Storage", { cache: cacheNameFor(def) });
+    console.info("[model] using model-specific cache", { cache: cacheNameFor(def) });
   } else {
-    // Some contexts (private browsing, blocked storage, non-secure origins) may not allow Cache Storage.
-    // Fall back to transformers' default caching behavior.
     transformers.env.useCustomCache = false;
-    console.warn(
-      "Model cache disabled: Cache Storage unavailable. Model will re-download and may fail on flaky networks. " +
-        "Try a non-private window, allow site storage, and use https/localhost."
-    );
+    console.warn("[model] Cache Storage unavailable, using default");
   }
+  
   transformers.env.allowLocalModels = false;
   if (transformers.env.backends?.onnx?.wasm) {
     transformers.env.backends.onnx.wasm.numThreads = 1;

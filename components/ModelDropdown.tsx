@@ -13,7 +13,7 @@ import {
   isDownloading,
   listModelFiles
 } from "@/lib/localModel";
-import { initializeVLModel, isVLModelLoading, listVLModelFiles } from "@/lib/vlModelRuntime";
+import { initializeVLModel, isVLModelLoading, listVLModelFilesSafe } from "@/lib/vlModelRuntime";
 import { AVAILABLE_MODELS, getModelById } from "@/lib/modelConfig";
 
 interface ModelDropdownProps {
@@ -65,22 +65,43 @@ export function ModelDropdown({ selectedModelId, onModelChange, className }: Mod
           .replace(/[^a-zA-Z0-9\s-]/g, "")
           .replace(/\s+/g, "-")
           .toLowerCase();
-        const cacheName = `antiprism-model-${prefix}-${def.revision}-v2`;
+        const cacheName = `antiprism-model-${prefix}-${def.revision}`;
         
         const cache = await caches.open(cacheName);
         if (cache) {
           // Check if model files are cached
-          const requiredFiles = def.vision
-            ? await listVLModelFiles()
-            : await listModelFiles(def.dtype);
           let allFilesCached = true;
           
-          for (const file of requiredFiles) {
-            const fileUrl = `https://huggingface.co/${def.hfId}/resolve/${def.revision}/${file}`;
-            const cachedResponse = await cache.match(fileUrl);
-            if (!cachedResponse || !cachedResponse.ok) {
-              allFilesCached = false;
-              break;
+          // For Qwen3.5, check if files are cached in model-specific cache
+          if (def.hfId.includes("Qwen3.5")) {
+            // Check key files in the model-specific cache
+            const keyFiles = [
+              "config.json",
+              "tokenizer.json",
+              "preprocessor_config.json"
+            ];
+            
+            for (const file of keyFiles) {
+              const fileUrl = `https://huggingface.co/${def.hfId}/resolve/${def.revision}/${file}`;
+              const cachedResponse = await cache.match(fileUrl);
+              if (!cachedResponse || !cachedResponse.ok) {
+                allFilesCached = false;
+                break;
+              }
+            }
+          } else {
+            // For other models, check file cache
+            const requiredFiles = def.vision
+              ? await listVLModelFilesSafe(def)
+              : await listModelFiles(def.dtype);
+            
+            for (const file of requiredFiles) {
+              const fileUrl = `https://huggingface.co/${def.hfId}/resolve/${def.revision}/${file}`;
+              const cachedResponse = await cache.match(fileUrl);
+              if (!cachedResponse || !cachedResponse.ok) {
+                allFilesCached = false;
+                break;
+              }
             }
           }
           

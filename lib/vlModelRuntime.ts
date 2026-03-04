@@ -5,12 +5,12 @@ import { fireProgressCallback, getActiveModelId } from "./localModel";
 function getVLModelDef() {
   const activeId = getActiveModelId();
   const activeDef = getModelById(activeId);
-  // Only use dedicated VLM models, not omnimodal models like Qwen3.5
-  if (activeDef.isDedicatedVLM) {
+  // Only use the active model if it has vision capabilities
+  if (activeDef.vision) {
     return activeDef;
   }
-  // Always fallback to lfm25-vl-1.6b for VLM tasks
-  return getModelById("lfm25-vl-1.6b");
+  // If current model doesn't have vision, don't fall back - throw an error
+  throw new Error(`Current model "${activeDef.label}" does not support vision. Please select a model with vision capabilities.`);
 }
 
 const HF = "https://huggingface.co";
@@ -19,12 +19,11 @@ const TILE = 512, MEAN = [0.5, 0.5, 0.5], STD = [0.5, 0.5, 0.5];
 
 function cacheNameForVL(): string {
   const VL = getVLModelDef();
-  const prefix = VL.label
+  const modelName = VL.label
     .replace(/[^a-zA-Z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .toLowerCase();
-  // Using v3 for all new model caches to avoid conflicts with older versions
-  return `antiprism-model-${prefix}-${VL.revision}-v3`;
+  return `antiprism-model-${modelName}-${VL.revision}`;
 }
 
 export interface VLMessage { role: "user"|"assistant"|"system"; content: string; image?: string; }
@@ -32,6 +31,21 @@ export interface VLMessage { role: "user"|"assistant"|"system"; content: string;
 export async function listVLModelFiles(): Promise<string[]> {
   const VL = getVLModelDef();
   const SF = VL.sessionFiles;
+  if (!SF) return [];
+  
+  // Handle all models with the same pattern (Qwen3.5 and LFM2.5 VL)
+  const stems = [SF.embedTokens, SF.embedImages, SF.decoder].filter(Boolean) as string[];
+  const files = [];
+  for (const stem of stems) {
+    files.push(`onnx/${stem}.onnx`);
+    files.push(`onnx/${stem}.onnx_data`);
+  }
+  return files;
+}
+
+// Safe version that doesn't throw for cache checking
+export async function listVLModelFilesSafe(modelDef: ModelDef): Promise<string[]> {
+  const SF = modelDef.sessionFiles;
   if (!SF) return [];
   
   const stems = [SF.embedTokens, SF.embedImages, SF.decoder].filter(Boolean) as string[];
@@ -60,7 +74,14 @@ const updateProgress = (p: number, s: string) => {
 };
 
 export const setVLProgressCallback = (cb: (p: number, s: string) => void) => { progCb = cb; };
-export const isVLModelLoaded = () => !!(etS && decS && tok);
+export const isVLModelLoaded = () => {
+  // For Qwen3.5, check if Transformers.js model is loaded
+  if ((window as any).__qwenModel && (window as any).__qwenProcessor) {
+    return true;
+  }
+  // For other models, check ONNX sessions
+  return !!(etS && decS && tok);
+};
 export const isVLModelLoading = () => loading;
 
 export async function initializeVLModel() {
@@ -71,12 +92,26 @@ export async function initializeVLModel() {
 }
 
 export function disposeVLModel() {
+  // Dispose Qwen3.5 Transformers.js model
+  if ((window as any).__qwenModel) {
+    (window as any).__qwenModel = null;
+    (window as any).__qwenProcessor = null;
+  }
+  
+  // Dispose raw ONNX sessions
   etS?.release?.(); eiS?.release?.(); decS?.release?.();
   etS = eiS = decS = tok = null; loading = false; loadP = null;
 }
 
 export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512) {
   if (!isVLModelLoaded()) await initializeVLModel();
+  
+  // Handle Qwen3.5 with Transformers.js
+  if ((window as any).__qwenModel && (window as any).__qwenProcessor) {
+    return generateQwen3_5Response(msgs, cb, maxTok);
+  }
+  
+  // Handle other models with raw ONNX
   if (!etS || !decS || !tok) throw new Error("VL not loaded");
   let { ids, hasImg, imgUrl } = buildPrompt(msgs);
   
@@ -89,20 +124,15 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
       let imgIdx = 0;
       const numImgTokens = imgEmb.dims[1];
       for (const id of ids) {
-        if (id === imgTok && imgIdx === 0) {
-          if (imgStartTok > -1) expandedIds.push(imgStartTok);
-          for (let i = 0; i < numImgTokens; i++) expandedIds.push(imgTok);
-          if (imgEndTok > -1) expandedIds.push(imgEndTok);
-          imgIdx++;
-        } else {
-          expandedIds.push(id);
+        expandedIds.push(id);
+        if (id === imgStartTok) {
+          for (let i = 0; i < numImgTokens; i++) {
+            expandedIds.push(imgTok);
+          }
         }
       }
       ids = expandedIds;
-    } catch (e) {
-      console.error("[VL] image preprocessing/embedding failed:", e);
-      throw new Error("Image attachment could not be processed. Please re-upload a standard PNG/JPEG image.");
-    }
+    } catch (e) { console.error("Image embedding failed:", e); }
   } else if (hasImg && !eiS) {
     throw new Error("Vision encoder is not loaded yet. Please wait for model load to finish.");
   }
@@ -111,6 +141,78 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
   if (imgEmb) emb = mergeImg(ids, emb, imgEmb);
 
   return runDecode(emb, ids.length, cb, maxTok);
+}
+
+async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512) {
+  const model = (window as any).__qwenModel;
+  const processor = (window as any).__qwenProcessor;
+  const { RawImage, TextStreamer } = await import("@huggingface/transformers");
+  
+  const start = performance.now();
+  
+  // Convert messages to Qwen3.5 format
+  const conversation = msgs.map(msg => {
+    if (msg.image) {
+      return {
+        role: msg.role,
+        content: [
+          { type: "image" },
+          { type: "text", text: msg.content }
+        ]
+      };
+    }
+    return {
+      role: msg.role,
+      content: msg.content
+    };
+  });
+  
+  // Apply chat template
+  const text = processor.apply_chat_template(conversation, {
+    add_generation_prompt: true,
+  });
+  
+  // Handle image if present
+  let image = null;
+  const msgWithImage = msgs.find(msg => msg.image);
+  if (msgWithImage && msgWithImage.image) {
+    image = await (await RawImage.read(msgWithImage.image)).resize(448, 448);
+  }
+  
+  // Prepare inputs
+  const inputs = await processor(text, image);
+  
+  // Generate response
+  const streamer = new TextStreamer(processor.tokenizer, {
+    skip_prompt: true,
+    skip_special_tokens: false,
+    callback_function: (token: string) => {
+      cb?.onChunk?.(token);
+    }
+  });
+  
+  const outputs = await model.generate({
+    ...inputs,
+    max_new_tokens: maxTok,
+    streamer: streamer,
+  });
+  
+  // Decode final output
+  const decoded = processor.batch_decode(
+    outputs.slice(null, [inputs.input_ids.dims.at(-1), null]),
+    {
+      skip_special_tokens: true,
+    },
+  );
+  
+  const elapsed = (performance.now() - start) / 1000;
+  const result = decoded[0];
+  const tokens = result.length;
+  
+  cb?.onComplete?.(tokens, elapsed);
+  cb?.onTokensPerSec?.(tokens / elapsed, tokens, elapsed);
+  
+  return result;
 }
 
 // --- Loading ---
@@ -155,6 +257,52 @@ async function downloadFile(url: string, onProg: (l: number, s: number) => void)
     }
   });
   return new Response(stream, { headers: r.headers, status: r.status, statusText: r.statusText });
+}
+
+async function ensureVLFilesCached(files: string[]): Promise<void> {
+  if (!("caches" in window)) return;
+  const VL = getVLModelDef();
+  const cache = await caches.open(cacheNameForVL());
+  
+  const urls = files.map((f) => `${HF}/${VL.hfId}/resolve/${VL.revision}/${f}`);
+  const sizes = await Promise.all(urls.map((u) => headLen(u)));
+  const totalSize = sizes.reduce((a, b) => a + b, 0);
+  
+  console.info("[VL] ensure cache", {
+    count: files.length,
+    totalBytes: totalSize,
+    files: files.map((f, i) => ({ file: f, bytes: sizes[i] || 0 })),
+    cache: cacheNameForVL(),
+  });
+
+  let cumulativeDownloaded = 0;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const url = urls[i];
+    const size = sizes[i] || 0;
+    
+    try {
+      const cachedResponse = await cache.match(url);
+      if (cachedResponse && cachedResponse.ok) {
+        cumulativeDownloaded += size;
+        continue; // Already cached
+      }
+      
+      // Download and cache
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch ${file}: ${response.status}`);
+      
+      await cache.put(url, response.clone());
+      cumulativeDownloaded += size;
+      
+      const progress = Math.round((cumulativeDownloaded / totalSize) * 100);
+      updateProgress(progress, `Caching ${file}...`);
+      
+    } catch (e) {
+      console.error(`[VL] Failed to cache ${file}:`, e);
+      throw e;
+    }
+  }
 }
 
 async function ensureCached(files: string[]) {
@@ -247,6 +395,50 @@ async function doLoad(): Promise<void> {
 
     if (typeof navigator === "undefined" || !("gpu" in navigator)) throw new Error("No WebGPU");
     if (!(await (navigator as any).gpu.requestAdapter())) throw new Error("No adapter");
+    
+    updateProgress(0, "Loading Qwen3.5 model...");
+    
+    // Use Transformers.js for Qwen3.5 (proper approach)
+    if (VL.hfId.includes("Qwen3.5")) {
+      // Configure model-specific cache BEFORE importing Transformers.js
+      const cache = await caches.open(cacheNameForVL());
+      const transformers = await import("@huggingface/transformers");
+      transformers.env.useCustomCache = true;
+      transformers.env.customCache = cache;
+      
+      const { AutoProcessor, Qwen3_5ForConditionalGeneration, RawImage } = transformers;
+      
+      updateProgress(20, "Loading processor...");
+      const processor = await AutoProcessor.from_pretrained(VL.hfId);
+      
+      updateProgress(40, "Loading model...");
+      const model = await Qwen3_5ForConditionalGeneration.from_pretrained(VL.hfId, {
+        dtype: {
+          embed_tokens: "q4",
+          vision_encoder: "fp16",
+          decoder_model_merged: "q4",
+        },
+        device: "webgpu",
+      });
+      
+      updateProgress(80, "Loading tokenizer...");
+      const { AutoTokenizer } = await import("@huggingface/transformers");
+      tok = await AutoTokenizer.from_pretrained(VL.hfId);
+      
+      try { imgTok = tok.convert_tokens_to_ids("<|vision_start|>") ?? -1; } catch { imgTok = -1; }
+      try { imgStartTok = tok.convert_tokens_to_ids("<|image_start|>") ?? -1; } catch { imgStartTok = -1; }
+      try { imgEndTok = tok.convert_tokens_to_ids("<|image_end|>") ?? -1; } catch { imgEndTok = -1; }
+      eosTok = tok.eos_token_id ?? 2;
+      
+      // Store the model and processor for later use (ONLY when fully loaded)
+      (window as any).__qwenModel = model;
+      (window as any).__qwenProcessor = processor;
+      
+      updateProgress(100, "Qwen3.5 ready!");
+      return;
+    }
+    
+    // Fall back to raw ONNX for other models (like LFM2.5 VL)
     updateProgress(0, "Init ONNX...");
     const o = await import("onnxruntime-web/webgpu"); o.env.wasm.numThreads = 1; ort = o;
     updateProgress(5, "Loading tokenizer...");
@@ -261,7 +453,7 @@ async function doLoad(): Promise<void> {
     if (SF.embedImages) { try { eiS = await makeSess(ort, SF.embedImages, "Vision"); } catch {} }
     decS = await makeSess(ort, SF.decoder, "Decoder");
 
-    // Strict cache verification (same behavior class as non-VLM runtime)
+    // Strict cache verification (only for raw ONNX models)
     const requiredFiles = await listVLModelFiles();
     const missing = await getMissingCachedFiles(requiredFiles);
     if (missing.length > 0) {
