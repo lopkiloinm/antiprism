@@ -2595,14 +2595,20 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           onComplete: (tokens, elapsed) => {
             setStreamingStats({ tokensPerSec: Math.round((tokens / elapsed) * 10) / 10, totalTokens: tokens, elapsedSeconds: Math.round(elapsed * 10) / 10, inputTokens: 0, contextUsed: tokens });
           },
-        });
+        }, undefined, chatMode);
         aiLogger.info("VL generation complete", {
           aiEventId,
-          outputChars: vlText.length,
+          outputChars: typeof vlText === "string" ? vlText.length : vlText.content.length,
           streamedChunks,
           streamedChars,
         });
-        reply = { type: "ask", content: vlText };
+        
+        // Handle VL response which can be string (ask) or AgentResponse (agent)
+        if (typeof vlText === "string") {
+          reply = { type: "ask", content: vlText };
+        } else {
+          reply = vlText; // AgentResponse object
+        }
       } else {
         // Standard text model path
         aiLogger.info("Text generation request", {

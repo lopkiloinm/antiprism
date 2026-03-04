@@ -1,6 +1,7 @@
 "use client";
 import { getModelById, ModelDef } from "./modelConfig";
 import { fireProgressCallback, getActiveModelId } from "./localModel";
+import { parseCreateResponse, type AgentMode, type AgentResponse } from "./agent";
 
 function getVLModelDef() {
   const activeId = getActiveModelId();
@@ -103,12 +104,12 @@ export function disposeVLModel() {
   etS = eiS = decS = tok = null; loading = false; loadP = null;
 }
 
-export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512) {
+export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
   if (!isVLModelLoaded()) await initializeVLModel();
   
   // Handle Qwen3.5 with Transformers.js
   if ((window as any).__qwenModel && (window as any).__qwenProcessor) {
-    return generateQwen3_5Response(msgs, cb, maxTok);
+    return generateQwen3_5Response(msgs, cb, maxTok, mode);
   }
   
   // Handle other models with raw ONNX
@@ -143,7 +144,7 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
   return runDecode(emb, ids.length, cb, maxTok);
 }
 
-async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512) {
+async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
   const model = (window as any).__qwenModel;
   const processor = (window as any).__qwenProcessor;
   const { RawImage, TextStreamer } = await import("@huggingface/transformers");
@@ -211,6 +212,12 @@ async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks
   
   cb?.onComplete?.(tokens, elapsed);
   cb?.onTokensPerSec?.(tokens / elapsed, tokens, elapsed);
+  
+  // Handle Agent mode with pandoc conversion
+  if (mode === "agent") {
+    const { latex, title, markdown } = await parseCreateResponse(result);
+    return { type: "agent", content: latex, title, markdown };
+  }
   
   return result;
 }
