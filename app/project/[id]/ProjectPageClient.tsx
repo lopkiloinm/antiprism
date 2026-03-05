@@ -366,35 +366,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       const currentYText = getCurrentYText();
       if (currentYText) {
         // Find the CodeMirror editor instance through the EditorPanel ref
-        const editorPanel = editorPanelRef.current;
+        const editorPanel = editorRef.current;
         if (editorPanel) {
-          // Get the editor view from the panel
-          const editorView = editorPanel.getEditorView?.();
-          if (editorView) {
-            try {
-              // Get the line content and position
-              const doc = editorView.state.doc;
-              const line = doc.line(result.lineNumber);
-              
-              // Scroll to the line
-              const pos = line.from;
-              editorView.dispatch({
-                effects: EditorView.scrollIntoView.of(pos, { y: 'center' })
-              });
-              
-              // Set cursor to the line
-              editorView.dispatch({
-                selection: { anchor: pos, head: pos }
-              });
-              
-              console.log(`[Global Search] Navigated to line ${result.lineNumber} in ${result.tabPath}`);
-            } catch (error) {
-              console.log('[Global Search] Error navigating to line:', error);
-            }
-          }
+          // Use the gotoLine method to navigate to the specific line
+          editorPanel.gotoLine(result.lineNumber);
         }
       }
-    }, 200); // Small delay to ensure editor is loaded
+    }, 100); // Small delay to ensure the editor is ready
   };
   const [addActionsOpen, setAddActionsOpen] = useState(false);
   const [chatExpanded, setChatExpanded] = useState(false);
@@ -1252,8 +1230,8 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
               }
               
               for (const dir of dirs) {
-                const dirPath = dirPath === "/" ? `/${dir.name}` : `${dirPath}/${dir.name}`;
-                await scanDirectory(dirPath);
+                const newDirPath = dirPath === "/" ? `/${dir.name}` : `${dirPath}/${dir.name}`;
+                await scanDirectory(newDirPath);
               }
             } catch (e) {
               console.warn(`Failed to scan directory ${dirPath}:`, e);
@@ -2466,7 +2444,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           setAddTargetPath(path); // Update addTargetPath for file actions
           
           // Set the content in the buffer manager
-          mgr.switchTo(path, filetreeContent);
+          if (mgr) {
+            mgr.switchTo(path, filetreeContent);
+          }
           
           console.log('🔍 Opened filetree Y.js document');
         } catch (e) {
@@ -2496,7 +2476,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           setAddTargetPath(path); // Update addTargetPath for file actions
           
           // Set the content in the buffer manager
-          mgr.switchTo(path, chatsContent);
+          if (mgr) {
+            mgr.switchTo(path, chatsContent);
+          }
           
           console.log('🔍 Opened chats metadata Y.js document');
         } catch (e) {
@@ -3538,12 +3520,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     aiMaxNewTokens={aiMaxNewTokens}
                     aiTemperature={aiTemperature}
                     aiTopP={aiTopP}
-                    aiContextWindow={aiContextWindow}
+                    aiContextWindow={aiContextWindow.toString()}
                     aiVisionEnabled={aiVisionEnabled}
                     promptAsk={promptAsk}
                     promptCreate={promptCreate}
                     theme={theme}
                     showHiddenYjsDocs={showHiddenYjsDocs}
+                    webrtcConfig={webrtcConfig}
                     onLatexEngineChange={setLatexEngineState}
                     onEditorFontSizeChange={setEditorFontSizeState}
                     onEditorTabSizeChange={setEditorTabSizeState}
@@ -3553,7 +3536,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     onAiMaxNewTokensChange={setAiMaxNewTokensState}
                     onAiTemperatureChange={setAiTemperatureState}
                     onAiTopPChange={setAiTopPState}
-                    onAiContextWindowChange={setAiContextWindowState}
+                    onAiContextWindowChange={(v) => setAiContextWindowState(parseInt(v, 10))}
                     onAiVisionEnabledChange={setAiVisionEnabledState}
                     onPromptAskChange={setPromptAskState}
                     onPromptCreateChange={setPromptCreateState}
@@ -4181,12 +4164,13 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                           aiMaxNewTokens={aiMaxNewTokens}
                           aiTemperature={aiTemperature}
                           aiTopP={aiTopP}
-                          aiContextWindow={aiContextWindow}
+                          aiContextWindow={aiContextWindow.toString()}
                           aiVisionEnabled={aiVisionEnabled}
                           promptAsk={promptAsk}
                           promptCreate={promptCreate}
                           theme={theme}
                           showHiddenYjsDocs={showHiddenYjsDocs}
+                          webrtcConfig={webrtcConfig}
                           onThemeChange={setTheme}
                           onLatexEngineChange={setLatexEngineState}
                           onEditorFontSizeChange={setEditorFontSizeState}
@@ -4197,7 +4181,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                           onAiMaxNewTokensChange={setAiMaxNewTokensState}
                           onAiTemperatureChange={setAiTemperatureState}
                           onAiTopPChange={setAiTopPState}
-                          onAiContextWindowChange={setAiContextWindowState}
+                          onAiContextWindowChange={(v) => setAiContextWindowState(parseInt(v, 10))}
                           onAiVisionEnabledChange={setAiVisionEnabledState}
                           onPromptAskChange={setPromptAskState}
                           onPromptCreateChange={setPromptCreateState}

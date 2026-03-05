@@ -395,7 +395,7 @@ export function SettingsPanel({
             onChange={(value) => {
               const v = parseInt(value, 10);
               setAiContextWindow(v);
-              onAiContextWindowChange(v);
+              onAiContextWindowChange(value);
             }}
             options={[
               { value: "32768", label: "32K (LFM2.5 Models)" },
