@@ -858,6 +858,14 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const serverParam = urlParams.get('server');
+      const recipientParam = urlParams.get('recipient');
+      
+      // Force recipient mode if URL parameter is present
+      if (recipientParam === 'true') {
+        console.log('🔗 Recipient mode detected from URL - will lose on first sync');
+        // Store recipient flag in sessionStorage to persist during session
+        sessionStorage.setItem('antiprism_recipient_mode', 'true');
+      }
       
       if (serverParam) {
         // Clean up server URL (remove trailing slash)
@@ -1391,13 +1399,16 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           if (webrtcReady) {
             console.log('📂 WebRTC ready, performing initial sync');
             
-            if (isNewProject) {
-              // RECIPIENT: Wait for remote data from sharer
-              console.log('📂 Recipient: waiting for sharer data...');
+            // Check if this user is a recipient (from shared link)
+            const isRecipient = sessionStorage.getItem('antiprism_recipient_mode') === 'true';
+            
+            if (isRecipient || isNewProject) {
+              // RECIPIENT: Always wait for remote data from sharer
+              console.log(`📂 Recipient (${isRecipient ? 'forced' : 'new project'}): waiting for sharer data...`);
               
-              // Wait up to 3 seconds for sharer to send data
+              // Wait up to 5 seconds for sharer to send data
               let waitAttempts = 0;
-              while (waitAttempts < 30) { // 30 * 100ms = 3 seconds
+              while (waitAttempts < 50) { // 50 * 100ms = 5 seconds
                 await new Promise(resolve => setTimeout(resolve, 100));
                 waitAttempts++;
                 
@@ -1405,6 +1416,8 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
                 if (remoteData && remoteData !== '{}') {
                   console.log('📥 Received data from sharer, importing...');
                   await deserializeFiletree(new TextEncoder().encode(remoteData));
+                  // Clear recipient mode after successful sync
+                  if (isRecipient) sessionStorage.removeItem('antiprism_recipient_mode');
                   return; // Done - recipient got sharer's data
                 }
               }
@@ -3420,6 +3433,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       
       // Always include project ID
       urlParams.set('project', id);
+      
+      // Mark as recipient to ensure they lose on first sync
+      urlParams.set('recipient', 'true');
       
       // Include signaling server if available and WebRTC is enabled
       if (webrtcConfig.enabled && workingServer) {

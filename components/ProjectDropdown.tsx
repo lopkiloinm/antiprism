@@ -164,7 +164,7 @@ export function ProjectDropdown({
         {children}
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-[160px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
+        <div className="absolute left-0 top-full mt-1 z-50 min-w-[160px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl">
           <button
             onClick={() => {
               setModalMode("rename");

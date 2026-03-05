@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { IconCopy, IconToggleRight } from "./Icons";
+import { IconCopy, IconToggleRight, IconCheckSquare } from "./Icons";
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -83,7 +83,7 @@ export function ShareModal({ isOpen, shareUrl, projectName, onClose }: ShareModa
               className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
               title={copied ? "Copied!" : "Copy"}
             >
-              {copied ? <IconToggleRight /> : <IconCopy />}
+              {copied ? <IconCheckSquare /> : <IconCopy />}
             </button>
           </div>
         </div>
