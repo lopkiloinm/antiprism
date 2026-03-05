@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  ChevronLeft,
   Sparkles,
   FileText,
   Folder,
@@ -80,6 +81,7 @@ export const IconSearch = () => <Search {...iconProps} />;
 export const IconChevronDown = () => <ChevronDown {...iconProps} />;
 export const IconChevronUp = () => <ChevronUp {...iconProps} />;
 export const IconChevronRight = () => <ChevronRight {...iconProps} />;
+export const IconChevronLeft = () => <ChevronLeft {...iconProps} />;
 export const IconSparkles = () => <Sparkles {...iconProps} />;
 export const IconFileText = () => <FileText {...iconProps} />;
 export const IconFolder = () => <Folder {...iconProps} />;
@@ -123,6 +125,7 @@ export const IconCheckSquare = () => <CheckSquare {...iconProps} />;
 export const IconSquare = () => <Square {...iconProps} />;
 export const IconX = () => <X {...iconProps} />;
 export const IconTool = () => <Wrench {...iconProps} />;
+export const IconWrench = () => <Wrench {...iconProps} />;
 export const IconGitBranch = () => <GitBranch {...iconProps} />;
 export const IconGitCommit = () => <GitCommit {...iconProps} />;
 export const IconCode2 = () => <Code2 {...iconProps} />;

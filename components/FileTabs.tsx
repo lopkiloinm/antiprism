@@ -8,6 +8,7 @@ export const SETTINGS_TAB_PATH = "__settings__";
 interface Tab {
   path: string;
   type: "text" | "image" | "settings" | "chat";
+  readOnly?: boolean;
   diffData?: {
     filePath: string;
     currentContent: string;
@@ -202,17 +203,23 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools, o
         const isDragOver = isReordering && dragOverIndex === index;
         const dropPosition = isDragOver ? getDropIndicatorPosition(index) : null;
         
+        // Calculate the actual background color for the gradient
+        // For inactive tabs: 18% border + 82% transparent, so gradient should be 18% border + 82% background
+        const tabBackgroundColor = isActive 
+          ? "color-mix(in srgb, var(--background) 100%, transparent)" 
+          : "color-mix(in srgb, var(--border) 18%, var(--background))"; // Match the exact 18% ratio
+        
         return (
           <div
             key={tab.path}
             className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 min-w-0 max-w-[240px] h-full overflow-hidden ${
               isActive
-                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             } ${
               isReordering && draggedTab === tab.path ? "opacity-50" : ""
             } ${
-              isDragOver ? "border-l-2 border-l-[var(--accent)]" : ""}
+              isDragOver ? "border-l-2 border-l-[var(--accent)]" : ""
             }`}
             draggable
             onDragStart={(e) => handleTabDragStart(e, tab, index)}
@@ -236,11 +243,7 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools, o
             <div
               className="absolute right-0 top-0 bottom-0 w-16 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
               style={{
-                background: `linear-gradient(to right, transparent 0%, ${
-                  isActive
-                    ? "var(--background)"
-                    : "color-mix(in srgb, var(--border) 18%, transparent)"
-                } 45%)`,
+                background: `linear-gradient(to right, transparent 0%, ${tabBackgroundColor} 45%)`,
               }}
             />
             <button

@@ -247,7 +247,7 @@ export function GitDiffView({
   return (
     <div className={`git-diff-view ${className}`}>
       {/* Diff header */}
-      <div className="bg-[var(--border)] px-4 py-2 text-xs font-mono text-[var(--muted)] border-b">
+      <div className="bg-[var(--border)] px-4 py-2 text-xs font-mono text-[var(--muted)]">
         <div>diff --git a/{filePath} b/{filePath}</div>
         {originalContent && (
           <div>

@@ -125,7 +125,7 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
       title: template.name,
       subtitle: template.description,
       icon: <IconFileText />,
-      listRightAccessory: (
+      topRightAccessory: (
         <div
           role="button"
           tabIndex={0}
@@ -135,12 +135,12 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
             e.stopPropagation();
             handleCreateFromTemplate(template);
           }}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[var(--accent)] text-white rounded transition-opacity cursor-pointer ${
+          className={`flex items-center gap-1.5 px-2 py-1 text-xs bg-[var(--accent)] text-white rounded transition-opacity cursor-pointer ${
             isCreating !== null ? "opacity-50 pointer-events-none" : "hover:opacity-90"
           }`}
         >
           {isCreating === template.id ? (
-            <span className="animate-pulse">Creating...</span>
+            <span className="animate-pulse">...</span>
           ) : (
             <>
               <IconPlus />
@@ -149,32 +149,6 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
           )}
         </div>
       ),
-      bottomAccessory: (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            if (isCreating !== null) return;
-            e.preventDefault();
-            e.stopPropagation();
-            handleCreateFromTemplate(template);
-          }}
-          className={`w-full flex items-center justify-center gap-2 py-2 bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)] rounded-lg transition-colors cursor-pointer ${
-            isCreating !== null ? "opacity-50 pointer-events-none" : "hover:bg-[var(--accent)] hover:text-white"
-          }`}
-        >
-          {isCreating === template.id ? (
-            <span className="animate-pulse">Creating...</span>
-          ) : (
-            <>
-              <div className="[&>svg]:w-4 [&>svg]:h-4 flex items-center">
-                <IconPlus />
-              </div>
-              Use Template
-            </>
-          )}
-        </div>
-      )
     };
   });
 

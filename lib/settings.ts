@@ -158,13 +158,13 @@ const AI_CONTEXT_WINDOW_DEFAULT = "32768";
 export function getAiContextWindow(): number {
   const v = get("aiContextWindow", AI_CONTEXT_WINDOW_DEFAULT, (s) => {
     const n = parseInt(s, 10);
-    return !Number.isNaN(n) && (n === 32768 || n === 65536 || n === 131072) ? s : null;
+    return !Number.isNaN(n) && (n === 32768 || n === 262144) ? s : null;
   });
   return parseInt(v, 10);
 }
 
 export function setAiContextWindow(value: number): void {
-  const n = [32768, 65536, 131072].includes(value) ? value : parseInt(AI_CONTEXT_WINDOW_DEFAULT, 10);
+  const n = [32768, 262144].includes(value) ? value : parseInt(AI_CONTEXT_WINDOW_DEFAULT, 10);
   set("aiContextWindow", String(n));
 }
 
@@ -337,6 +337,19 @@ export function resetAllSettingsToDefaults(): void {
   } catch {
     /* ignore */
   }
+}
+
+// --- Filetree settings ---
+const DEFAULT_SHOW_HIDDEN_YJS_DOCS = false;
+
+export function getShowHiddenYjsDocs(): boolean {
+  return get("showHiddenYjsDocs", String(DEFAULT_SHOW_HIDDEN_YJS_DOCS), (v) =>
+    v === "true" || v === "false" ? v : null
+  ) === "true";
+}
+
+export function setShowHiddenYjsDocs(value: boolean): void {
+  set("showHiddenYjsDocs", value ? "true" : "false");
 }
 
 // --- Persistence helpers ---

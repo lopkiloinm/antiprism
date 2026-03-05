@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { IconCopy, IconToggleRight } from "./Icons";
 
 interface ShareModalProps {
   isOpen: boolean;
@@ -79,9 +80,10 @@ export function ShareModal({ isOpen, shareUrl, projectName, onClose }: ShareModa
             />
             <button
               onClick={handleCopy}
-              className="px-3 py-2 rounded text-sm bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium transition-colors"
+              className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
+              title={copied ? "Copied!" : "Copy"}
             >
-              {copied ? "Copied!" : "Copy"}
+              {copied ? <IconToggleRight /> : <IconCopy />}
             </button>
           </div>
         </div>
@@ -124,22 +126,6 @@ export function ShareModal({ isOpen, shareUrl, projectName, onClose }: ShareModa
               </ul>
             </div>
           </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={onClose}
-            className="px-3 py-2 rounded text-sm text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)] transition-colors"
-          >
-            Close
-          </button>
-          <button
-            onClick={handleCopy}
-            className="px-3 py-2 rounded text-sm bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium transition-colors"
-          >
-            {copied ? "Copied!" : "Copy Link"}
-          </button>
         </div>
       </div>
     </div>

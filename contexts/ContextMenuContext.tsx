@@ -79,15 +79,15 @@ export const ContextMenuProvider: React.FC<{ children: React.ReactNode }> = ({ c
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 w-[180px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-1"
+          className="fixed z-50 min-w-[160px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
         >
           {contextMenu.items.map((item, index) => (
             <button
               key={index}
-              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-[var(--accent)] transition-colors ${
-                item.danger ? 'text-red-500 hover:bg-red-500/10' : ''
+              className={`w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 transition-colors ${
+                item.danger ? 'text-red-400 hover:text-red-300' : ''
               }`}
               onClick={() => {
                 item.onClick();

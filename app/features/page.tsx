@@ -12,9 +12,10 @@ import {
   IconArrowRight,
   IconSend,
   IconGitBranch,
-  IconCheckSquare,
+  IconToggleRight,
   IconX,
   IconAntiprism,
+  IconCheckSquare,
 } from "@/components/Icons";
 
 type MockupKey =
@@ -221,9 +222,14 @@ export default function FeaturesPage() {
                 className="flex min-h-[260px] flex-col gap-4 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950/50 p-5 transition-colors hover:border-zinc-700 md:min-h-[300px] md:flex-row md:items-stretch md:gap-5"
               >
                 <div className="min-w-0 flex-1">
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700/80 bg-zinc-800/50 text-zinc-400">
-                    <Icon />
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700/80 bg-zinc-800/50 text-zinc-400">
+                      <Icon />
+                    </span>
+                    <span className="flex h-5 w-5 items-center justify-center rounded text-green-500">
+                      <IconCheckSquare />
+                    </span>
+                  </div>
                   <h3 className="mt-3 font-medium text-zinc-200">{title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-400">
                     {description}
@@ -505,37 +511,37 @@ effects (p < .05).
                 <tbody className="divide-y divide-zinc-800/50">
                   <tr className="hover:bg-zinc-800/20 transition-colors">
                     <td className="py-4 px-5 text-sm text-zinc-300">Offline compilation</td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                   </tr>
                   <tr className="hover:bg-zinc-800/20 transition-colors">
                     <td className="py-4 px-5 text-sm text-zinc-300">Privacy (Zero-knowledge)</td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                   </tr>
                   <tr className="hover:bg-zinc-800/20 transition-colors">
                     <td className="py-4 px-5 text-sm text-zinc-300">Unlimited collaborators</td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                   </tr>
                   <tr className="hover:bg-zinc-800/20 transition-colors">
                     <td className="py-4 px-5 text-sm text-zinc-300">Full Git Integration</td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                   </tr>
                   <tr className="hover:bg-zinc-800/20 transition-colors">
                     <td className="py-4 px-5 text-sm text-zinc-300">In-browser AI (Local)</td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                   </tr>
                   <tr className="hover:bg-zinc-800/20 transition-colors">
                     <td className="py-4 px-5 text-sm text-zinc-300">Typst support</td>
-                    <td className="py-4 px-5 text-green-500"><IconCheckSquare /></td>
+                    <td className="py-4 px-5 text-green-500"><IconToggleRight /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                     <td className="py-4 px-5 text-zinc-600"><IconX /></td>
                   </tr>

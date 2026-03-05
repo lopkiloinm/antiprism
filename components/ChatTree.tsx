@@ -3,30 +3,36 @@
 import { useState, useRef, useEffect } from "react";
 import { NameModal } from "./NameModal";
 import { IconMessageSquare, IconPencil, IconDownload, IconTrash2 } from "./Icons";
-import { renameChat, deleteChat, getChatMessages, type ChatSession } from "@/lib/chatStore";
+import { renameProjectChat, deleteProjectChat, getProjectChatMessages, listProjectChats, type ChatSession } from "@/lib/chatStore";
 import { useContextMenu } from "@/contexts/ContextMenuContext";
 
 interface ChatTreeProps {
+  projectId: string;
   onChatSelect: (chatId: string) => void;
   refreshTrigger?: number;
   onRefresh: () => void;
   searchQuery?: string;
+  activeChatId?: string;
 }
 
 function ChatNodeComponent({
   chat,
+  projectId,
   onChatSelect,
   onRefresh,
   onOpenRenameModal,
   level,
   refreshTrigger,
+  activeChatId,
 }: {
   chat: ChatSession;
+  projectId: string;
   onChatSelect: (chatId: string) => void;
   onRefresh: () => void;
   onOpenRenameModal: (chat: ChatSession) => void;
   level: number;
   refreshTrigger?: number;
+  activeChatId?: string;
 }) {
   const { showContextMenu } = useContextMenu();
 
@@ -44,7 +50,7 @@ function ChatNodeComponent({
         icon: <IconDownload />,
         onClick: async () => {
           try {
-            const messages = await getChatMessages(chat.id);
+            const messages = await getProjectChatMessages(projectId, chat.id);
             const content = JSON.stringify(messages, null, 2);
             const blob = new Blob([content], { type: "application/json" });
             const url = URL.createObjectURL(blob);
@@ -65,7 +71,7 @@ function ChatNodeComponent({
         onClick: async () => {
           if (!confirm(`Delete chat "${chat.title}"?`)) return;
           try {
-            await deleteChat(chat.id);
+            await deleteProjectChat(projectId, chat.id);
             onRefresh();
           } catch (e) {
             console.error("Delete failed:", e);
@@ -80,7 +86,11 @@ function ChatNodeComponent({
   return (
     <>
       <div
-        className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-2 min-w-0 transition-colors hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]`}
+        className={`px-3 py-2 cursor-pointer text-sm flex items-center gap-2 min-w-0 transition-colors ${
+          chat.id === activeChatId
+            ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+            : "hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+        }`}
         style={{ paddingLeft: `${level * 12 + 12}px` }}
         onClick={() => onChatSelect(chat.id)}
         onContextMenu={handleContextMenu}
@@ -103,42 +113,39 @@ function filterChats(chats: ChatSession[], q: string): ChatSession[] {
   return chats.filter((c) => c.title.toLowerCase().includes(lower));
 }
 
-export function ChatTree({ onChatSelect, refreshTrigger, onRefresh, searchQuery }: ChatTreeProps) {
+export function ChatTree({ projectId, onChatSelect, refreshTrigger, onRefresh, searchQuery, activeChatId }: ChatTreeProps) {
   const [chats, setChats] = useState<ChatSession[]>([]);
   const [renameModal, setRenameModal] = useState<ChatSession | null>(null);
 
   useEffect(() => {
-    // Load chats from localStorage
+    // Load project-specific chats from storage
     const loadChats = () => {
       try {
-        const stored = localStorage.getItem("antiprism_chats");
-        const parsed = stored ? JSON.parse(stored) : [];
-                setChats(parsed);
-      } catch (e) {
-        console.error("Failed to load chats:", e);
+        const loaded = listProjectChats(projectId);
+        setChats(loaded);
+      } catch (error) {
+        console.error("Failed to load project chats:", error);
         setChats([]);
       }
     };
-
     loadChats();
 
     // Listen for storage changes from other tabs
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "antiprism_chats") {
+      if (e.key === `antiprism_chats_${projectId}`) {
         loadChats();
       }
     };
-
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-    }, [refreshTrigger]);
+  }, [projectId, refreshTrigger]);
 
   const performRename = async (newName: string) => {
     if (!renameModal) return;
     const trimmed = newName.trim();
     if (!trimmed || trimmed === renameModal.title) return;
     try {
-      renameChat(renameModal.id, trimmed);
+      renameProjectChat(projectId, renameModal.id, trimmed);
       onRefresh();
     } catch (e) {
       console.error("Rename failed:", e);
@@ -150,7 +157,7 @@ export function ChatTree({ onChatSelect, refreshTrigger, onRefresh, searchQuery 
 
   return (
     <>
-      <div className="overflow-auto flex-1 min-h-0 py-3">
+      <div className="overflow-auto flex-1 min-h-0">
         {filteredChats.length === 0 ? (
           <div className="p-3 text-sm text-[var(--muted)]">
             {searchQuery?.trim() ? "No matching chats." : "No chats yet. Create a new chat to get started."}
@@ -160,11 +167,13 @@ export function ChatTree({ onChatSelect, refreshTrigger, onRefresh, searchQuery 
             <ChatNodeComponent
               key={chat.id}
               chat={chat}
+              projectId={projectId}
               onChatSelect={onChatSelect}
               onRefresh={onRefresh}
               onOpenRenameModal={setRenameModal}
               level={0}
               refreshTrigger={refreshTrigger}
+              activeChatId={activeChatId}
             />
           ))
         )}

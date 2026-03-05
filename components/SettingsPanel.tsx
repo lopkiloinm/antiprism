@@ -44,10 +44,13 @@ import {
   getWebRTCSignalingConfig,
   setWebRTCSignalingConfig,
   type WebRTCSignalingConfig,
+  getShowHiddenYjsDocs,
+  setShowHiddenYjsDocs,
 } from "@/lib/settings";
 import { DEFAULT_PROMPT_ASK } from "@/lib/agent/ask";
 import { DEFAULT_PROMPT_CREATE } from "@/lib/agent/create";
 import { Select } from "./Select";
+import { IconToggleLeft, IconToggleRight } from "./Icons";
 
 interface SettingsPanelProps {
   latexEngine: LaTeXEngine;
@@ -59,12 +62,13 @@ interface SettingsPanelProps {
   aiMaxNewTokens: number;
   aiTemperature: number;
   aiTopP: number;
-  aiContextWindow: number;
+  aiContextWindow: string;
   aiVisionEnabled: boolean;
   promptAsk: string;
   promptCreate: string;
   theme: Theme;
-  onThemeChange: (theme: Theme) => void;
+  webrtcConfig: WebRTCSignalingConfig;
+  showHiddenYjsDocs: boolean;
   onLatexEngineChange: (v: LaTeXEngine) => void;
   onEditorFontSizeChange: (v: number) => void;
   onEditorTabSizeChange: (v: number) => void;
@@ -74,11 +78,13 @@ interface SettingsPanelProps {
   onAiMaxNewTokensChange: (v: number) => void;
   onAiTemperatureChange: (v: number) => void;
   onAiTopPChange: (v: number) => void;
-  onAiContextWindowChange: (v: number) => void;
+  onAiContextWindowChange: (v: string) => void;
   onAiVisionEnabledChange: (v: boolean) => void;
   onPromptAskChange: (v: string) => void;
   onPromptCreateChange: (v: string) => void;
+  onThemeChange: (v: Theme) => void;
   onWebRTCSignalingConfigChange: (v: WebRTCSignalingConfig) => void;
+  onShowHiddenYjsDocsChange: (v: boolean) => void;
   /** Called after reset so parent can re-read all settings into state */
   onResetRequested: () => void;
 }
@@ -163,6 +169,8 @@ export function SettingsPanel({
   onPromptAskChange,
   onPromptCreateChange,
   onWebRTCSignalingConfigChange,
+  showHiddenYjsDocs,
+  onShowHiddenYjsDocsChange,
   onResetRequested,
 }: SettingsPanelProps) {
   const [webrtcConfig, setWebrtcConfig] = useState<WebRTCSignalingConfig>(getWebRTCSignalingConfig());
@@ -379,7 +387,7 @@ export function SettingsPanel({
           <Label 
             id="settings-context-window" 
             label="Context Window Size" 
-            hint="Maximum context length for conversations (Qwen3.5 supports up to 128K)" 
+            hint="Maximum context length for conversations (LFM2.5: 32K, Qwen3.5: 256K)" 
           />
           <Select
             id="settings-context-window"
@@ -390,9 +398,8 @@ export function SettingsPanel({
               onAiContextWindowChange(v);
             }}
             options={[
-              { value: "32768", label: "32K (Standard)" },
-              { value: "65536", label: "64K (Extended)" },
-              { value: "131072", label: "128K (Maximum)" }
+              { value: "32768", label: "32K (LFM2.5 Models)" },
+              { value: "262144", label: "256K (Qwen3.5 Models)" }
             ]}
           />
         </div>
@@ -565,6 +572,24 @@ export function SettingsPanel({
               <li>Password protects signaling traffic, not the documents themselves</li>
             </ul>
           </div>
+        </div>
+      </Section>
+
+      <Section title="Filetree">
+        <div className="flex items-center justify-between gap-2">
+          <Label
+            id="settings-show-hidden-yjs-docs"
+            label="Show hidden Y.js documents"
+            hint="Display internal Y.js documents (chats, filetree) in the filetree for advanced debugging."
+          />
+          <Toggle
+            id="settings-show-hidden-yjs-docs"
+            checked={showHiddenYjsDocs}
+            onToggle={() => {
+              const next = !showHiddenYjsDocs;
+              onShowHiddenYjsDocsChange(next);
+            }}
+          />
         </div>
       </Section>
 

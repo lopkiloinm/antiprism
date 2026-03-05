@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NameModal } from "./NameModal";
-import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconCheckSquare, IconSquare, IconChevronDown, IconChevronUp } from "./Icons";
+import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconChevronDown, IconChevronUp } from "./Icons";
 import { gitStore, GitStore, type GitChange } from "@/lib/gitStore";
 import type { EditorBufferManager } from "@/lib/editorBufferManager";
 import { getProjects } from "@/lib/projects";
@@ -826,11 +826,21 @@ export function GitPanelReal({
             <div className="shrink-0">
               <div className="flex items-center gap-2 min-w-0 text-sm px-3 py-2">
                 <button
+                  role="switch"
+                  aria-checked={stagedCount === changes.length && changes.length > 0}
                   onClick={() => stagedCount === changes.length ? unstageAll() : stageAll()}
                   disabled={changes.length === 0}
-                  className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] transition-colors"
+                  className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+                    stagedCount === changes.length && changes.length > 0
+                      ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                      : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
+                  }`}
                 >
-                  {stagedCount === changes.length && changes.length > 0 ? <IconCheckSquare /> : <IconSquare />}
+                  <span
+                    className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                      stagedCount === changes.length && changes.length > 0 ? "left-[22px]" : "left-1"
+                    }`}
+                  />
                 </button>
                 <span className="truncate min-w-0 flex-1 text-[var(--foreground)]">Changes ({stagedCount} staged)</span>
                 <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}></span>
@@ -862,13 +872,23 @@ export function GitPanelReal({
                   onClick={() => handleFileClick(change.path)}
                 >
                   <button
+                    role="switch"
+                    aria-checked={change.staged}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleStage(i);
                     }}
-                    className="p-1.5 -m-1.5 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] transition-colors"
+                    className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+                      change.staged
+                        ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                        : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
+                    }`}
                   >
-                    {change.staged ? <IconCheckSquare /> : <IconSquare />}
+                    <span
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                        change.staged ? "left-[22px]" : "left-1"
+                      }`}
+                    />
                   </button>
                   <span className="truncate min-w-0 flex-1" title={change.path}>{change.path.split('/').pop() || change.path}</span>
                   <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}>{statusIcon(change.status)}</span>

@@ -94,7 +94,7 @@ function TabButton({
       onClick={onClick}
       className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap ${
         active
-          ? "bg-[var(--background)] text-[var(--foreground)]"
+          ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--accent)] border-b-2 border-b-[var(--accent)]"
           : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
       }`}
     >
@@ -342,7 +342,7 @@ export function ToolsPanel({
           <div
             className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "summary"
-                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => setActiveTab("summary")}
@@ -352,7 +352,7 @@ export function ToolsPanel({
           <div
             className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "ai-logs"
-                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => setActiveTab("ai-logs")}
@@ -362,7 +362,7 @@ export function ToolsPanel({
           <div
             className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "latex-logs"
-                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => setActiveTab("latex-logs")}
@@ -372,7 +372,7 @@ export function ToolsPanel({
           <div
             className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "typst-logs"
-                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => setActiveTab("typst-logs")}
@@ -382,7 +382,7 @@ export function ToolsPanel({
           <div
             className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "yjs-logs"
-                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => setActiveTab("yjs-logs")}
@@ -392,21 +392,13 @@ export function ToolsPanel({
           <div
             className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 h-full ${
               activeTab === "git-logs"
-                ? "bg-[var(--background)] border-b-2 border-b-[var(--background)] -mb-px text-[var(--foreground)]"
+                ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
             }`}
             onClick={() => setActiveTab("git-logs")}
           >
             <span className="text-sm">Git</span>
           </div>
-          <div className="flex-1" />
-          <button
-            onClick={onClose}
-            className="px-3 py-2 text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)] transition-colors"
-            title="Close tools panel"
-          >
-            ×
-          </button>
         </div>
       </div>
 

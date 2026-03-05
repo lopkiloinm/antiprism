@@ -15,7 +15,7 @@ interface ChatTelemetryProps {
 
 export function ChatTelemetry({ streamingStats, isGenerating }: ChatTelemetryProps) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-[var(--muted)] shrink-0 border-t border-[var(--border)]">
+    <div className="flex items-center justify-between gap-3 px-3 py-1.5 text-xs text-[var(--muted)] shrink-0">
       <span className={isGenerating ? "text-[var(--muted)]" : streamingStats ? "text-[var(--accent)]" : "text-[var(--muted)]"}>
         {isGenerating ? "Streaming…" : streamingStats ? "Done!" : "—"}
       </span>

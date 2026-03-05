@@ -170,7 +170,7 @@ export function DashboardHeader({
         </div>
         {selectedCount > 0 && activeNav !== "servers" && (
           <div
-            className={`${isMobile ? "flex" : searchExpanded ? "flex" : "hidden"} items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--background))] shadow-sm overflow-hidden`}
+            className="flex items-center rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--accent)_8%,var(--background))] shadow-sm overflow-hidden"
             role="toolbar"
             aria-label="Bulk actions"
           >
@@ -257,7 +257,7 @@ export function DashboardHeader({
                 <IconChevronDown />
               </button>
               {importOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl py-2">
+                <div className="absolute right-0 top-full mt-1 z-50 min-w-[140px] rounded border border-[var(--border)] bg-[var(--background)] shadow-xl">
                   <button
                     onClick={() => {
                       onImportZip();

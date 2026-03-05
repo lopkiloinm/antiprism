@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Project } from "@/lib/projects";
-import { IconDownload, IconRestore, IconTrash2, IconCheckSquare, IconSquare, IconPencil, IconFolder, IconFile } from "./Icons";
+import { IconDownload, IconRestore, IconTrash2, IconPencil, IconFolder, IconFile } from "./Icons";
 import { DashboardView, DashboardItemProps } from "./DashboardView";
 import { useResponsive } from "@/hooks/useResponsive";
 
@@ -109,13 +109,15 @@ export function ProjectList({
       subtitle: item.isRoom ? "Room" : `Modified ${new Date(item.createdAt).toLocaleDateString()}`,
       icon: item.isRoom ? <IconFolder /> : <IconFile />,
       href: `/project/${item.id}`,
-      leftAccessory: (
-        <div
-          role="button"
-          tabIndex={0}
+      leftAccessory: onSelectionChange ? (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isSelected}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            // Don't navigate when clicking the toggle
             if (onSelectionChange) {
               const isSelected = selectedItems?.includes(item.id) || false;
               if (isSelected) {
@@ -125,11 +127,34 @@ export function ProjectList({
               }
             }
           }}
-          className="cursor-pointer"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (onSelectionChange) {
+                const isSelected = selectedItems?.includes(item.id) || false;
+                if (isSelected) {
+                  onSelectionChange(selectedItems.filter(id => id !== item.id));
+                } else {
+                  onSelectionChange([...selectedItems, item.id]);
+                }
+              }
+            }
+          }}
+          className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+            isSelected
+              ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+              : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
+          }`}
+          title={isSelected ? "Deselect" : "Select"}
         >
-          {isSelected ? <IconCheckSquare /> : <IconSquare />}
-        </div>
-      ),
+          <span
+            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+              isSelected ? "left-[22px]" : "left-1"
+            }`}
+          />
+        </button>
+      ) : undefined,
       topRightAccessory: rightAccessories,
     };
   });

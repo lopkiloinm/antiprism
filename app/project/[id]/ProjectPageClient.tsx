@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +10,7 @@ import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
-import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig } from "@/lib/settings";
+import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig, getShowHiddenYjsDocs, setShowHiddenYjsDocs } from "@/lib/settings";
 import { FileTree } from "@/components/FileTree";
 import { FileActions } from "@/components/FileActions";
 import { FileTabs, SETTINGS_TAB_PATH } from "@/components/FileTabs";
@@ -24,7 +26,7 @@ import { BigChatMessage } from "@/components/BigChatMessage";
 import { SmallChatMessage } from "@/components/SmallChatMessage";
 import { ChatTelemetry } from "@/components/ChatTelemetry";
 import { ProjectDropdown } from "@/components/ProjectDropdown";
-import { IconSearch, IconChevronDown, IconChevronUp, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload, IconWifi, IconWifiOff, IconLock, IconUsers } from "@/components/Icons";
+import { IconSearch, IconChevronDown, IconChevronUp, IconChevronLeft, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload, IconWifi, IconWifiOff, IconLock, IconUsers, IconFolder, IconGitBranch, IconHome, IconToggleLeft, IconToggleRight, IconWrench } from "@/components/Icons";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { WebRTCStatus } from "@/components/WebRTCStatus";
 import { ToolsPanel } from "@/components/ToolsPanel";
@@ -35,6 +37,7 @@ import { GitPanelReal, getAllProjectFiles } from "@/components/GitPanelReal";
 import { GitDiffView } from "@/components/GitDiffView";
 import { SideBySideDiffView } from "@/components/SideBySideDiffView";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { getFileIcon } from "@/components/FileTree";
 import { parseOutline, type OutlineEntry } from "@/lib/documentOutline";
 import { EditorView, basicSetup } from "codemirror";
 import { EditorState } from "@codemirror/state";
@@ -54,7 +57,7 @@ import { generateVLResponse, initializeVLModel, isVLModelLoaded, isVLModelLoadin
 import { IconX } from "@/components/Icons";
 import { MobileProjectLayout } from "@/components/MobileProjectLayout";
 import { useResponsive } from "@/hooks/useResponsive";
-import { createChat, getChatMessages, saveChatMessages } from "@/lib/chatStore";
+import { createProjectChat, getProjectChatMessages, saveProjectChatMessages, listProjectChats } from "@/lib/chatStore";
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, getModelById } from "@/lib/modelConfig";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { compileTypstToPdf, ensureTypstReady } from "@/lib/typstCompiler";
@@ -133,6 +136,7 @@ const getStableGitRepoName = (projectName: string, filePaths: string[], projectI
 };
 
 export default function ProjectPageClient({ idOverride }: { idOverride?: string }) {
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const params = useParams();
   const pathname = usePathname();
@@ -184,6 +188,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [smallChatMessages, setSmallChatMessages] = useState<
     { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
   >([]);
+  
+  // Simple fixed height when chat input is present - will be calculated after showAIPanel is defined
+  let chatInputPadding = 0;
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCompiling, setIsCompiling] = useState(false);
   const [modelReady, setModelReady] = useState(false);
@@ -193,11 +200,202 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [lastCompileMs, setLastCompileMs] = useState<number | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareUrl, setShareUrl] = useState("");
+  const [findFileModalOpen, setFindFileModalOpen] = useState(false);
+  const [findConversationModalOpen, setFindConversationModalOpen] = useState(false);
+  const [webrtcModalOpen, setWebrtcModalOpen] = useState(false);
+  const [findFileQuery, setFindFileQuery] = useState("");
+  const [findConversationQuery, setFindConversationQuery] = useState("");
   const [initError, setInitError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [sidebarTab, setSidebarTab] = useState<"files" | "chats" | "git">("files");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<"home" | "files" | "chats" | "git" | "search">("files");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showHiddenYjsDocs, setShowHiddenYjsDocsState] = useState(getShowHiddenYjsDocs());
+  
+  // Update showHiddenYjsDocs when setting changes
+  useEffect(() => {
+    setShowHiddenYjsDocsState(getShowHiddenYjsDocs());
+    
+    // Listen for storage changes from other tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'antiprism.showHiddenYjsDocs') {
+        setShowHiddenYjsDocsState(getShowHiddenYjsDocs());
+        // Refresh filetree when setting changes
+        setRefreshTrigger(t => t + 1);
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+  
+  // Refresh filetree when showHiddenYjsDocs state changes
+  useEffect(() => {
+    setRefreshTrigger(t => t + 1);
+  }, [showHiddenYjsDocs]);
+
+  // Global search functionality
+  const [searchResults, setSearchResults] = useState<Array<{
+    tabPath: string;
+    fileName: string;
+    line: number;
+    content: string;
+    lineNumber: number;
+  }>>([]);
+
+  // Perform global search when search query changes
+  useEffect(() => {
+    const performSearch = async () => {
+      if (sidebarTab === "search" && searchQuery.trim()) {
+        const results: typeof searchResults = [];
+        
+        console.log('[Global Search] Searching for:', searchQuery);
+        console.log('[Global Search] allProjectFiles:', allProjectFiles?.length || 'null');
+        console.log('[Global Search] openTabs:', openTabs.length);
+        
+        // Use FileDocumentManager for all files (avoids conflicts with y-indexeddb)
+        const fileDocManager = fileDocManagerRef.current;
+        
+        if (fileDocManager && allProjectFiles && allProjectFiles.length > 0) {
+          console.log('[Global Search] Searching all project files via FileDocumentManager:', allProjectFiles.length);
+          
+          for (const filePath of allProjectFiles) {
+            try {
+              // Skip binary files
+              if (/\.(jpg|jpeg|png|gif|webp|bmp|svg|pdf|woff|woff2|ttf|otf|zip|gz|tar)$/i.test(filePath)) {
+                continue;
+              }
+              
+              // Get content from FileDocumentManager (uses y-indexeddb)
+              const fileDoc = fileDocManager.getDocument(filePath, true); // silent=true
+              const ytext = fileDoc.text;
+              
+              if (ytext) {
+                const content = ytext.toString();
+                
+                if (content && content.trim()) {
+                  const lines = content.split('\n');
+                  const query = searchQuery.toLowerCase();
+                  
+                  lines.forEach((line, index) => {
+                    if (line.toLowerCase().includes(query)) {
+                      // Extract context around the match
+                      const start = Math.max(0, line.toLowerCase().indexOf(query) - 20);
+                      const end = Math.min(line.length, line.toLowerCase().indexOf(query) + query.length + 20);
+                      const context = line.substring(start, end);
+                      
+                      results.push({
+                        tabPath: filePath,
+                        fileName: filePath.split('/').pop() || filePath,
+                        line: index + 1,
+                        content: context,
+                        lineNumber: index + 1
+                      });
+                    }
+                  });
+                }
+              } else {
+                console.log('[Global Search] No Yjs document for:', filePath);
+              }
+            } catch (error) {
+              console.log('[Global Search] Error getting document for', filePath, error);
+            }
+          }
+        } else {
+          // Fallback: search through currently open tabs
+          console.log('[Global Search] Fallback: searching open tabs only');
+          
+          if (fileDocManager) {
+            openTabs.forEach(tab => {
+              if (tab.type === "text") {
+                try {
+                  const fileDoc = fileDocManager.getDocument(tab.path, true);
+                  const ytext = fileDoc.text;
+                  
+                  if (ytext) {
+                    const content = ytext.toString();
+                    const lines = content.split('\n');
+                    const query = searchQuery.toLowerCase();
+                    
+                    lines.forEach((line, index) => {
+                      if (line.toLowerCase().includes(query)) {
+                        const start = Math.max(0, line.toLowerCase().indexOf(query) - 20);
+                        const end = Math.min(line.length, line.toLowerCase().indexOf(query) + query.length + 20);
+                        const context = line.substring(start, end);
+                        
+                        results.push({
+                          tabPath: tab.path,
+                          fileName: tab.path.split('/').pop() || tab.path,
+                          line: index + 1,
+                          content: context,
+                          lineNumber: index + 1
+                        });
+                      }
+                    });
+                  }
+                } catch (error) {
+                  console.log('[Global Search] Error with open tab:', tab.path, error);
+                }
+              }
+            });
+          }
+        }
+        
+        console.log('[Global Search] Found results:', results.length);
+        setSearchResults(results);
+      } else {
+        setSearchResults([]);
+      }
+    };
+
+    performSearch();
+  }, [searchQuery, sidebarTab, allProjectFiles, openTabs]);
+
+  // Handle search result click
+  const handleSearchResultClick = (result: typeof searchResults[0]) => {
+    // Switch to the file tab
+    setActiveTabPath(result.tabPath);
+    
+    // If tab is not open, open it
+    if (!openTabs.find(t => t.path === result.tabPath)) {
+      setOpenTabs(prev => [...prev, { path: result.tabPath, type: "text" }]);
+    }
+    
+    // Navigate to the specific line after the file is loaded
+    setTimeout(() => {
+      // Get the current Yjs text for the active tab
+      const currentYText = getCurrentYText();
+      if (currentYText) {
+        // Find the CodeMirror editor instance through the EditorPanel ref
+        const editorPanel = editorPanelRef.current;
+        if (editorPanel) {
+          // Get the editor view from the panel
+          const editorView = editorPanel.getEditorView?.();
+          if (editorView) {
+            try {
+              // Get the line content and position
+              const doc = editorView.state.doc;
+              const line = doc.line(result.lineNumber);
+              
+              // Scroll to the line
+              const pos = line.from;
+              editorView.dispatch({
+                effects: EditorView.scrollIntoView.of(pos, { y: 'center' })
+              });
+              
+              // Set cursor to the line
+              editorView.dispatch({
+                selection: { anchor: pos, head: pos }
+              });
+              
+              console.log(`[Global Search] Navigated to line ${result.lineNumber} in ${result.tabPath}`);
+            } catch (error) {
+              console.log('[Global Search] Error navigating to line:', error);
+            }
+          }
+        }
+      }
+    }, 200); // Small delay to ensure editor is loaded
+  };
   const [addActionsOpen, setAddActionsOpen] = useState(false);
   const [chatExpanded, setChatExpanded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -240,12 +438,16 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const initRef = useRef(false);
   const providerRef = useRef<WebrtcProvider | null>(null);
   const fileDocManagerRef = useRef<FileDocumentManager | null>(null);
+  const filetreeRef = useRef<Y.Doc | null>(null);
+  const filetreeProviderRef = useRef<WebrtcProvider | null>(null);
   const editorRef = useRef<EditorPanelHandle | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  
   const lastMessageRef = useRef<HTMLPreElement | null>(null);
   const autoCompileDoneRef = useRef(false);
   const handleCompileRef = useRef<(() => Promise<void>) | null>(null);
   const isCompilingRef = useRef(false);
+  const compilationCancelRef = useRef<(() => void) | null>(null);
   const gitDiffRef = useRef<HTMLDivElement>(null);
   const gitDiffViewRef = useRef<EditorView | null>(null);
   const yjsLastMutationLogRef = useRef(0);
@@ -728,7 +930,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
     if (activeTab?.type === "chat") {
       const chatId = activeTab.path.replace("/ai-chat/", "");
-      const persistedMsgs = getChatMessages(chatId, "big");
+      const persistedMsgs = getProjectChatMessages(id, chatId, "big");
       setBigChatMessages(persistedMsgs);
     }
   }, [activeTabPath, openTabs]);
@@ -738,7 +940,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     if (!activeTabPath) return;
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
     if (activeTab?.type === "text") {
-      const persistedMsgs = getChatMessages("", "small");
+      const persistedMsgs = getProjectChatMessages(id, "", "small");
       setSmallChatMessages(persistedMsgs);
     }
   }, [activeTabPath, openTabs]);
@@ -851,6 +1053,17 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         fileDocManagerRef.current = fileDocManager;
         console.log('📂 File document manager created');
 
+        // Create Yjs document for entire filetree synchronization
+        const filetreeDoc = new Y.Doc();
+        const filetreeProvider = new WebrtcProvider(`${id}-filetree`, filetreeDoc, providerOptions);
+        const filetreeYText = filetreeDoc.getText('filetree');
+        
+        // Store in refs for cleanup
+        filetreeRef.current = filetreeDoc;
+        filetreeProviderRef.current = filetreeProvider;
+        
+        console.log('📂 Filetree Yjs document created for synchronization');
+
         const idbfs = await mount();
         fsRef.current = idbfs;
         console.log('📂 File system mounted');
@@ -878,7 +1091,38 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         const isEmpty = dirs.length === 0 && files.length === 0;
         const hasMainTex = files.some((f: { name: string }) => f.name === "main.tex");
         const hasMainTyp = files.some((f: { name: string }) => f.name === "main.typ");
+        const hasDiagram = files.some((f: { name: string }) => f.name === "diagram.jpg");
         const isNewProject = !isImported && isEmpty;
+
+        // Cache existing binary files for display
+        if (!isNewProject) {
+          console.log('🖼️ Checking for existing binary files to cache...');
+          for (const file of files) {
+            const filePath = `${basePath}/${file.name}`;
+            if (isBinaryPath(filePath)) {
+              try {
+                const data = await idbfs.readFile(filePath);
+                if (data && data instanceof ArrayBuffer) {
+                  let mimeType = "application/octet-stream";
+                  if (file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')) mimeType = "image/jpeg";
+                  else if (file.name.endsWith('.png')) mimeType = "image/png";
+                  else if (file.name.endsWith('.pdf')) mimeType = "application/pdf";
+                  
+                  const blob = new Blob([data], { type: mimeType });
+                  const url = URL.createObjectURL(blob);
+                  setImageUrlCache((prev) => { 
+                    const next = new Map(prev); 
+                    next.set(filePath, url); 
+                    return next; 
+                  });
+                  console.log(`🖼️ Cached existing binary file: ${file.name}`);
+                }
+              } catch (e) {
+                console.warn(`Failed to cache existing binary file ${file.name}:`, e);
+              }
+            }
+          }
+        }
 
         if (isNewProject) {
           // + New only: seed from public (fetch all in parallel to avoid partial state on Strict Mode double-mount)
@@ -908,12 +1152,218 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
             }
           }
           if (diagramBuf && !files.some((f: { name: string }) => f.name === "diagram.jpg")) {
+            console.log('🖼️ Writing diagram.jpg to IDBFS:', { 
+              diagramBuf: diagramBuf?.byteLength, 
+              diagramPath,
+              files: files.map(f => f.name)
+            });
             try {
               await idbfs.writeFile(diagramPath, diagramBuf, { mimeType: "image/jpeg" });
+              console.log('✅ diagram.jpg written successfully');
+              
+              // Cache the image for immediate display
+              const blob = new Blob([diagramBuf], { type: "image/jpeg" });
+              const url = URL.createObjectURL(blob);
+              setImageUrlCache((prev) => { 
+                const next = new Map(prev); 
+                next.set(diagramPath, url); 
+                return next; 
+              });
+              console.log('🖼️ diagram.jpg cached for display');
+              
+              // Verify the file was written by reading it back
+              try {
+                const verifyBuf = await idbfs.readFile(diagramPath);
+                console.log('🔍 Verification - diagram.jpg read back:', { 
+                  originalSize: diagramBuf.byteLength,
+                  readBackSize: verifyBuf.byteLength,
+                  matches: diagramBuf.byteLength === verifyBuf.byteLength
+                });
+              } catch (verifyErr) {
+                console.error('❌ Failed to verify diagram.jpg:', verifyErr);
+              }
             } catch (e) {
+              console.error('❌ Failed to write diagram.jpg:', e);
               if (!String(e).includes("already exists")) throw e;
             }
+          } else {
+            console.log('🖼️ diagram.jpg already exists or fetch failed:', { 
+              hasDiagramBuf: !!diagramBuf,
+              diagramBufSize: diagramBuf?.byteLength,
+              existsInFiles: files.some((f: { name: string }) => f.name === "diagram.jpg")
+            });
           }
+        }
+
+        // Filetree synchronization logic
+        if (cancelled) return;
+        
+        // Function to serialize entire filetree to JSON
+        async function serializeFiletree(): Promise<string> {
+          const filetreeData: any = { files: {} };
+          
+          // Add project chat metadata
+          try {
+            const projectChats = listProjectChats(id);
+            if (projectChats.length > 0) {
+              filetreeData.chats = projectChats.map(chat => ({
+                id: chat.id,
+                title: chat.title,
+                createdAt: chat.createdAt,
+                modelId: chat.modelId
+              }));
+            }
+          } catch (e) {
+            console.warn('Failed to serialize chat metadata:', e);
+          }
+          
+          async function scanDirectory(dirPath: string) {
+            try {
+              const { dirs, files } = await idbfs.readdir(dirPath);
+              
+              for (const file of files) {
+                const filePath = dirPath === "/" ? `/${file.name}` : `${dirPath}/${file.name}`;
+                try {
+                  const data = await idbfs.readFile(filePath);
+                  let mimeType = "application/octet-stream";
+                  if (file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')) mimeType = "image/jpeg";
+                  else if (file.name.endsWith('.png')) mimeType = "image/png";
+                  else if (file.name.endsWith('.pdf')) mimeType = "application/pdf";
+                  else if (file.name.endsWith('.tex')) mimeType = "text/x-tex";
+                  else if (file.name.endsWith('.typ')) mimeType = "text/x-typst";
+                  
+                  // Convert binary data to base64 for JSON serialization
+                  let content: string;
+                  if (mimeType.startsWith('text/') || mimeType.startsWith('application/')) {
+                    content = new TextDecoder().decode(data);
+                  } else {
+                    // Binary files - convert to base64
+                    content = `base64:${btoa(String.fromCharCode(...new Uint8Array(data)))}`;
+                  }
+                  
+                  filetreeData.files[filePath] = {
+                    content,
+                    mimeType,
+                    modified: Date.now()
+                  };
+                } catch (e) {
+                  console.warn(`Failed to read file ${filePath} for sync:`, e);
+                }
+              }
+              
+              for (const dir of dirs) {
+                const dirPath = dirPath === "/" ? `/${dir.name}` : `${dirPath}/${dir.name}`;
+                await scanDirectory(dirPath);
+              }
+            } catch (e) {
+              console.warn(`Failed to scan directory ${dirPath}:`, e);
+            }
+          }
+          
+          await scanDirectory(basePath);
+          return JSON.stringify(filetreeData);
+        }
+        
+        // Function to deserialize filetree from JSON
+        async function deserializeFiletree(filetreeJson: string) {
+          try {
+            const filetreeData = JSON.parse(filetreeJson);
+            
+            // Handle chat metadata
+            if (filetreeData.chats && Array.isArray(filetreeData.chats)) {
+              try {
+                const existingChats = listProjectChats(id);
+                const incomingChats = filetreeData.chats;
+                
+                // Merge incoming chats with existing ones (avoid duplicates)
+                for (const incomingChat of incomingChats) {
+                  if (!existingChats.find(c => c.id === incomingChat.id)) {
+                    // Import the chat metadata (messages will be loaded separately)
+                    const projectChats = listProjectChats(id);
+                    projectChats.push(incomingChat);
+                    localStorage.setItem(`antiprism_chats_${id}`, JSON.stringify(projectChats));
+                    console.log(`📥 Imported chat metadata: ${incomingChat.title}`);
+                  }
+                }
+                
+                // Refresh ChatTree if it's visible
+                if (sidebarTab === "chats") {
+                  setRefreshTrigger(t => t + 1);
+                }
+              } catch (e) {
+                console.warn('Failed to deserialize chat metadata:', e);
+              }
+            }
+            
+            for (const [filePath, fileData] of Object.entries(filetreeData.files || {})) {
+              try {
+                // Check if file already exists
+                const exists = await idbfs.exists(filePath).catch(() => false);
+                if (exists) continue; // Skip existing files
+                
+                const { content, mimeType } = fileData as any;
+                let buffer: ArrayBuffer;
+                
+                if (content.startsWith('base64:')) {
+                  // Decode base64 binary content
+                  const base64Content = content.substring(7);
+                  const binaryString = atob(base64Content);
+                  buffer = new Uint8Array(binaryString.length).map((_, i) => binaryString.charCodeAt(i)).buffer;
+                } else {
+                  // Text content
+                  buffer = new TextEncoder().encode(content).buffer;
+                }
+                
+                // Ensure parent directory exists
+                const parentPath = filePath.substring(0, filePath.lastIndexOf('/')) || "/";
+                if (parentPath !== "/") {
+                  await idbfs.mkdir(parentPath).catch(() => {}); // May exist
+                }
+                
+                await idbfs.writeFile(filePath, buffer, { mimeType });
+                console.log(`📥 Synced file from remote: ${filePath}`);
+                
+                // Cache binary files for display
+                if (isBinaryPath(filePath)) {
+                  const blob = new Blob([buffer], { type: mimeType });
+                  const url = URL.createObjectURL(blob);
+                  setImageUrlCache((prev) => { 
+                    const next = new Map(prev); 
+                    next.set(filePath, url); 
+                    return next; 
+                  });
+                }
+              } catch (e) {
+                console.warn(`Failed to sync file ${filePath}:`, e);
+              }
+            }
+          } catch (e) {
+            console.error('Failed to deserialize filetree:', e);
+          }
+        }
+        
+        // Sync filetree to Yjs when this client has files
+        if (!isNewProject) {
+          const filetreeJson = await serializeFiletree();
+          if (filetreeYText.toString() !== filetreeJson) {
+            filetreeYText.insert(0, filetreeJson);
+            console.log('📤 Filetree synced to Yjs');
+          }
+        }
+        
+        // Listen for remote filetree updates
+        filetreeYText.observe(() => {
+          const remoteFiletree = filetreeYText.toString();
+          if (remoteFiletree && remoteFiletree !== '{}') {
+            console.log('📥 Received remote filetree update');
+            deserializeFiletree(remoteFiletree);
+          }
+        });
+        
+        // Initial sync from remote if this client is empty
+        if (isNewProject && filetreeYText.toString() && filetreeYText.toString() !== '{}') {
+          console.log('📥 Initial filetree sync from remote');
+          deserializeFiletree(filetreeYText.toString());
         }
 
         if (cancelled) return;
@@ -1064,9 +1514,11 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         try {
           const allFiles = await getAllProjectFiles(id);
           setAllProjectFiles(allFiles);
-          console.log('📁 Loaded all project files for Git:', allFiles);
+          console.log('📁 Loaded all project files for Git:', allFiles.length, 'files');
+          console.log('📁 First few files:', allFiles.slice(0, 5));
         } catch (error) {
           console.error('Failed to load all project files:', error);
+          setAllProjectFiles([]); // Set to empty array on error
         }
       } catch (e) {
         if (cancelled) return;
@@ -1090,6 +1542,16 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       providerRef.current = null;
       fileDocManagerRef.current?.destroy(); // ✅ Cleanup all file documents
       fileDocManagerRef.current = null;
+      
+      // ✅ Also cleanup the filetree document and provider
+      if (filetreeRef.current) {
+        filetreeRef.current.destroy();
+        filetreeRef.current = null;
+      }
+      if (filetreeProviderRef.current) {
+        filetreeProviderRef.current.destroy();
+        filetreeProviderRef.current = null;
+      }
     };
   }, [id]);
 
@@ -1983,6 +2445,66 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       if (!fs) return;
       const mgr = getBufferMgr();
 
+      // Handle virtual Y.js files
+      if (path === `${basePath}/.yjs-filetree.json`) {
+        try {
+          // Get filetree Y.js document content
+          const filetreeContent = filetreeRef.current?.getText('filetree').toString() || '{}';
+          
+          // Create a read-only tab with the filetree content
+          const existingIdx = openTabs.findIndex((t) => t.path === path);
+          if (existingIdx >= 0) {
+            setActiveTabPath(path);
+            setCurrentPath(path); // Update currentPath for filetree highlighting
+            setAddTargetPath(path); // Update addTargetPath for file actions
+            return;
+          }
+          
+          setOpenTabs((t) => [...t, { path, type: "text", readOnly: true }]);
+          setActiveTabPath(path);
+          setCurrentPath(path); // Update currentPath for filetree highlighting
+          setAddTargetPath(path); // Update addTargetPath for file actions
+          
+          // Set the content in the buffer manager
+          mgr.switchTo(path, filetreeContent);
+          
+          console.log('🔍 Opened filetree Y.js document');
+        } catch (e) {
+          console.error('Failed to open filetree Y.js document:', e);
+        }
+        return;
+      }
+      
+      if (path === `${basePath}/.yjs-chats.json`) {
+        try {
+          // Get project chat metadata
+          const projectChats = listProjectChats(id);
+          const chatsContent = JSON.stringify(projectChats, null, 2);
+          
+          // Create a read-only tab with the chats content
+          const existingIdx = openTabs.findIndex((t) => t.path === path);
+          if (existingIdx >= 0) {
+            setActiveTabPath(path);
+            setCurrentPath(path); // Update currentPath for filetree highlighting
+            setAddTargetPath(path); // Update addTargetPath for file actions
+            return;
+          }
+          
+          setOpenTabs((t) => [...t, { path, type: "text", readOnly: true }]);
+          setActiveTabPath(path);
+          setCurrentPath(path); // Update currentPath for filetree highlighting
+          setAddTargetPath(path); // Update addTargetPath for file actions
+          
+          // Set the content in the buffer manager
+          mgr.switchTo(path, chatsContent);
+          
+          console.log('🔍 Opened chats metadata Y.js document');
+        } catch (e) {
+          console.error('Failed to open chats Y.js document:', e);
+        }
+        return;
+      }
+
       const stat = await fs.stat(path).catch(() => null);
       if (stat?.isDirectory) {
         setCurrentPath(path);
@@ -2179,6 +2701,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     const fsInstance = fs;
     const currentActivePath = activeTabPathRef.current;
     const compileEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    
+    // Create cancellation token for this compilation
+    let cancelled = false;
+    const cancel = () => { cancelled = true; };
+    compilationCancelRef.current = cancel;
+    
     typstLogger.info("handleCompile start", {
       compileEventId,
       currentActivePath,
@@ -2222,6 +2750,14 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
     setIsCompiling(true);
     const start = performance.now();
+    
+    // Check if compilation was cancelled before starting
+    if (cancelled) {
+      typstLogger.info("handleCompile cancelled before compilation start", { compileEventId });
+      setIsCompiling(false);
+      return;
+    }
+    
     try {
       // Compile the active source buffer (no implicit "main.tex" fallback).
       const latex = activeIsTex ? currentYText.toString() : "";
@@ -2270,6 +2806,14 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       }
       await gatherFiles(basePath);
+      
+      // Check if compilation was cancelled during file gathering
+      if (cancelled) {
+        typstLogger.info("handleCompile cancelled during file gathering", { compileEventId });
+        setIsCompiling(false);
+        return;
+      }
+      
       typstLogger.info("handleCompile gathered files", {
         compileEventId,
         additionalFileCount: additionalFiles.length,
@@ -2316,6 +2860,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         throw lastErr ?? new Error("LaTeX compile failed");
       }
 
+      // Final cancellation check before compilation
+      if (cancelled) {
+        typstLogger.info("handleCompile cancelled before compilation", { compileEventId });
+        setIsCompiling(false);
+        return;
+      }
+
       const pdfBlob = useTypst
         ? await compileTypstToPdf(typSource!, additionalFiles)
         : await compileLatexWithFallback();
@@ -2340,6 +2891,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       });
     } finally {
       setIsCompiling(false);
+      compilationCancelRef.current = null; // Clear cancellation ref
       typstLogger.info("handleCompile finally", {
         compileEventId,
         isCompiling: false,
@@ -2361,6 +2913,18 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       void handleCompile();
     }
   }, [compilerReady, fs, isCompiling, handleCompile, activeTabPath]); // ✅ Add activeTabPath to trigger when switching files
+
+  // 🔧 FIX: Reset autoCompileDoneRef when switching files to prevent broken compilation
+  useEffect(() => {
+    // Cancel any ongoing compilation
+    if (compilationCancelRef.current) {
+      compilationCancelRef.current();
+      compilationCancelRef.current = null;
+    }
+    
+    // Reset compilation flag when switching to a new file
+    autoCompileDoneRef.current = false;
+  }, [activeTabPath]);
 
   useEffect(() => {
     isCompilingRef.current = isCompiling;
@@ -2746,13 +3310,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         // Big chat
         const chatId = activeTab.path.replace("/ai-chat/", "");
         setBigChatMessages((msgs: any) => {
-          saveChatMessages(chatId, msgs, "big");
+          saveProjectChatMessages(id, chatId, msgs, "big");
           return msgs;
         });
       } else if (activeTab?.type === "text") {
         // Small chat
         setSmallChatMessages((msgs: any) => {
-          saveChatMessages("", msgs, "small");
+          saveProjectChatMessages(id, "", msgs, "small");
           return msgs;
         });
       }
@@ -2819,6 +3383,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   };
 
   const openOrSelectSettingsTab = useCallback(() => {
+    // Switch to files tab first to ensure editor is visible
+    setSidebarTab("files");
+    
     const has = openTabs.some((t) => t.path === SETTINGS_TAB_PATH);
     if (has) {
       setActiveTabPath(SETTINGS_TAB_PATH);
@@ -2833,6 +3400,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   const activeTab = isGitTab ? gitOpenTabs.find((t) => t.path === activeGitTabPath) : openTabs.find((t) => t.path === activeTabPath);
   const showAIPanel = !!(activeTab?.type === "text" && currentYDocRef.current);
   
+  // Update chatInputPadding now that showAIPanel is defined
+  chatInputPadding = (showAIPanel || activeTab?.type === "chat") ? 140 : 0; // Fixed 140px padding
+  
   // Debug chatbox visibility
   console.log('🤖 Chatbox:', { 
     showAIPanel, 
@@ -2840,7 +3410,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     hasYDoc: !!currentYDocRef.current,
     hasYText: !!currentYTextRef.current,
     activeTabPath: isGitTab ? activeGitTabPath : activeTabPath,
-    sidebarTab
+    sidebarTab,
+    chatInputPadding
   });
 
   const { isMobile } = useResponsive();
@@ -2913,10 +3484,11 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                 fs={fs}
                 basePath={basePath}
                 currentPath={currentPath}
-                refreshTrigger={refreshTrigger}
                 onFileSelect={handleFileSelect}
+                refreshTrigger={refreshTrigger}
                 onRefresh={() => setRefreshTrigger(t => t + 1)}
                 searchQuery={searchQuery}
+                showHiddenYjsDocs={showHiddenYjsDocs}
               />
               {/* Hidden file inputs for upload actions handled by FileTree implicitly, 
                   we just trigger them via DOM queries in the callbacks */}
@@ -2971,6 +3543,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     promptAsk={promptAsk}
                     promptCreate={promptCreate}
                     theme={theme}
+                    showHiddenYjsDocs={showHiddenYjsDocs}
                     onLatexEngineChange={setLatexEngineState}
                     onEditorFontSizeChange={setEditorFontSizeState}
                     onEditorTabSizeChange={setEditorTabSizeState}
@@ -2986,6 +3559,10 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     onPromptCreateChange={setPromptCreateState}
                     onThemeChange={setTheme}
                     onWebRTCSignalingConfigChange={setWebRTCSignalingConfig}
+                    onShowHiddenYjsDocsChange={(value) => {
+                      setShowHiddenYjsDocsState(value);
+                      setShowHiddenYjsDocs(value);
+                    }}
                     onResetRequested={() => {
                       setLatexEngineState(getLatexEngine());
                       setEditorFontSizeState(getEditorFontSize());
@@ -3000,6 +3577,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       setAiVisionEnabledState(getAiVisionEnabled());
                       setPromptAskState(getPromptAsk());
                       setPromptCreateState(getPromptCreate());
+                      setShowHiddenYjsDocsState(getShowHiddenYjsDocs());
                       setTheme(getTheme());
                     }}
                   />
@@ -3059,25 +3637,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           tabSize={editorTabSize}
                           lineWrapping={true} // Force line wrapping on mobile
                           theme={theme}
+                          readOnly={openTabs.find(t => t.path === activeTabPath)?.readOnly || false}
                         />
-                        {/* Floating format button for LaTeX files */}
-                        {handleFormatDocument && activeTabPath.endsWith('.tex') && (
-                          <button
-                            onClick={handleFormatDocument}
-                            disabled={isFormatting}
-                            className="absolute bottom-4 right-4 w-10 h-10 bg-[var(--accent)] text-white rounded-full shadow-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center z-10"
-                            title="Format document"
-                          >
-                            {isFormatting ? (
-                              <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5a2.121 2.121 0 0 1 0-3Z"/>
-                              </svg>
-                            )}
-                          </button>
-                        )}
                       </div>
                     );
                   })()}
@@ -3112,22 +3673,161 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   );
 }
 
+// Inline component for conversation search results
+function ChatConversationResults({ query, projectId, onChatSelect }: { query: string; projectId: string; onChatSelect: (chatId: string) => void }) {
+  const [chats, setChats] = useState<any[]>([]);
+  
+  useEffect(() => {
+    // Load project-specific chats from storage (same as ChatTree)
+    const loadChats = async () => {
+      try {
+        const stored = localStorage.getItem(`antiprism_chats_${projectId}`);
+        const parsed = stored ? JSON.parse(stored) : [];
+        setChats(parsed);
+        console.log('Loaded project chats for search:', parsed.length);
+      } catch (error) {
+        console.error('Failed to load project chats:', error);
+        setChats([]);
+      }
+    };
+    loadChats();
+  }, [projectId]);
+
+  const filteredChats = chats.filter(chat => 
+    chat.title && chat.title.toLowerCase().includes(query.toLowerCase())
+  );
+
+  console.log('Search query:', query, 'Filtered chats:', filteredChats.length);
+
+  if (filteredChats.length === 0) {
+    return (
+      <div className="text-xs text-[var(--muted)]">
+        No conversations found for "{query}"
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {filteredChats.map(chat => (
+        <div
+          key={chat.id}
+          onClick={() => onChatSelect(chat.id)}
+          className="p-2 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] cursor-pointer transition-colors flex items-center gap-2"
+        >
+          <span className="text-xs text-[var(--muted)] shrink-0">
+            <IconMessageSquare />
+          </span>
+          <span className="text-xs text-[var(--foreground)] flex-1 break-all">
+            {chat.title}
+          </span>
+          <span className="text-xs text-[var(--muted)] shrink-0">
+            {new Date(chat.createdAt).toLocaleDateString()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
-      <aside style={{ width: sidebarWidth, minWidth: sidebarWidth > 0 ? 180 : 0, maxWidth: 480, transition: "width 0.15s ease-out" }} className="border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden">
-        <div className="h-12 flex items-center justify-between gap-2 px-3 border-b border-[var(--border)] shrink-0">
-          <Link href="/" className="text-xs text-[var(--muted)] hover:text-[var(--foreground)] truncate min-w-0">
-            ←
-          </Link>
-          <WebRTCStatus provider={provider} config={webrtcConfig} />
+      {/* Separate skinny vertical sidebar */}
+      <aside className="w-12 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0">
+        {/* Main navigation icons - vertical */}
+          <div className="flex flex-col gap-1 p-2">
+            <button
+              onClick={() => router.push("/")}
+              className="w-8 h-8 flex items-center justify-center rounded transition-colors text-[var(--muted)] hover:text-[var(--foreground)]"
+              title="Home"
+            >
+              <IconHome />
+            </button>
+            <button
+              onClick={() => setSidebarTab("files")}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "files" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              title="Files"
+            >
+              <IconFolder />
+            </button>
+            <button
+              onClick={() => setSidebarTab("chats")}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "chats" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              title="Chats"
+            >
+              <IconMessageSquare />
+            </button>
+            <button
+              onClick={() => setSidebarTab("search")}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "search" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              title="Global search"
+            >
+              <IconSearch />
+            </button>
+            <button
+              onClick={() => setSidebarTab("git")}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "git" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              title="Git"
+            >
+              <IconGitBranch />
+            </button>
+            <button
+              onClick={handleShare}
+              className="w-8 h-8 rounded flex items-center justify-center transition-colors text-[var(--muted)] hover:text-[var(--foreground)]"
+              title="Share project"
+            >
+              <IconShare2 />
+            </button>
+          </div>
+        
+        {/* Bottom icons */}
+        <div className="mt-auto p-2 flex flex-col gap-1">
+          <button
+            onClick={() => setWebrtcModalOpen(true)}
+            className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${webrtcConfig.enabled ? "text-[var(--accent)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+            title={webrtcConfig.enabled ? "WebRTC enabled" : "WebRTC disabled"}
+          >
+            {webrtcConfig.enabled ? <IconWifi /> : <IconWifiOff />}
+          </button>
+          <button
+            onClick={() => setToolsPanelOpen(!toolsPanelOpen)}
+            className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${toolsPanelOpen ? "text-[var(--accent)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+            title={toolsPanelOpen ? "Hide tools panel" : "Show tools panel"}
+          >
+            <IconWrench />
+          </button>
           <button
             onClick={openOrSelectSettingsTab}
-            className="shrink-0 text-[var(--muted)] hover:text-[var(--foreground)] p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded transition-colors text-[var(--muted)] hover:text-[var(--foreground)]"
             title="Settings"
           >
             <IconSettings />
           </button>
         </div>
+      </aside>
+
+      {/* Main sidebar */}
+      <aside style={{ width: sidebarWidth, minWidth: sidebarWidth > 0 ? 180 : 0, maxWidth: 480, transition: "width 0.15s ease-out" }} className="border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden">
+        {(sidebarTab === "files" || sidebarTab === "chats") && (
+        <div className="h-12 flex items-center justify-center gap-2 px-3 border-b border-[var(--border)] shrink-0">
+          {sidebarTab === "files" && (
+            <button
+              onClick={() => setFindFileModalOpen(true)}
+              className="w-full px-3 py-1.5 text-sm bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
+            >
+              Find a file
+            </button>
+          )}
+          {sidebarTab === "chats" && (
+            <button
+              onClick={() => setFindConversationModalOpen(true)}
+              className="w-full px-3 py-1.5 text-sm bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
+            >
+              Find a conversation
+            </button>
+          )}
+        </div>
+      )}
         <div className="px-3 py-2 border-b border-[var(--border)] shrink-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <ProjectDropdown
@@ -3139,104 +3839,67 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             >
               {projectName}
             </ProjectDropdown>
-            <button
-              onClick={handleShare}
-              className="shrink-0 text-[var(--muted)] hover:text-[var(--foreground)] p-1.5 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
-              title="Share"
-            >
-              <IconShare2 />
-            </button>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] overflow-hidden shrink-0">
-              <button
-                onClick={() => setSidebarTab("files")}
-                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "files" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-              >
-                Files
-              </button>
-              <button
-                onClick={() => setSidebarTab("chats")}
-                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "chats" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-              >
-                Chats
-              </button>
-              <button
-                onClick={() => setSidebarTab("git")}
-                className={`px-2 py-1.5 text-xs font-medium transition-colors ${sidebarTab === "git" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-              >
-                Git
-              </button>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
+            
+            {/* All action buttons in same row as project name */}
+            <div className="flex items-center gap-1">
+              {/* File actions */}
               {sidebarTab === "files" && (
                 <>
                   <button
-                    onClick={() => setSearchOpen((o) => !o)}
-                    className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-[var(--foreground)]"}`}
-                    title="Search"
+                    onClick={() => {
+                      document.querySelector<HTMLInputElement>('input[type="file"]:not([webkitdirectory])')?.click();
+                    }}
+                    className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors"
+                    title="Upload files"
                   >
-                    <IconSearch />
+                    <IconUpload />
+                  </button>
+                  <button
+                    onClick={() => {
+                      document.querySelector<HTMLInputElement>('input[webkitdirectory]')?.click();
+                    }}
+                    className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors"
+                    title="Upload folder"
+                  >
+                    <IconFolderPlus />
                   </button>
                   <button
                     onClick={() => setAddActionsOpen(!addActionsOpen)}
-                    className={`w-7 h-7 rounded flex items-center justify-center ${
+                    className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
                       addActionsOpen 
                         ? "bg-[var(--accent)] text-white"
                         : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)]"
                     }`}
-                    title="Add"
+                    title="Add file"
                   >
-                    <IconPlus />
+                    <IconFilePlus />
                   </button>
                 </>
               )}
+              
+              {/* Chat action */}
               {sidebarTab === "chats" && (
-                <>
-                  <button
-                    onClick={() => setSearchOpen((o) => !o)}
-                    className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-[var(--foreground)]"}`}
-                    title="Search chats"
-                  >
-                    <IconSearch />
-                  </button>
-                  <button
-                    onClick={() => {
-                      const chat = createChat(selectedModelId);
-                      const chatPath = `/ai-chat/${chat.id}`;
-                      setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
-                      setActiveTabPath(chatPath);
-                      setRefreshTrigger((t) => t + 1); // Refresh ChatTree
-                    }}
-                    className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center"
-                    title="New chat"
-                  >
-                    <IconPlus />
-                  </button>
-                </>
-              )}
-              {sidebarTab === "git" && (
                 <button
-                  onClick={() => setSearchOpen((o) => !o)}
-                  className={`w-7 h-7 rounded flex items-center justify-center ${searchOpen ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] hover:text-[var(--foreground)]"}`}
-                  title="Search git"
+                  onClick={() => {
+                    const chat = createProjectChat(id, selectedModelId);
+                    const chatPath = `/ai-chat/${chat.id}`;
+                    setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
+                    setActiveTabPath(chatPath);
+                    setRefreshTrigger((t) => t + 1); // Refresh ChatTree
+                  }}
+                  className="w-8 h-8 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center transition-colors"
+                  title="New chat"
                 >
-                  <IconSearch />
+                  <IconPlus />
                 </button>
               )}
             </div>
           </div>
-          {(sidebarTab === "files" && searchOpen) && (
-            <input
-              type="text"
-              placeholder="Search files…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
-              autoFocus
-            />
-          )}
-          {sidebarTab === "files" && (
+        </div>
+        
+                
+        {/* File actions for files tab - no wrapper div */}
+        {sidebarTab === "files" && (
           <FileActions 
             fs={fs} 
             basePath={addTargetPath} 
@@ -3244,27 +3907,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             expanded={addActionsOpen}
           />
         )}
-          {(sidebarTab === "chats" && searchOpen) && (
-            <input
-              type="text"
-              placeholder="Search chats…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
-              autoFocus
-            />
-          )}
-          {(sidebarTab === "git" && searchOpen) && (
-            <input
-              type="text"
-              placeholder="Search git…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-2 py-1.5 text-xs rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
-              autoFocus
-            />
-          )}
-        </div>
+        
+        {/* Content area */}
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {sidebarTab === "files" && (
             <FileTree
@@ -3275,11 +3919,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               onRefresh={() => setRefreshTrigger((t) => t + 1)}
               refreshTrigger={refreshTrigger}
               onFileDeleted={handleFileDeleted}
-              searchQuery={searchQuery}
+              showHiddenYjsDocs={showHiddenYjsDocs}
             />
           )}
           {sidebarTab === "chats" && (
             <ChatTree
+              projectId={id}
               onChatSelect={(chatId) => {
                 const chatPath = `/ai-chat/${chatId}`;
                 if (!openTabs.find((t) => t.path === chatPath)) {
@@ -3291,8 +3936,58 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               onRefresh={() => {
                 setRefreshTrigger((t) => t + 1);
               }}
-              searchQuery={searchQuery}
+              activeChatId={activeTab?.type === "chat" ? activeTab.path.replace("/ai-chat/", "") : undefined}
             />
+          )}
+          {sidebarTab === "search" && (
+            <div className="flex-1 overflow-auto">
+              <div className="px-3 py-2 border-b border-[var(--border)]">
+                <input
+                  type="text"
+                  placeholder="Search all files…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] rounded"
+                  autoFocus
+                />
+              </div>
+              
+              <div className="px-3 py-2">
+                {searchQuery ? (
+                  searchResults.length > 0 ? (
+                    <div className="space-y-1">
+                      <div className="text-xs text-[var(--muted)] mb-2">
+                        Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} in {allProjectFiles?.length || 0} file{allProjectFiles?.length !== 1 ? 's' : ''}
+                      </div>
+                      {searchResults.map((result, index) => (
+                        <div
+                          key={`${result.tabPath}-${result.lineNumber}-${index}`}
+                          onClick={() => handleSearchResultClick(result)}
+                          className="p-2 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="text-xs text-[var(--muted)] shrink-0 mt-0.5">
+                              {result.fileName}:{result.lineNumber}
+                            </div>
+                            <div className="text-xs text-[var(--foreground)] flex-1 break-all">
+                              {result.content}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-[var(--muted)]">
+                      No results found for "{searchQuery}"
+                    </div>
+                  )
+                ) : (
+                  <div className="text-xs text-[var(--muted)]">
+                    Enter a search term to search all files
+                  </div>
+                )}
+              </div>
+            </div>
           )}
           {sidebarTab === "git" && (
             <GitPanelReal
@@ -3429,7 +4124,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               <section className="flex-1 flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
                 {/* Git Mode - Separate tab system for git diffs */}
                 {gitTabs.length > 0 && (
-                  <div className="border-b border-[var(--border)] bg-[var(--muted)/30]">
+                  <div className="bg-[var(--muted)/30]">
                     <FileTabs
                       tabs={gitTabs}
                       activePath={activeGitTabPath && gitTabs.find(t => t.path === activeGitTabPath) ? activeGitTabPath : null}
@@ -3461,7 +4156,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           return (
             <section style={{ flex: `${editorFraction} 1 0%` }} className="flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
               {/* Files/Chats Mode - Separate tab system for regular files */}
-              <div className="border-b border-[var(--border)] bg-[var(--background)]">
+              <div className="bg-[var(--background)]">
                 <FileTabs
                   tabs={displayTabs}
                   activePath={activeTabPath}
@@ -3491,6 +4186,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           promptAsk={promptAsk}
                           promptCreate={promptCreate}
                           theme={theme}
+                          showHiddenYjsDocs={showHiddenYjsDocs}
                           onThemeChange={setTheme}
                           onLatexEngineChange={setLatexEngineState}
                           onEditorFontSizeChange={setEditorFontSizeState}
@@ -3506,6 +4202,10 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           onPromptAskChange={setPromptAskState}
                           onPromptCreateChange={setPromptCreateState}
                           onWebRTCSignalingConfigChange={setWebrtcConfig}
+                          onShowHiddenYjsDocsChange={(value) => {
+                            setShowHiddenYjsDocsState(value);
+                            setShowHiddenYjsDocs(value);
+                          }}
                           onResetRequested={() => {
                             setLatexEngineState(getLatexEngine());
                             setEditorFontSizeState(getEditorFontSize());
@@ -3520,6 +4220,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                             setAiVisionEnabledState(getAiVisionEnabled());
                             setPromptAskState(getPromptAsk());
                             setPromptCreateState(getPromptCreate());
+                            setShowHiddenYjsDocsState(getShowHiddenYjsDocs());
                             setWebrtcConfig(getWebRTCSignalingConfig());
                           }}
                         />
@@ -3550,11 +4251,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     const msgs = bigChatMessages;
 
                     return (
-                      <div className="absolute inset-0 flex flex-col bg-[var(--background)]">
-                        {/* Messages Area */}
+                      <>
+                        {/* Messages in main container */}
                         <div
                           ref={chatScrollRef}
-                          className="flex-1 overflow-y-auto"
+                          className="absolute inset-0 overflow-y-auto"
+                          // Add bottom padding to prevent messages from being hidden behind the chat input
+                          style={{ paddingBottom: `${chatInputPadding}px` }}
                         >
                           {msgs.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-[var(--muted)] px-6">
@@ -3574,28 +4277,36 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           )}
                         </div>
 
-                        {/* Bottom bar: status + input */}
-                        <div className="shrink-0 border-t border-[var(--border)]">
-                          <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />
-                          <ChatInput
-                            chatInput={chatInput}
-                            setChatInput={setChatInput}
-                            chatMode={chatMode}
-                            setChatMode={setChatMode}
-                            isGenerating={isGenerating}
-                            onSend={handleSendChat}
-                            selectedModelId={selectedModelId}
-                            onModelChange={async (id) => {
-                              setSelectedModelId(id);
-                              setModelReady(false);
-                              await switchModel(id);
-                            }}
-                            imageDataUrl={chatImageDataUrl}
-                            onImageChange={setChatImageDataUrl}
-                            isVisionModel={!!getModelById(selectedModelId).vision}
-                          />
-                        </div>
-                      </div>
+                        {/* Floating chat input panel */}
+                        {(showAIPanel || activeTab?.type === "chat") && (
+                          <div className="absolute bottom-4 left-4 right-4">
+                            <div className="flex flex-col bg-[var(--background)] rounded-lg border border-[var(--border)] shadow-lg overflow-hidden">
+                              <div>
+                                <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />
+                              </div>
+                              <div>
+                                <ChatInput
+                                  chatInput={chatInput}
+                                  setChatInput={setChatInput}
+                                  chatMode={chatMode}
+                                  setChatMode={setChatMode}
+                                  isGenerating={isGenerating}
+                                  onSend={handleSendChat}
+                                  selectedModelId={selectedModelId}
+                                  onModelChange={async (id) => {
+                                    setSelectedModelId(id);
+                                    setModelReady(false);
+                                    await switchModel(id);
+                                  }}
+                                  imageDataUrl={chatImageDataUrl}
+                                  onImageChange={setChatImageDataUrl}
+                                  isVisionModel={!!getModelById(selectedModelId).vision}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     );
                   }
                   if (activeTab?.type === "text" && currentYDocRef.current && provider) {
@@ -3616,7 +4327,6 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     return (
                       <div
                         className="absolute inset-0 overflow-hidden"
-                        style={{ bottom: showAIPanel ? aiOverlayHeight : 0 }}
                       >
                         {isDiffTab && diffData ? (
                           <SideBySideDiffView
@@ -3673,39 +4383,42 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                                 tabSize={editorTabSize}
                                 lineWrapping={editorLineWrapping}
                                 theme={theme}
+                                readOnly={openTabs.find(t => t.path === activeTabPath)?.readOnly || false}
                               />
                             );
                           })()
-                        )}
-                        {/* Floating format button for LaTeX files */}
-                        {handleFormatDocument && activeTabPath.endsWith('.tex') && (
-                          <button
-                            onClick={handleFormatDocument}
-                            disabled={isFormatting}
-                            className="absolute bottom-4 right-4 w-10 h-10 bg-[var(--accent)] text-white rounded-full shadow-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center z-10"
-                            title="Format document"
-                          >
-                            {isFormatting ? (
-                              <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5a2.121 2.121 0 0 1 0-3Z"/>
-                              </svg>
-                            )}
-                          </button>
                         )}
                       </div>
                     );
                   }
                 })()}
                 {showAIPanel && (
-                  <div
-                    className={`absolute bottom-0 left-0 right-0 flex flex-col bg-[var(--background)] border-t border-[var(--border)] transition-[height] duration-200 ease-out overflow-hidden ${
-                      chatExpanded ? "h-[45%]" : "h-[155px]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-end gap-1 shrink-0 px-1 py-1">
+                  <div className="absolute bottom-4 left-4 right-4">
+                    {handleFormatDocument && activeTabPath.endsWith('.tex') && (
+                      <button
+                        onClick={handleFormatDocument}
+                        disabled={isFormatting}
+                        className="absolute -top-12 right-0 w-10 h-10 bg-[var(--accent)] text-white rounded-full shadow-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center z-50"
+                        title="Format document"
+                      >
+                        {isFormatting ? (
+                          <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                    <div className={`flex flex-col bg-[var(--background)] rounded-lg border border-[var(--border)] shadow-lg overflow-hidden ${
+                      chatExpanded ? "max-h-[60vh]" : ""
+                    }`}>
+                    <div className="flex items-center justify-between shrink-0 bg-[color-mix(in_srgb,var(--border)_8%,transparent)]">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-0.5 bg-[var(--muted)]/40 rounded-full" />
+                      </div>
+                      <div className="flex items-center gap-1">
                       <button
                         onClick={() => {
                           const activeTab = openTabs.find((t) => t.path === activeTabPath);
@@ -3713,11 +4426,11 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                             // Big chat
                             const chatId = activeTab.path.replace("/ai-chat/", "");
                             setBigChatMessages([]);
-                            saveChatMessages(chatId, [], "big");
+                            saveProjectChatMessages(id, chatId, [], "big");
                           } else {
                             // Small chat
                             setSmallChatMessages([]);
-                            saveChatMessages("", [], "small");
+                            saveProjectChatMessages(id, "", [], "small");
                           }
                           // Don't reset streamingStats to null so telemetry remains visible
                         }}
@@ -3733,6 +4446,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       >
                         {chatExpanded ? <IconChevronDown /> : <IconChevronUp />}
                       </button>
+                      </div>
                     </div>
                     {chatExpanded && (
                       <div
@@ -3750,8 +4464,11 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                         ))}
                       </div>
                     )}
-                    <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />
-                    <ChatInput
+                    <div>
+                      <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />
+                    </div>
+                    <div>
+                      <ChatInput
                       chatInput={chatInput}
                       setChatInput={setChatInput}
                       chatMode={chatMode}
@@ -3768,6 +4485,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       onImageChange={setChatImageDataUrl}
                       isVisionModel={!!getModelById(selectedModelId).vision}
                     />
+                    </div>
+                  </div>
                   </div>
                 )}
               </div>
@@ -3811,6 +4530,167 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         projectName={projectName}
         onClose={() => setShareModalOpen(false)}
       />
+      
+      {/* Find File Modal */}
+      {findFileModalOpen && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/50"
+          onClick={() => setFindFileModalOpen(false)}
+        >
+          <div className="w-full max-w-2xl rounded border border-[var(--border)] bg-[var(--background)] shadow-xl p-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold text-[var(--foreground)] mb-3">Find a file</h2>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="Search files..."
+                value={findFileQuery}
+                onChange={(e) => setFindFileQuery(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] rounded"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-96 overflow-auto">
+              {findFileQuery.trim() ? (
+                allProjectFiles?.filter(file => 
+                  file.toLowerCase().includes(findFileQuery.toLowerCase())
+                ).length ? (
+                  <div className="space-y-1">
+                    {allProjectFiles
+                      .filter(file => file.toLowerCase().includes(findFileQuery.toLowerCase()))
+                      .map(file => (
+                        <div
+                          key={file}
+                          onClick={() => {
+                            handleFileSelect(file);
+                            setFindFileModalOpen(false);
+                            setFindFileQuery("");
+                          }}
+                          className="p-2 rounded hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] cursor-pointer transition-colors flex items-center gap-2"
+                        >
+                          <span className="text-xs text-[var(--muted)] shrink-0">
+                            {getFileIcon(file)}
+                          </span>
+                          <span className="text-xs text-[var(--foreground)] flex-1 break-all">
+                            {file.split('/').pop()}
+                          </span>
+                          <span className="text-xs text-[var(--muted)] shrink-0">
+                            {file}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-[var(--muted)]">
+                    No files found for "{findFileQuery}"
+                  </div>
+                )
+              ) : (
+                <div className="text-xs text-[var(--muted)]">
+                  Type to search files...
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Find Conversation Modal */}
+      {findConversationModalOpen && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/50"
+          onClick={() => setFindConversationModalOpen(false)}
+        >
+          <div className="w-full max-w-2xl rounded border border-[var(--border)] bg-[var(--background)] shadow-xl p-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold text-[var(--foreground)] mb-3">Find a conversation</h2>
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={findConversationQuery}
+                onChange={(e) => setFindConversationQuery(e.target.value)}
+                className="flex-1 px-3 py-2 text-sm bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] rounded"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-96 overflow-auto">
+              {findConversationQuery.trim() ? (
+                <ChatConversationResults query={findConversationQuery} projectId={id} onChatSelect={(chatId) => {
+                  const chatPath = `/ai-chat/${chatId}`;
+                  if (!openTabs.find((t) => t.path === chatPath)) {
+                    setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
+                  }
+                  setActiveTabPath(chatPath);
+                  setFindConversationModalOpen(false);
+                  setFindConversationQuery("");
+                }} />
+              ) : (
+                <div className="text-xs text-[var(--muted)]">
+                  Type to search conversations...
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* WebRTC Modal */}
+      {webrtcModalOpen && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/50"
+          onClick={() => setWebrtcModalOpen(false)}
+        >
+          <div className="w-full max-w-md rounded border border-[var(--border)] bg-[var(--background)] shadow-xl p-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-sm font-semibold text-[var(--foreground)] mb-3">WebRTC Settings</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[var(--foreground)]">Enable WebRTC</span>
+                <button
+                  onClick={() => {
+  const newConfig = { ...webrtcConfig, enabled: !webrtcConfig.enabled };
+  setWebRTCSignalingConfig(newConfig);
+  setWebrtcConfig(newConfig);
+}}
+                  className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+                    webrtcConfig.enabled
+                      ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                      : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                      webrtcConfig.enabled ? "left-[22px]" : "left-1"
+                    }`}
+                  />
+                </button>
+              </div>
+              
+              {webrtcConfig.enabled && (
+                <div className="space-y-2">
+                  <label className="block text-sm text-[var(--foreground)]">Signaling Server</label>
+                  <input
+                    type="text"
+                    placeholder="wss://signaling.yjs.dev"
+                    value={webrtcConfig.customServers[0] || ''}
+                    onChange={(e) => {
+  const newConfig = { 
+    ...webrtcConfig, 
+    customServers: e.target.value ? [e.target.value] : [] 
+  };
+  setWebRTCSignalingConfig(newConfig);
+  setWebrtcConfig(newConfig);
+}}
+                    className="w-full px-3 py-2 text-sm bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] rounded"
+                  />
+                </div>
+              )}
+              
+              <div className="text-xs text-[var(--muted)]">
+                WebRTC enables real-time collaboration with other users in the same project room.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

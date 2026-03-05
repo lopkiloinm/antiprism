@@ -96,7 +96,7 @@ export const AVAILABLE_MODELS: ModelDef[] = [
     numKVHeads: 2,
     headDim: 256,
     maxNewTokens: 2048,
-    maxContextTokens: 131_072,
+    maxContextTokens: 262_144,
     reservedTokens: 4096,
     vision: true,
     isDedicatedVLM: false,

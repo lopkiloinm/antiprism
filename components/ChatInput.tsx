@@ -106,7 +106,7 @@ export function ChatInput({
   };
 
   return (
-    <div className="flex flex-col shrink-0 mx-3 mb-2 rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] overflow-hidden">
+    <div className="flex flex-col shrink-0 overflow-hidden">
       {isVisionModel && imageDataUrl && (
         <div className="mx-3 mt-2 relative inline-block">
           <img src={imageDataUrl} alt="Upload" className="max-h-24 rounded border border-[var(--border)]" />
@@ -122,14 +122,14 @@ export function ChatInput({
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
       <textarea
         ref={textareaRef}
-        className="w-full min-h-[24px] max-h-[280px] resize-none border-0 bg-transparent px-3 pt-3 pb-1 text-sm text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-0"
+        className="w-full min-h-[24px] max-h-[280px] resize-none border-0 bg-transparent px-2 pt-2 pb-1 text-sm text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-0"
         value={chatInput}
         onChange={(e) => setChatInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={chatMode === "ask" ? "Ask about your LaTeX…" : "Describe the document to create…"}
         rows={1}
       />
-      <div className="flex items-center justify-between gap-2 px-2 py-1.5 shrink-0">
+      <div className="flex items-center justify-between gap-2 px-2 py-1 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] overflow-hidden">
             <button

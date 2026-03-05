@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useImperativeHandle, forwardRef } from "react";
 import { getWebRTCSignalingConfig, setWebRTCSignalingConfig } from "@/lib/settings";
-import { IconTrash2, IconSquare, IconCheckSquare, IconServer } from "./Icons";
+import { IconTrash2, IconServer } from "./Icons";
 import { SignalingServerModal } from "./SignalingServerModal";
 import { DashboardView, DashboardItemProps } from "./DashboardView";
 
@@ -125,18 +125,26 @@ export const SignalingServerList = forwardRef<{ handleNewServer: () => void }, S
       subtitle: `${server.id.startsWith('custom') ? 'Custom server' : 'Public server'} · ${server.enabled ? 'Active' : 'Inactive'}`,
       icon: <IconServer />,
       leftAccessory: (
-        <div
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleToggleServer(server.id);
-          }}
-          className={`p-1.5 -m-1.5 rounded transition-colors cursor-pointer ${
-            server.enabled ? "hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)]" : "hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"
-          }`}
-        >
-          {server.enabled ? <IconCheckSquare /> : <IconSquare />}
-        </div>
+        <button
+            role="switch"
+            aria-checked={server.enabled}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleToggleServer(server.id);
+            }}
+            className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+              server.enabled
+                ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
+            }`}
+          >
+            <span
+              className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
+                server.enabled ? "left-[22px]" : "left-1"
+              }`}
+            />
+          </button>
       ),
       topRightAccessory: server.id.startsWith('custom') ? (
         <div

@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import JSZip from "jszip";
 import { NameModal } from "./NameModal";
-import { IconFileText, IconFolder, IconFolderOpen, IconImage, IconLoader, IconPencil, IconDownload, IconTrash2, IconFileCode, IconFileJson, IconFileCog, IconBraces, IconPalette, IconFile } from "./Icons";
+import { IconFileText, IconFolder, IconFolderOpen, IconImage, IconLoader, IconPencil, IconDownload, IconTrash2, IconFileCode, IconFileJson, IconFileCog, IconBraces, IconPalette, IconFile, IconFileArchive } from "./Icons";
 import { useContextMenu } from "@/contexts/ContextMenuContext";
 
-function getFileIcon(path: string) {
+export function getFileIcon(path: string) {
   const name = path.split("/").pop()?.toLowerCase() ?? "";
   const ext = name.split(".").pop() ?? "";
 
@@ -30,6 +30,8 @@ function getFileIcon(path: string) {
   if (ext === "pdf") return <IconFile />;
   // Markdown / text
   if (ext === "md" || ext === "txt" || ext === "rst") return <IconFileText />;
+  // Archives
+  if (ext === "zip" || ext === "tar" || ext === "gz" || ext === "7z") return <IconFileArchive />;
   // Default
   return <IconFile />;
 }
@@ -86,6 +88,8 @@ interface TreeNode {
   size?: number;
   children?: TreeNode[];
   loaded?: boolean;
+  isVirtual?: boolean;
+  virtualType?: "filetree" | "chats";
 }
 
 interface FileTreeProps {
@@ -97,11 +101,15 @@ interface FileTreeProps {
   onRefresh: () => void;
   onFileDeleted?: (path: string, isFolder: boolean) => void;
   searchQuery?: string;
+  showHiddenYjsDocs?: boolean;
 }
 
-async function loadDir(fs: IdbfsFs, path: string): Promise<TreeNode[]> {
+async function loadDir(fs: IdbfsFs, path: string, showHiddenYjsDocs = false, basePath = "/"): Promise<TreeNode[]> {
   const { dirs, files } = await fs.readdir(path);
   const nodes: TreeNode[] = [];
+
+  console.log(`🔍 Loading directory: ${path}`, { dirs: dirs.length, files: files.length });
+  console.log(`🔍 Files found:`, files.map(f => f.name));
 
   // Sort directories alphabetically
   const sortedDirs = dirs.sort((a, b) => a.name.localeCompare(b.name));
@@ -117,8 +125,61 @@ async function loadDir(fs: IdbfsFs, path: string): Promise<TreeNode[]> {
     const stat = await fs.stat(fullPath).catch(() => null);
     nodes.push({ name: f.name, path: fullPath, type: "file", size: stat?.size ?? 0 });
   }
+
+  // Check for duplicates before adding virtual files
+  const duplicateCheck = nodes.reduce((acc, node) => {
+    if (acc[node.name]) {
+      console.warn(`⚠️ Duplicate file found: ${node.name} at paths ${acc[node.name]} and ${node.path}`);
+    }
+    acc[node.name] = node.path;
+    return acc;
+  }, {} as Record<string, string>);
+
+  // Deduplicate nodes by path to ensure unique entries
+  const uniqueNodes = nodes.filter((node, index, self) => 
+    index === self.findIndex((n) => n.path === node.path)
+  );
   
-  return nodes;
+  console.log(`🔍 Deduplicated nodes: ${nodes.length} -> ${uniqueNodes.length}`);
+  
+  // Replace nodes with deduplicated version
+  const finalNodes = uniqueNodes;
+  
+  // Add hidden Y.js documents if enabled and we're in the project directory
+  if (showHiddenYjsDocs && path === basePath) {
+    console.log(`🔍 Adding hidden Y.js documents to project directory: ${basePath}`);
+    
+    // Check if virtual files already exist to avoid duplicates
+    const existingFileNames = finalNodes.map(n => n.name);
+    
+    // Add filetree Y.js document
+    if (!existingFileNames.includes(".yjs-filetree.json")) {
+      finalNodes.push({ 
+        name: ".yjs-filetree.json", 
+        path: `${basePath}/.yjs-filetree.json`, 
+        type: "file", 
+        size: 0,
+        isVirtual: true,
+        virtualType: "filetree"
+      });
+    }
+    
+    // Add chat metadata Y.js document
+    if (!existingFileNames.includes(".yjs-chats.json")) {
+      finalNodes.push({ 
+        name: ".yjs-chats.json", 
+        path: `${basePath}/.yjs-chats.json`, 
+        type: "file", 
+        size: 0,
+        isVirtual: true,
+        virtualType: "chats"
+      });
+    }
+    
+    console.log(`🔍 Added virtual files in ${basePath}:`, finalNodes.filter(n => n.isVirtual).map(n => n.name));
+  }
+  
+  return finalNodes;
 }
 
 function TreeNodeComponent({
@@ -293,7 +354,7 @@ function filterNodes(nodes: TreeNode[], q: string): TreeNode[] {
   return nodes.filter((n) => n.name.toLowerCase().includes(lower));
 }
 
-export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefresh, refreshTrigger, onFileDeleted, searchQuery }: FileTreeProps) {
+export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefresh, refreshTrigger, onFileDeleted, searchQuery, showHiddenYjsDocs = false }: FileTreeProps) {
   const [rootNodes, setRootNodes] = useState<TreeNode[]>([]);
   const [renameModal, setRenameModal] = useState<{
     name: string;
@@ -303,8 +364,8 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
 
   useEffect(() => {
     if (!fs) return;
-    loadDir(fs, basePath).then(setRootNodes);
-  }, [fs, basePath, refreshTrigger]);
+    loadDir(fs, basePath, showHiddenYjsDocs, basePath).then(setRootNodes);
+  }, [fs, basePath, refreshTrigger, showHiddenYjsDocs]);
 
   const performRename = async (newName: string) => {
     if (!fs || !renameModal) return;
@@ -343,7 +404,7 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
 
   return (
     <>
-    <div className="overflow-auto flex-1 min-h-0 py-3">
+    <div className="overflow-auto flex-1 min-h-0">
       {filteredNodes.length === 0 ? (
         <div className="p-3 text-sm text-[var(--muted)]">
           {searchQuery?.trim() ? "No matching files." : "No files. Create a new file to get started."}
@@ -351,7 +412,7 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
         ) : (
           filteredNodes.map((node) => (
             <TreeNodeComponent
-              key={node.path}
+              key={node.isVirtual ? `virtual-${node.path}` : node.path}
               node={node}
               fs={fs}
               currentPath={currentPath}

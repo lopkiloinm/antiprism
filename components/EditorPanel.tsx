@@ -10,6 +10,7 @@ import type { LanguageSupport } from "@codemirror/language";
 import { indentUnit } from "@codemirror/language";
 import { yCollab } from "y-codemirror.next";
 import { EditorState } from "@codemirror/state";
+import { scrollPastEnd } from "@codemirror/view";
 import { latex } from "codemirror-lang-latex";
 import type { Theme } from "@/lib/settings";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -46,6 +47,8 @@ interface EditorPanelProps {
   tabSize?: number;
   lineWrapping?: boolean;
   theme?: Theme;
+  /** Whether the editor should be read-only */
+  readOnly?: boolean;
 }
 
 const DEFAULT_FONT_SIZE = 14;
@@ -62,6 +65,7 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
     tabSize = DEFAULT_TAB_SIZE,
     lineWrapping = true,
     theme = "dark",
+    readOnly = false,
   }: EditorPanelProps,
   ref
 ) {
@@ -244,6 +248,8 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
       }),
       langSupport,
       yCollab(ytext, provider.awareness, { undoManager }),
+      ...(readOnly ? [EditorState.readOnly.of(true)] : []),
+      scrollPastEnd(),
     ];
     if (lineWrapping) extensions.push(EditorView.lineWrapping);
 
