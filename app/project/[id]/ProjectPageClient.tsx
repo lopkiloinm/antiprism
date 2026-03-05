@@ -1402,13 +1402,13 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
             // Check if this user is a recipient (from shared link)
             const isRecipient = sessionStorage.getItem('antiprism_recipient_mode') === 'true';
             
-            if (isRecipient || isNewProject) {
-              // RECIPIENT: Always wait for remote data from sharer
-              console.log(`📂 Recipient (${isRecipient ? 'forced' : 'new project'}): waiting for sharer data...`);
+            if (isRecipient) {
+              // RECIPIENT: ALWAYS wait for sharer data, regardless of project state
+              console.log('📂 Recipient (forced): waiting for sharer data...');
               
-              // Wait up to 5 seconds for sharer to send data
+              // Wait up to 10 seconds for sharer to send data (extended timeout)
               let waitAttempts = 0;
-              while (waitAttempts < 50) { // 50 * 100ms = 5 seconds
+              while (waitAttempts < 100) { // 100 * 100ms = 10 seconds
                 await new Promise(resolve => setTimeout(resolve, 100));
                 waitAttempts++;
                 
@@ -1417,13 +1417,35 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
                   console.log('📥 Received data from sharer, importing...');
                   await deserializeFiletree(new TextEncoder().encode(remoteData));
                   // Clear recipient mode after successful sync
-                  if (isRecipient) sessionStorage.removeItem('antiprism_recipient_mode');
+                  sessionStorage.removeItem('antiprism_recipient_mode');
                   return; // Done - recipient got sharer's data
                 }
               }
               
-              // No sharer data received - this might be the first user
-              console.log('📂 No sharer data received, assuming first user');
+              // No sharer data received - show error but don't become sharer
+              console.error('📂 No sharer data received after 10 seconds - sharing failed');
+              // Keep recipient mode so they can retry
+              return;
+            } else if (isNewProject) {
+              // NEW PROJECT (not recipient): Wait briefly then become first user
+              console.log('📂 New project: waiting briefly for other users...');
+              
+              // Wait up to 3 seconds for other users
+              let waitAttempts = 0;
+              while (waitAttempts < 30) { // 30 * 100ms = 3 seconds
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitAttempts++;
+                
+                const remoteData = filetreeYText.toString();
+                if (remoteData && remoteData !== '{}') {
+                  console.log('📥 Received data from other user, importing...');
+                  await deserializeFiletree(new TextEncoder().encode(remoteData));
+                  return; // Done - got other user's data
+                }
+              }
+              
+              // No other users - become first user
+              console.log('📂 No other users detected, becoming first user');
               await debouncedSync('local');
             } else {
               // SHARER: I have files, sync immediately
@@ -3415,10 +3437,27 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     );
   }
 
-  const handleShare = () => {
+  const handleShare = async () => {
     if (typeof window === "undefined") return;
     
     try {
+      // CRITICAL: Force sync filetree before sharing to ensure latest state
+      console.log('📤 Syncing filetree before share...');
+      
+      // Get current filetree state
+      const currentFiletreeBinary = new TextEncoder().encode(filetreeRef.current?.getText('filetree').toString() || '{}');
+      const latestFiletreeBinary = await serializeFiletree();
+      
+      // Always update filetree Y.js document with latest state before sharing
+      if (!arraysEqual(currentFiletreeBinary, latestFiletreeBinary)) {
+        console.log('📤 Updating filetree with latest state before share...');
+        filetreeRef.current?.getText('filetree').delete(0, filetreeRef.current?.getText('filetree').length);
+        filetreeRef.current?.getText('filetree').insert(0, new TextDecoder().decode(latestFiletreeBinary));
+        console.log('📤 Filetree synced for sharing');
+      } else {
+        console.log('📤 Filetree already up to date for sharing');
+      }
+      
       // Get current WebRTC signaling configuration
       const webrtcConfig = getWebRTCSignalingConfig();
       
