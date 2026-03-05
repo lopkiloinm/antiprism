@@ -26,11 +26,13 @@ export class FileDocumentManager {
   private fastManager: FastFileDocumentManager;
   private projectId: string;
   private globalWebrtcProvider: WebrtcProvider;
+  private providerOptions: any;
   private documents = new Map<string, FastFileDocument>();
 
-  constructor(projectId: string, globalWebrtcProvider: WebrtcProvider) {
+  constructor(projectId: string, globalWebrtcProvider: WebrtcProvider, providerOptions: any = {}) {
     this.projectId = projectId;
     this.globalWebrtcProvider = globalWebrtcProvider;
+    this.providerOptions = providerOptions;
     this.fastManager = new FastFileDocumentManager(projectId);
     
     yjsLogger.info("FastFileDocumentManager initialized", {
@@ -83,8 +85,8 @@ export class FileDocumentManager {
     // Get document from fast manager
     const { doc, text, whenLoaded } = this.fastManager.getDocument(filePath, false);
     
-    // Create WebRTC provider for this specific file
-    const webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc);
+    // Create WebRTC provider for this specific file with inherited configuration
+    const webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc, this.providerOptions);
     
     // Log WebRTC connection status
     webrtcProvider.on('status', (event: any) => {

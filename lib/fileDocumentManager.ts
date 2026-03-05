@@ -18,10 +18,12 @@ export class FileDocumentManager {
   private documents = new Map<string, FileDocument>();
   private projectId: string;
   private globalWebrtcProvider: WebrtcProvider;
+  private providerOptions: any;
 
-  constructor(projectId: string, globalWebrtcProvider: WebrtcProvider) {
+  constructor(projectId: string, globalWebrtcProvider: WebrtcProvider, providerOptions: any = {}) {
     this.projectId = projectId;
     this.globalWebrtcProvider = globalWebrtcProvider;
+    this.providerOptions = providerOptions;
     yjsLogger.info("FileDocumentManager initialized", {
       projectId,
       hasGlobalProvider: !!globalWebrtcProvider,
@@ -70,7 +72,7 @@ export class FileDocumentManager {
     const persistence = new IndexeddbPersistence(docName, doc);
     
     // Create WebRTC provider for this specific file
-    const webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc);
+    const webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc, this.providerOptions);
     
     // Create a promise that resolves when the IndexedDB has finished loading
     let loaded = false;

@@ -1027,7 +1027,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         providerRef.current = prov;
 
         // Create File document manager for per-file persistence
-        const fileDocManager = new FileDocumentManager(id, prov);
+        const fileDocManager = new FileDocumentManager(id, prov, providerOptions);
         fileDocManagerRef.current = fileDocManager;
         console.log('📂 File document manager created');
 
@@ -1320,29 +1320,92 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           }
         }
         
-        // Sync filetree to Yjs when this client has files
-        if (!isNewProject) {
-          const filetreeJson = await serializeFiletree();
-          if (filetreeYText.toString() !== filetreeJson) {
-            filetreeYText.insert(0, filetreeJson);
-            console.log('📤 Filetree synced to Yjs');
+        // Wait for WebRTC provider to be ready before syncing
+        let webrtcReady = false;
+        filetreeProvider.on('status', (event: any) => {
+          console.log('📂 Filetree WebRTC status:', event.status);
+          if (event.status === 'connected') {
+            webrtcReady = true;
+            console.log('📂 Filetree WebRTC ready for sync');
           }
-        }
-        
-        // Listen for remote filetree updates
-        filetreeYText.observe(() => {
-          const remoteFiletree = filetreeYText.toString();
-          if (remoteFiletree && remoteFiletree !== '{}') {
-            console.log('📥 Received remote filetree update');
-            deserializeFiletree(remoteFiletree);
+        });
+
+        // Track last sync timestamp to prevent race conditions
+        let lastSyncTimestamp = 0;
+        const SYNC_DEBOUNCE_MS = 1000;
+
+        // Debounced sync function to prevent race conditions
+        const debouncedSync = async (source: 'local' | 'remote') => {
+          const now = Date.now();
+          if (now - lastSyncTimestamp < SYNC_DEBOUNCE_MS) {
+            console.log(`📂 Sync debounced (${source}), last sync ${now - lastSyncTimestamp}ms ago`);
+            return;
+          }
+          lastSyncTimestamp = now;
+
+          try {
+            const currentFiletree = filetreeYText.toString();
+            console.log(`📂 Starting ${source} sync, current length: ${currentFiletree.length}`);
+
+            if (!isNewProject) {
+              const filetreeJson = await serializeFiletree();
+              
+              // Only sync if local data is newer/empty or remote is empty
+              if (!currentFiletree || currentFiletree === '{}' || 
+                  (source === 'local' && currentFiletree !== filetreeJson)) {
+                filetreeYText.delete(0, currentFiletree.length);
+                filetreeYText.insert(0, filetreeJson);
+                console.log(`📤 Filetree synced to Yjs (${source})`);
+              }
+            }
+            
+            // Handle remote sync if we have data
+            if (source === 'remote' && currentFiletree && currentFiletree !== '{}') {
+              console.log('📥 Processing remote filetree update');
+              await deserializeFiletree(currentFiletree);
+            }
+          } catch (error) {
+            console.error(`📂 Sync error (${source}):`, error);
+          }
+        };
+
+        // Listen for remote filetree updates with debouncing
+        filetreeYText.observe(async () => {
+          if (webrtcReady) {
+            console.log('📂 Remote filetree update detected');
+            await debouncedSync('remote');
           }
         });
         
-        // Initial sync from remote if this client is empty
-        if (isNewProject && filetreeYText.toString() && filetreeYText.toString() !== '{}') {
-          console.log('📥 Initial filetree sync from remote');
-          deserializeFiletree(filetreeYText.toString());
-        }
+        // Initial sync after WebRTC is ready
+        const waitForWebRTCAndSync = async () => {
+          // Wait up to 5 seconds for WebRTC to connect
+          let attempts = 0;
+          while (!webrtcReady && attempts < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+          
+          if (webrtcReady) {
+            console.log('📂 WebRTC ready, performing initial sync');
+            
+            // Check if we should sync from remote (empty local project)
+            const currentFiletree = filetreeYText.toString();
+            if (isNewProject && currentFiletree && currentFiletree !== '{}') {
+              console.log('📥 Initial filetree sync from remote');
+              await deserializeFiletree(currentFiletree);
+            } else {
+              // Sync local data to remote
+              await debouncedSync('local');
+            }
+          } else {
+            console.log('📂 WebRTC not ready, doing local sync only');
+            await debouncedSync('local');
+          }
+        };
+
+        // Start the sync process
+        waitForWebRTCAndSync();
 
         if (cancelled) return;
         
