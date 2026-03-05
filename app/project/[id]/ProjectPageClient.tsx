@@ -211,6 +211,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [searchQuery, setSearchQuery] = useState("");
   const [showHiddenYjsDocs, setShowHiddenYjsDocsState] = useState(getShowHiddenYjsDocs());
   
+  // Helper functions for filetree operations (accessible to handleShare)
+  // Note: These will be properly initialized when idbfs and basePath are available
+  let serializeFiletree: (() => Promise<Uint8Array>) | null = null;
+  let arraysEqual: ((a: Uint8Array, b: Uint8Array) => boolean) | null = null;
+  
   // Update showHiddenYjsDocs when setting changes
   useEffect(() => {
     setShowHiddenYjsDocsState(getShowHiddenYjsDocs());
@@ -1055,6 +1060,124 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         console.log('📂 File system mounted');
         if (cancelled) return;
 
+        // Helper functions for filetree operations (accessible to handleShare)
+        // Assign to component-level variables for handleShare to access
+        serializeFiletree = async (): Promise<Uint8Array> => {
+          const filetreeData: any = { files: {} };
+          
+          // CRITICAL: Sync Y-IndexedDB (source of truth) with IDBFS before sharing
+          console.log('📤 Syncing Y-IndexedDB with IDBFS before share...');
+          
+          // Get all project files from FileDocumentManager (Y-IndexedDB)
+          const fileDocManager = fileDocManagerRef.current;
+          if (fileDocManager) {
+            const allProjectFiles = await getAllProjectFiles(id);
+            console.log(`📤 Found ${allProjectFiles.length} files to sync`);
+            
+            for (const filePath of allProjectFiles) {
+              try {
+                // Get content from Y-IndexedDB (source of truth)
+                const fileDoc = fileDocManager.getDocument(filePath, true); // silent=true
+                const ytext = fileDoc.text;
+                const yjsContent = ytext.toString();
+                
+                // Skip empty files (likely not edited yet)
+                if (yjsContent.trim() === '') {
+                  console.log(`📤 Skipping empty file: ${filePath}`);
+                  continue;
+                }
+                
+                // Write Y-IndexedDB content to IDBFS to ensure consistency
+                try {
+                  const mimeType = filePath.endsWith('.typ') ? 'text/x-typst' : 'text/x-tex';
+                  await idbfs.writeFile(filePath, new TextEncoder().encode(yjsContent).buffer as ArrayBuffer, { mimeType });
+                  console.log(`📤 Synced Y-IndexedDB → IDBFS: ${filePath} (${yjsContent.length} chars)`);
+                } catch (writeError) {
+                  console.warn(`📤 Failed to write ${filePath} to IDBFS:`, writeError);
+                }
+                
+              } catch (yjsError) {
+                console.warn(`📤 Failed to get Y-IndexedDB content for ${filePath}:`, yjsError);
+              }
+            }
+          }
+          
+          // Add project chat metadata
+          try {
+            const projectChats = listProjectChats(id);
+            if (projectChats.length > 0) {
+              filetreeData.chats = projectChats.map(({ id, title, createdAt, modelId }) => ({
+                id, title, createdAt, modelId
+              }));
+            }
+          } catch (e) {
+            console.warn('Failed to serialize chat metadata:', e);
+          }
+          
+          // Optimized MIME type detection
+          const getMimeType = (name: string): string => {
+            const ext = name.split('.').pop()?.toLowerCase();
+            const mimeMap: Record<string, string> = {
+              'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+              'png': 'image/png', 'pdf': 'application/pdf',
+              'tex': 'text/x-tex', 'typ': 'text/x-typst'
+            };
+            return mimeMap[ext || ''] || 'application/octet-stream';
+          };
+          
+          // Single async function to scan all directories
+          async function scanAllDirectories(): Promise<void> {
+            const dirsToScan = [basePath];
+            const processed = new Set<string>();
+            
+            while (dirsToScan.length > 0) {
+              const currentDir = dirsToScan.pop()!;
+              if (processed.has(currentDir)) continue;
+              processed.add(currentDir);
+              
+              try {
+                const { dirs, files } = await idbfs.readdir(currentDir);
+                
+                // Process files
+                for (const file of files) {
+                  const filePath = currentDir === "/" ? `/${file.name}` : `${currentDir}/${file.name}`;
+                  try {
+                    const data = await idbfs.readFile(filePath);
+                    filetreeData.files[filePath] = {
+                      data: Array.from(new Uint8Array(data)),
+                      mimeType: getMimeType(file.name),
+                      modified: Date.now()
+                    };
+                  } catch (e) {
+                    console.warn(`Failed to read ${filePath}:`, e);
+                  }
+                }
+                
+                // Add subdirectories to scan queue
+                dirs.forEach((dir: any) => {
+                  const dirPath = currentDir === "/" ? `/${dir.name}` : `${currentDir}/${dir.name}`;
+                  dirsToScan.push(dirPath);
+                });
+                
+              } catch (e) {
+                console.warn(`Failed to scan ${currentDir}:`, e);
+              }
+            }
+          }
+          
+          await scanAllDirectories();
+          return new TextEncoder().encode(JSON.stringify(filetreeData));
+        }
+
+        // Helper function to compare arrays
+        arraysEqual = (a: Uint8Array, b: Uint8Array): boolean => {
+          if (a.length !== b.length) return false;
+          for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+          }
+          return true;
+        }
+
         const mainPath = `${basePath}/main.tex`;
         const mainTypPath = `${basePath}/main.typ`;
         const diagramPath = `${basePath}/diagram.jpg`;
@@ -1184,67 +1307,6 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         // Filetree synchronization logic
         if (cancelled) return;
         
-        // Simple binary filetree transfer - no JSON complications
-        async function serializeFiletree(): Promise<Uint8Array> {
-          const filetreeData: any = { files: {} };
-          
-          // Add project chat metadata
-          try {
-            const projectChats = listProjectChats(id);
-            if (projectChats.length > 0) {
-              filetreeData.chats = projectChats.map(chat => ({
-                id: chat.id,
-                title: chat.title,
-                createdAt: chat.createdAt,
-                modelId: chat.modelId
-              }));
-            }
-          } catch (e) {
-            console.warn('Failed to serialize chat metadata:', e);
-          }
-          
-          async function scanDirectory(dirPath: string) {
-            try {
-              const { dirs, files } = await idbfs.readdir(dirPath);
-              
-              for (const file of files) {
-                const filePath = dirPath === "/" ? `/${file.name}` : `${dirPath}/${file.name}`;
-                try {
-                  const data = await idbfs.readFile(filePath);
-                  let mimeType = "application/octet-stream";
-                  if (file.name.endsWith('.jpg') || file.name.endsWith('.jpeg')) mimeType = "image/jpeg";
-                  else if (file.name.endsWith('.png')) mimeType = "image/png";
-                  else if (file.name.endsWith('.pdf')) mimeType = "application/pdf";
-                  else if (file.name.endsWith('.tex')) mimeType = "text/x-tex";
-                  else if (file.name.endsWith('.typ')) mimeType = "text/x-typst";
-                  
-                  // Store raw binary data
-                  filetreeData.files[filePath] = {
-                    data: Array.from(new Uint8Array(data)), // Convert to array for JSON serialization
-                    mimeType,
-                    modified: Date.now()
-                  };
-                } catch (e) {
-                  console.warn(`Failed to read file ${filePath} for sync:`, e);
-                }
-              }
-              
-              for (const dir of dirs) {
-                const newDirPath = dirPath === "/" ? `/${dir.name}` : `${dirPath}/${dir.name}`;
-                await scanDirectory(newDirPath);
-              }
-            } catch (e) {
-              console.warn(`Failed to scan directory ${dirPath}:`, e);
-            }
-          }
-          
-          await scanDirectory(basePath);
-          
-          // Convert to binary and return
-          const jsonString = JSON.stringify(filetreeData);
-          return new TextEncoder().encode(jsonString);
-        }
-        
         // Function to deserialize filetree from binary
         async function deserializeFiletree(binaryData: Uint8Array) {
           try {
@@ -1344,6 +1406,10 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
             console.log(`📂 Starting ${source} sync, current length: ${currentFiletreeBinary.length}`);
 
             if (!isNewProject) {
+              if (!serializeFiletree || !arraysEqual) {
+                console.warn('📂 Helper functions not available for sync');
+                return;
+              }
               const filetreeBinary = await serializeFiletree();
               
               // SHARER LOGIC: Only sync if I have files and remote is empty OR I'm the source
@@ -1369,15 +1435,6 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
             console.error(`📂 Sync error (${source}):`, error);
           }
         };
-
-        // Helper function to compare arrays
-        function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
-          if (a.length !== b.length) return false;
-          for (let i = 0; i < a.length; i++) {
-            if (a[i] !== b[i]) return false;
-          }
-          return true;
-        }
 
         // Listen for remote filetree updates with debouncing
         filetreeYText.observe(async () => {
@@ -3443,6 +3500,19 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     try {
       // CRITICAL: Force sync filetree before sharing to ensure latest state
       console.log('📤 Syncing filetree before share...');
+      
+      // Check if helper functions are available
+      if (!serializeFiletree || !arraysEqual) {
+        console.warn('📤 Helper functions not available, using basic share URL');
+        // Fallback to basic URL without sync
+        const baseUrl = window.location.origin + window.location.pathname;
+        const urlParams = new URLSearchParams();
+        urlParams.set('project', id);
+        urlParams.set('recipient', 'true');
+        setShareUrl(`${baseUrl}?${urlParams.toString()}`);
+        setShareModalOpen(true);
+        return;
+      }
       
       // Get current filetree state
       const currentFiletreeBinary = new TextEncoder().encode(filetreeRef.current?.getText('filetree').toString() || '{}');
