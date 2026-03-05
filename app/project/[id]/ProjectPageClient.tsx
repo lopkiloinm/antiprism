@@ -1176,8 +1176,8 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         // Filetree synchronization logic
         if (cancelled) return;
         
-        // Function to serialize entire filetree to JSON
-        async function serializeFiletree(): Promise<string> {
+        // Simple binary filetree transfer - no JSON complications
+        async function serializeFiletree(): Promise<Uint8Array> {
           const filetreeData: any = { files: {} };
           
           // Add project chat metadata
@@ -1210,17 +1210,9 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
                   else if (file.name.endsWith('.tex')) mimeType = "text/x-tex";
                   else if (file.name.endsWith('.typ')) mimeType = "text/x-typst";
                   
-                  // Convert binary data to base64 for JSON serialization
-                  let content: string;
-                  if (mimeType.startsWith('text/') || mimeType.startsWith('application/')) {
-                    content = new TextDecoder().decode(data);
-                  } else {
-                    // Binary files - convert to base64
-                    content = `base64:${btoa(String.fromCharCode(...new Uint8Array(data)))}`;
-                  }
-                  
+                  // Store raw binary data
                   filetreeData.files[filePath] = {
-                    content,
+                    data: Array.from(new Uint8Array(data)), // Convert to array for JSON serialization
                     mimeType,
                     modified: Date.now()
                   };
@@ -1239,12 +1231,16 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           }
           
           await scanDirectory(basePath);
-          return JSON.stringify(filetreeData);
+          
+          // Convert to binary and return
+          const jsonString = JSON.stringify(filetreeData);
+          return new TextEncoder().encode(jsonString);
         }
         
-        // Function to deserialize filetree from JSON
-        async function deserializeFiletree(filetreeJson: string) {
+        // Function to deserialize filetree from binary
+        async function deserializeFiletree(binaryData: Uint8Array) {
           try {
+            const filetreeJson = new TextDecoder().decode(binaryData);
             const filetreeData = JSON.parse(filetreeJson);
             
             // Handle chat metadata
@@ -1279,18 +1275,10 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
                 const exists = await idbfs.exists(filePath).catch(() => false);
                 if (exists) continue; // Skip existing files
                 
-                const { content, mimeType } = fileData as any;
-                let buffer: ArrayBuffer;
+                const { data, mimeType } = fileData as any;
                 
-                if (content.startsWith('base64:')) {
-                  // Decode base64 binary content
-                  const base64Content = content.substring(7);
-                  const binaryString = atob(base64Content);
-                  buffer = new Uint8Array(binaryString.length).map((_, i) => binaryString.charCodeAt(i)).buffer;
-                } else {
-                  // Text content
-                  buffer = new TextEncoder().encode(content).buffer;
-                }
+                // Convert array back to binary
+                const buffer = new Uint8Array(data).buffer;
                 
                 // Ensure parent directory exists
                 const parentPath = filePath.substring(0, filePath.lastIndexOf('/')) || "/";
@@ -1344,30 +1332,44 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           lastSyncTimestamp = now;
 
           try {
-            const currentFiletree = filetreeYText.toString();
-            console.log(`📂 Starting ${source} sync, current length: ${currentFiletree.length}`);
+            const currentFiletreeBinary = new TextEncoder().encode(filetreeYText.toString());
+            console.log(`📂 Starting ${source} sync, current length: ${currentFiletreeBinary.length}`);
 
             if (!isNewProject) {
-              const filetreeJson = await serializeFiletree();
+              const filetreeBinary = await serializeFiletree();
               
-              // Only sync if local data is newer/empty or remote is empty
-              if (!currentFiletree || currentFiletree === '{}' || 
-                  (source === 'local' && currentFiletree !== filetreeJson)) {
-                filetreeYText.delete(0, currentFiletree.length);
-                filetreeYText.insert(0, filetreeJson);
-                console.log(`📤 Filetree synced to Yjs (${source})`);
+              // SHARER LOGIC: Only sync if I have files and remote is empty OR I'm the source
+              if (source === 'local') {
+                if (currentFiletreeBinary.length === 0 || !arraysEqual(currentFiletreeBinary, filetreeBinary)) {
+                  filetreeYText.delete(0, filetreeYText.length);
+                  filetreeYText.insert(0, new TextDecoder().decode(filetreeBinary));
+                  console.log(`📤 Sharer synced files to recipients`);
+                } else {
+                  console.log(`📂 Sharer data already synced, skipping`);
+                }
               }
-            }
-            
-            // Handle remote sync if we have data
-            if (source === 'remote' && currentFiletree && currentFiletree !== '{}') {
-              console.log('📥 Processing remote filetree update');
-              await deserializeFiletree(currentFiletree);
+            } else {
+              // RECIPIENT LOGIC: Only process remote data, never sync local (empty)
+              if (source === 'remote' && currentFiletreeBinary.length > 0) {
+                console.log('📥 Recipient processing remote sharer data');
+                await deserializeFiletree(currentFiletreeBinary);
+              } else if (source === 'local') {
+                console.log('📂 Recipient has no files, skipping local sync');
+              }
             }
           } catch (error) {
             console.error(`📂 Sync error (${source}):`, error);
           }
         };
+
+        // Helper function to compare arrays
+        function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
+          if (a.length !== b.length) return false;
+          for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+          }
+          return true;
+        }
 
         // Listen for remote filetree updates with debouncing
         filetreeYText.observe(async () => {
@@ -1389,13 +1391,30 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           if (webrtcReady) {
             console.log('📂 WebRTC ready, performing initial sync');
             
-            // Check if we should sync from remote (empty local project)
-            const currentFiletree = filetreeYText.toString();
-            if (isNewProject && currentFiletree && currentFiletree !== '{}') {
-              console.log('📥 Initial filetree sync from remote');
-              await deserializeFiletree(currentFiletree);
+            if (isNewProject) {
+              // RECIPIENT: Wait for remote data from sharer
+              console.log('📂 Recipient: waiting for sharer data...');
+              
+              // Wait up to 3 seconds for sharer to send data
+              let waitAttempts = 0;
+              while (waitAttempts < 30) { // 30 * 100ms = 3 seconds
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitAttempts++;
+                
+                const remoteData = filetreeYText.toString();
+                if (remoteData && remoteData !== '{}') {
+                  console.log('📥 Received data from sharer, importing...');
+                  await deserializeFiletree(new TextEncoder().encode(remoteData));
+                  return; // Done - recipient got sharer's data
+                }
+              }
+              
+              // No sharer data received - this might be the first user
+              console.log('📂 No sharer data received, assuming first user');
+              await debouncedSync('local');
             } else {
-              // Sync local data to remote
+              // SHARER: I have files, sync immediately
+              console.log('📂 Sharer: syncing files to recipients...');
               await debouncedSync('local');
             }
           } else {
