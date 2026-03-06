@@ -12,7 +12,8 @@ import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
 import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig, getShowHiddenYjsDocs, setShowHiddenYjsDocs } from "@/lib/settings";
 import { FileTree } from "@/components/FileTree";
-import { FileActions } from "@/components/FileActions";
+import { OrderedFileTree } from "@/components/OrderedFileTree";
+import { FileTreeManager, TreeItem } from "@/lib/fileTreeManager";
 import { FileTabs, SETTINGS_TAB_PATH } from "@/components/FileTabs";
 import type { Tab } from "@/components/FileTabs";
 import { NameModal } from "@/components/NameModal";
@@ -211,11 +212,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [searchQuery, setSearchQuery] = useState("");
   const [showHiddenYjsDocs, setShowHiddenYjsDocsState] = useState(getShowHiddenYjsDocs());
   
-  // Helper functions for filetree operations (accessible to handleShare)
-  // Note: These will be properly initialized when idbfs and basePath are available
-  let serializeFiletree: (() => Promise<Uint8Array>) | null = null;
-  let arraysEqual: ((a: Uint8Array, b: Uint8Array) => boolean) | null = null;
-  
   // Update showHiddenYjsDocs when setting changes
   useEffect(() => {
     setShowHiddenYjsDocsState(getShowHiddenYjsDocs());
@@ -379,7 +375,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       }
     }, 100); // Small delay to ensure the editor is ready
   };
-  const [addActionsOpen, setAddActionsOpen] = useState(false);
   const [chatExpanded, setChatExpanded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
@@ -421,8 +416,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const initRef = useRef(false);
   const providerRef = useRef<WebrtcProvider | null>(null);
   const fileDocManagerRef = useRef<FileDocumentManager | null>(null);
-  const filetreeRef = useRef<Y.Doc | null>(null);
-  const filetreeProviderRef = useRef<WebrtcProvider | null>(null);
+  const fileTreeManagerRef = useRef<FileTreeManager | null>(null);
+  const fileTreeDocRef = useRef<Y.Doc | null>(null);
+  const fileTreeProviderRef = useRef<WebrtcProvider | null>(null);
   const editorRef = useRef<EditorPanelHandle | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   
@@ -863,14 +859,6 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const serverParam = urlParams.get('server');
-      const recipientParam = urlParams.get('recipient');
-      
-      // Force recipient mode if URL parameter is present
-      if (recipientParam === 'true') {
-        console.log('🔗 Recipient mode detected from URL - will lose on first sync');
-        // Store recipient flag in sessionStorage to persist during session
-        sessionStorage.setItem('antiprism_recipient_mode', 'true');
-      }
       
       if (serverParam) {
         // Clean up server URL (remove trailing slash)
@@ -1044,139 +1032,27 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         fileDocManagerRef.current = fileDocManager;
         console.log('📂 File document manager created');
 
-        // Create Yjs document for entire filetree synchronization
-        const filetreeDoc = new Y.Doc();
-        const filetreeProvider = new WebrtcProvider(`${id}-filetree`, filetreeDoc, providerOptions);
-        const filetreeYText = filetreeDoc.getText('filetree');
+        // Create YJS document and WebRTC provider for filetree
+        const fileTreeDoc = new Y.Doc();
+        const fileTreeProvider = new WebrtcProvider(`${id}-filetree`, fileTreeDoc, providerOptions);
+        const fileTreeMap = fileTreeDoc.getMap('filetree');
         
         // Store in refs for cleanup
-        filetreeRef.current = filetreeDoc;
-        filetreeProviderRef.current = filetreeProvider;
+        fileTreeDocRef.current = fileTreeDoc;
+        fileTreeProviderRef.current = fileTreeProvider;
         
-        console.log('📂 Filetree Yjs document created for synchronization');
+        // Create FileTreeManager
+        const fileTreeManager = new FileTreeManager(fileTreeMap);
+        fileTreeManagerRef.current = fileTreeManager;
+        console.log('🌳 FileTreeManager created with yjs-orderedtree');
 
         const idbfs = await mount();
         fsRef.current = idbfs;
         console.log('📂 File system mounted');
         if (cancelled) return;
 
-        // Helper functions for filetree operations (accessible to handleShare)
-        // Assign to component-level variables for handleShare to access
-        serializeFiletree = async (): Promise<Uint8Array> => {
-          const filetreeData: any = { files: {} };
-          
-          // CRITICAL: Sync Y-IndexedDB (source of truth) with IDBFS before sharing
-          console.log('📤 Syncing Y-IndexedDB with IDBFS before share...');
-          
-          // Get all project files from FileDocumentManager (Y-IndexedDB)
-          const fileDocManager = fileDocManagerRef.current;
-          if (fileDocManager) {
-            const allProjectFiles = await getAllProjectFiles(id);
-            console.log(`📤 Found ${allProjectFiles.length} files to sync`);
-            
-            for (const filePath of allProjectFiles) {
-              try {
-                // Get content from Y-IndexedDB (source of truth)
-                const fileDoc = fileDocManager.getDocument(filePath, true); // silent=true
-                const ytext = fileDoc.text;
-                const yjsContent = ytext.toString();
-                
-                // Skip empty files (likely not edited yet)
-                if (yjsContent.trim() === '') {
-                  console.log(`📤 Skipping empty file: ${filePath}`);
-                  continue;
-                }
-                
-                // Write Y-IndexedDB content to IDBFS to ensure consistency
-                try {
-                  const mimeType = filePath.endsWith('.typ') ? 'text/x-typst' : 'text/x-tex';
-                  await idbfs.writeFile(filePath, new TextEncoder().encode(yjsContent).buffer as ArrayBuffer, { mimeType });
-                  console.log(`📤 Synced Y-IndexedDB → IDBFS: ${filePath} (${yjsContent.length} chars)`);
-                } catch (writeError) {
-                  console.warn(`📤 Failed to write ${filePath} to IDBFS:`, writeError);
-                }
-                
-              } catch (yjsError) {
-                console.warn(`📤 Failed to get Y-IndexedDB content for ${filePath}:`, yjsError);
-              }
-            }
-          }
-          
-          // Add project chat metadata
-          try {
-            const projectChats = listProjectChats(id);
-            if (projectChats.length > 0) {
-              filetreeData.chats = projectChats.map(({ id, title, createdAt, modelId }) => ({
-                id, title, createdAt, modelId
-              }));
-            }
-          } catch (e) {
-            console.warn('Failed to serialize chat metadata:', e);
-          }
-          
-          // Optimized MIME type detection
-          const getMimeType = (name: string): string => {
-            const ext = name.split('.').pop()?.toLowerCase();
-            const mimeMap: Record<string, string> = {
-              'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-              'png': 'image/png', 'pdf': 'application/pdf',
-              'tex': 'text/x-tex', 'typ': 'text/x-typst'
-            };
-            return mimeMap[ext || ''] || 'application/octet-stream';
-          };
-          
-          // Single async function to scan all directories
-          async function scanAllDirectories(): Promise<void> {
-            const dirsToScan = [basePath];
-            const processed = new Set<string>();
-            
-            while (dirsToScan.length > 0) {
-              const currentDir = dirsToScan.pop()!;
-              if (processed.has(currentDir)) continue;
-              processed.add(currentDir);
-              
-              try {
-                const { dirs, files } = await idbfs.readdir(currentDir);
-                
-                // Process files
-                for (const file of files) {
-                  const filePath = currentDir === "/" ? `/${file.name}` : `${currentDir}/${file.name}`;
-                  try {
-                    const data = await idbfs.readFile(filePath);
-                    filetreeData.files[filePath] = {
-                      data: Array.from(new Uint8Array(data)),
-                      mimeType: getMimeType(file.name),
-                      modified: Date.now()
-                    };
-                  } catch (e) {
-                    console.warn(`Failed to read ${filePath}:`, e);
-                  }
-                }
-                
-                // Add subdirectories to scan queue
-                dirs.forEach((dir: any) => {
-                  const dirPath = currentDir === "/" ? `/${dir.name}` : `${currentDir}/${dir.name}`;
-                  dirsToScan.push(dirPath);
-                });
-                
-              } catch (e) {
-                console.warn(`Failed to scan ${currentDir}:`, e);
-              }
-            }
-          }
-          
-          await scanAllDirectories();
-          return new TextEncoder().encode(JSON.stringify(filetreeData));
-        }
-
-        // Helper function to compare arrays
-        arraysEqual = (a: Uint8Array, b: Uint8Array): boolean => {
-          if (a.length !== b.length) return false;
-          for (let i = 0; i < a.length; i++) {
-            if (a[i] !== b[i]) return false;
-          }
-          return true;
-        }
+        // Sync existing filesystem files to FileTreeManager
+        await syncFilesystemToFileTree(fileTreeManager, idbfs, basePath);
 
         const mainPath = `${basePath}/main.tex`;
         const mainTypPath = `${basePath}/main.typ`;
@@ -1302,221 +1178,11 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
               existsInFiles: files.some((f: { name: string }) => f.name === "diagram.jpg")
             });
           }
+
+          // Sync newly created files to FileTreeManager
+          console.log('🔄 Syncing newly created files to FileTreeManager...');
+          await syncFilesystemToFileTree(fileTreeManager, idbfs, basePath);
         }
-
-        // Filetree synchronization logic
-        if (cancelled) return;
-        
-        // Function to deserialize filetree from binary
-        async function deserializeFiletree(binaryData: Uint8Array) {
-          try {
-            const filetreeJson = new TextDecoder().decode(binaryData);
-            const filetreeData = JSON.parse(filetreeJson);
-            
-            // Handle chat metadata
-            if (filetreeData.chats && Array.isArray(filetreeData.chats)) {
-              try {
-                const existingChats = listProjectChats(id);
-                const incomingChats = filetreeData.chats;
-                
-                // Merge incoming chats with existing ones (avoid duplicates)
-                for (const incomingChat of incomingChats) {
-                  if (!existingChats.find(c => c.id === incomingChat.id)) {
-                    // Import the chat metadata (messages will be loaded separately)
-                    const projectChats = listProjectChats(id);
-                    projectChats.push(incomingChat);
-                    localStorage.setItem(`antiprism_chats_${id}`, JSON.stringify(projectChats));
-                    console.log(`📥 Imported chat metadata: ${incomingChat.title}`);
-                  }
-                }
-                
-                // Refresh ChatTree if it's visible
-                if (sidebarTab === "chats") {
-                  setRefreshTrigger(t => t + 1);
-                }
-              } catch (e) {
-                console.warn('Failed to deserialize chat metadata:', e);
-              }
-            }
-            
-            for (const [filePath, fileData] of Object.entries(filetreeData.files || {})) {
-              try {
-                // Check if file already exists
-                const exists = await idbfs.exists(filePath).catch(() => false);
-                if (exists) continue; // Skip existing files
-                
-                const { data, mimeType } = fileData as any;
-                
-                // Convert array back to binary
-                const buffer = new Uint8Array(data).buffer;
-                
-                // Ensure parent directory exists
-                const parentPath = filePath.substring(0, filePath.lastIndexOf('/')) || "/";
-                if (parentPath !== "/") {
-                  await idbfs.mkdir(parentPath).catch(() => {}); // May exist
-                }
-                
-                await idbfs.writeFile(filePath, buffer, { mimeType });
-                console.log(`📥 Synced file from remote: ${filePath}`);
-                
-                // Cache binary files for display
-                if (isBinaryPath(filePath)) {
-                  const blob = new Blob([buffer], { type: mimeType });
-                  const url = URL.createObjectURL(blob);
-                  setImageUrlCache((prev) => { 
-                    const next = new Map(prev); 
-                    next.set(filePath, url); 
-                    return next; 
-                  });
-                }
-              } catch (e) {
-                console.warn(`Failed to sync file ${filePath}:`, e);
-              }
-            }
-          } catch (e) {
-            console.error('Failed to deserialize filetree:', e);
-          }
-        }
-        
-        // Wait for WebRTC provider to be ready before syncing
-        let webrtcReady = false;
-        filetreeProvider.on('status', (event: any) => {
-          console.log('📂 Filetree WebRTC status:', event.status);
-          if (event.status === 'connected') {
-            webrtcReady = true;
-            console.log('📂 Filetree WebRTC ready for sync');
-          }
-        });
-
-        // Track last sync timestamp to prevent race conditions
-        let lastSyncTimestamp = 0;
-        const SYNC_DEBOUNCE_MS = 1000;
-
-        // Debounced sync function to prevent race conditions
-        const debouncedSync = async (source: 'local' | 'remote') => {
-          const now = Date.now();
-          if (now - lastSyncTimestamp < SYNC_DEBOUNCE_MS) {
-            console.log(`📂 Sync debounced (${source}), last sync ${now - lastSyncTimestamp}ms ago`);
-            return;
-          }
-          lastSyncTimestamp = now;
-
-          try {
-            const currentFiletreeBinary = new TextEncoder().encode(filetreeYText.toString());
-            console.log(`📂 Starting ${source} sync, current length: ${currentFiletreeBinary.length}`);
-
-            if (!isNewProject) {
-              if (!serializeFiletree || !arraysEqual) {
-                console.warn('📂 Helper functions not available for sync');
-                return;
-              }
-              const filetreeBinary = await serializeFiletree();
-              
-              // SHARER LOGIC: Only sync if I have files and remote is empty OR I'm the source
-              if (source === 'local') {
-                if (currentFiletreeBinary.length === 0 || !arraysEqual(currentFiletreeBinary, filetreeBinary)) {
-                  filetreeYText.delete(0, filetreeYText.length);
-                  filetreeYText.insert(0, new TextDecoder().decode(filetreeBinary));
-                  console.log(`📤 Sharer synced files to recipients`);
-                } else {
-                  console.log(`📂 Sharer data already synced, skipping`);
-                }
-              }
-            } else {
-              // RECIPIENT LOGIC: Only process remote data, never sync local (empty)
-              if (source === 'remote' && currentFiletreeBinary.length > 0) {
-                console.log('📥 Recipient processing remote sharer data');
-                await deserializeFiletree(currentFiletreeBinary);
-              } else if (source === 'local') {
-                console.log('📂 Recipient has no files, skipping local sync');
-              }
-            }
-          } catch (error) {
-            console.error(`📂 Sync error (${source}):`, error);
-          }
-        };
-
-        // Listen for remote filetree updates with debouncing
-        filetreeYText.observe(async () => {
-          if (webrtcReady) {
-            console.log('📂 Remote filetree update detected');
-            await debouncedSync('remote');
-          }
-        });
-        
-        // Initial sync after WebRTC is ready
-        const waitForWebRTCAndSync = async () => {
-          // Wait up to 5 seconds for WebRTC to connect
-          let attempts = 0;
-          while (!webrtcReady && attempts < 50) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-          }
-          
-          if (webrtcReady) {
-            console.log('📂 WebRTC ready, performing initial sync');
-            
-            // Check if this user is a recipient (from shared link)
-            const isRecipient = sessionStorage.getItem('antiprism_recipient_mode') === 'true';
-            
-            if (isRecipient) {
-              // RECIPIENT: ALWAYS wait for sharer data, regardless of project state
-              console.log('📂 Recipient (forced): waiting for sharer data...');
-              
-              // Wait up to 10 seconds for sharer to send data (extended timeout)
-              let waitAttempts = 0;
-              while (waitAttempts < 100) { // 100 * 100ms = 10 seconds
-                await new Promise(resolve => setTimeout(resolve, 100));
-                waitAttempts++;
-                
-                const remoteData = filetreeYText.toString();
-                if (remoteData && remoteData !== '{}') {
-                  console.log('📥 Received data from sharer, importing...');
-                  await deserializeFiletree(new TextEncoder().encode(remoteData));
-                  // Clear recipient mode after successful sync
-                  sessionStorage.removeItem('antiprism_recipient_mode');
-                  return; // Done - recipient got sharer's data
-                }
-              }
-              
-              // No sharer data received - show error but don't become sharer
-              console.error('📂 No sharer data received after 10 seconds - sharing failed');
-              // Keep recipient mode so they can retry
-              return;
-            } else if (isNewProject) {
-              // NEW PROJECT (not recipient): Wait briefly then become first user
-              console.log('📂 New project: waiting briefly for other users...');
-              
-              // Wait up to 3 seconds for other users
-              let waitAttempts = 0;
-              while (waitAttempts < 30) { // 30 * 100ms = 3 seconds
-                await new Promise(resolve => setTimeout(resolve, 100));
-                waitAttempts++;
-                
-                const remoteData = filetreeYText.toString();
-                if (remoteData && remoteData !== '{}') {
-                  console.log('📥 Received data from other user, importing...');
-                  await deserializeFiletree(new TextEncoder().encode(remoteData));
-                  return; // Done - got other user's data
-                }
-              }
-              
-              // No other users - become first user
-              console.log('📂 No other users detected, becoming first user');
-              await debouncedSync('local');
-            } else {
-              // SHARER: I have files, sync immediately
-              console.log('📂 Sharer: syncing files to recipients...');
-              await debouncedSync('local');
-            }
-          } else {
-            console.log('📂 WebRTC not ready, doing local sync only');
-            await debouncedSync('local');
-          }
-        };
-
-        // Start the sync process
-        waitForWebRTCAndSync();
 
         if (cancelled) return;
         
@@ -1695,15 +1361,12 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       fileDocManagerRef.current?.destroy(); // ✅ Cleanup all file documents
       fileDocManagerRef.current = null;
       
-      // ✅ Also cleanup the filetree document and provider
-      if (filetreeRef.current) {
-        filetreeRef.current.destroy();
-        filetreeRef.current = null;
-      }
-      if (filetreeProviderRef.current) {
-        filetreeProviderRef.current.destroy();
-        filetreeProviderRef.current = null;
-      }
+      // Cleanup FileTreeManager and its YJS document
+      fileTreeProviderRef.current?.destroy();
+      fileTreeProviderRef.current = null;
+      fileTreeDocRef.current?.destroy();
+      fileTreeDocRef.current = null;
+      fileTreeManagerRef.current = null;
     };
   }, [id]);
 
@@ -2597,134 +2260,143 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       if (!fs) return;
       const mgr = getBufferMgr();
 
-      // Handle virtual Y.js files
-      if (path === `${basePath}/.yjs-filetree.json`) {
-        try {
-          // Get filetree Y.js document content
-          const filetreeContent = filetreeRef.current?.getText('filetree').toString() || '{}';
-          
-          // Create a read-only tab with the filetree content
-          const existingIdx = openTabs.findIndex((t) => t.path === path);
-          if (existingIdx >= 0) {
-            setActiveTabPath(path);
-            setCurrentPath(path); // Update currentPath for filetree highlighting
-            setAddTargetPath(path); // Update addTargetPath for file actions
-            return;
-          }
-          
-          setOpenTabs((t) => [...t, { path, type: "text", readOnly: true }]);
-          setActiveTabPath(path);
-          setCurrentPath(path); // Update currentPath for filetree highlighting
-          setAddTargetPath(path); // Update addTargetPath for file actions
-          
-          // Set the content in the buffer manager
-          if (mgr) {
-            mgr.switchTo(path, filetreeContent);
-          }
-          
-          console.log('🔍 Opened filetree Y.js document');
-        } catch (e) {
-          console.error('Failed to open filetree Y.js document:', e);
-        }
-        return;
-      }
-      
-      if (path === `${basePath}/.yjs-chats.json`) {
+      // Convert relative path to full path for file operations
+      const fullPath = path.startsWith('/') ? path : `${basePath}/${path}`;
+
+      if (fullPath === `${basePath}/.yjs-chats.json`) {
         try {
           // Get project chat metadata
           const projectChats = listProjectChats(id);
           const chatsContent = JSON.stringify(projectChats, null, 2);
           
           // Create a read-only tab with the chats content
-          const existingIdx = openTabs.findIndex((t) => t.path === path);
+          const existingIdx = openTabs.findIndex((t) => t.path === fullPath);
           if (existingIdx >= 0) {
-            setActiveTabPath(path);
-            setCurrentPath(path); // Update currentPath for filetree highlighting
-            setAddTargetPath(path); // Update addTargetPath for file actions
+            setActiveTabPath(fullPath);
+            setCurrentPath(fullPath); // Update currentPath for filetree highlighting
+            setAddTargetPath(fullPath); // Update addTargetPath for file actions
             return;
           }
           
-          setOpenTabs((t) => [...t, { path, type: "text", readOnly: true }]);
-          setActiveTabPath(path);
-          setCurrentPath(path); // Update currentPath for filetree highlighting
-          setAddTargetPath(path); // Update addTargetPath for file actions
+          setOpenTabs((t) => [...t, { path: fullPath, type: "text", readOnly: true }]);
+          setActiveTabPath(fullPath);
+          setCurrentPath(fullPath); // Update currentPath for filetree highlighting
+          setAddTargetPath(fullPath); // Update addTargetPath for file actions
           
-          // Set the content in the buffer manager
-          if (mgr) {
-            mgr.switchTo(path, chatsContent);
-          }
-          
-          console.log('🔍 Opened chats metadata Y.js document');
+          // Load content into the new file's Yjs document
+          loadTextIntoEditor(fullPath, chatsContent);
         } catch (e) {
-          console.error('Failed to open chats Y.js document:', e);
+          console.warn('Failed to load chats file:', e);
         }
         return;
       }
 
-      const stat = await fs.stat(path).catch(() => null);
+      const stat = await fs.stat(fullPath).catch(() => null);
       if (stat?.isDirectory) {
-        setCurrentPath(path);
-        setAddTargetPath(path);
+        setCurrentPath(fullPath);
+        setAddTargetPath(fullPath);
         return;
       }
 
-      setCurrentPath(path);
-      const parentDir = path.substring(0, path.lastIndexOf("/")) || "/";
+      setCurrentPath(fullPath);
+      const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/")) || "/";
       setAddTargetPath(parentDir.startsWith(basePath) ? parentDir : basePath);
-      const isBinary = isBinaryPath(path);
-      const existingIdx = openTabs.findIndex((t) => t.path === path);
+      const isBinary = isBinaryPath(fullPath);
+      const existingIdx = openTabs.findIndex((t) => t.path === fullPath);
 
       if (existingIdx >= 0) {
-        // 🎯 FIX: Each file has its own Yjs document via FileDocumentManager.
-        // Just switch the active path — getCurrentYText() returns the correct doc.
-        // Do NOT use buffer manager switchTo() — it writes into the OLD tab's Yjs doc.
-        setActiveTabPath(path);
-        setCurrentPath(path);
+        setActiveTabPath(fullPath);
+        setCurrentPath(fullPath);
         return;
       }
 
       // New tab
       if (isBinary) {
         try {
-          const data = await fs.readFile(path);
+          const data = await fs.readFile(fullPath);
           const blob = data instanceof ArrayBuffer ? new Blob([data]) : new Blob([data]);
           const url = URL.createObjectURL(blob);
-          setImageUrlCache((prev) => { const next = new Map(prev); next.set(path, url); return next; });
-          setOpenTabs((t) => [...t, { path, type: "image" }]);
-          setActiveTabPath(path);
-          setCurrentPath(path);
+          setImageUrlCache((prev) => { const next = new Map(prev); next.set(fullPath, url); return next; });
         } catch (e) {
-          console.error("Failed to load binary file:", e);
+          console.error(`Not found:${fullPath}`, e);
         }
-      } else {
-        const content = await resolveFileContent(path);
-        // Determine file type based on extension
-        const isImage = path.match(/\.(png|jpg|jpeg|gif|bmp|svg|webp|tiff|heif|ico)$/i);
-        const isPdf = path.endsWith('.pdf');
-        const fileType = isImage ? "image" : isPdf ? "image" : "text";
-        
-        // Cache PDF files for the PDF viewer (read binary data directly)
-        if (isPdf && fs) {
-          try {
-            const data = await fs.readFile(path);
-            if (data && typeof data !== 'string') {
-              const blob = new Blob([data], { type: 'application/pdf' });
-              const url = URL.createObjectURL(blob);
-              setImageUrlCache((prev) => { const next = new Map(prev); next.set(path, url); return next; });
-            }
-          } catch (e) {
-            console.warn('Failed to cache PDF for viewer:', e);
+      }
+      
+      const isPdf = fullPath.endsWith('.pdf');
+      const isImage = !isPdf && (fullPath.endsWith('.jpg') || fullPath.endsWith('.jpeg') || fullPath.endsWith('.png') || fullPath.endsWith('.gif') || fullPath.endsWith('.svg') || fullPath.endsWith('.webp'));
+      const fileType = isImage ? "image" : isPdf ? "image" : "text";
+      
+      // Cache PDF files for the PDF viewer (read binary data directly)
+      if (isPdf && fs) {
+        try {
+          const data = await fs.readFile(fullPath);
+          if (data && typeof data !== 'string') {
+            const blob = new Blob([data], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            setImageUrlCache((prev) => { const next = new Map(prev); next.set(fullPath, url); return next; });
           }
+        } catch (e) {
+          console.warn('Failed to cache PDF for viewer:', e);
+        }
+      }
+      
+      // Load content into the new file's Yjs document
+      const content = await resolveFileContent(fullPath);
+      loadTextIntoEditor(fullPath, content);
+      setOpenTabs((t) => [...t, { path: fullPath, type: fileType }]);
+      setActiveTabPath(fullPath);
+      setCurrentPath(fullPath);
+    },
+    [fs, openTabs, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent, id, listProjectChats, isBinaryPath, setActiveTabPath, setCurrentPath, setAddTargetPath, setOpenTabs, setImageUrlCache]
+  );
+
+  // Handle file rename
+  const handleFileRename = useCallback(
+    async (item: TreeItem, newName: string) => {
+      if (!fs || !fileTreeManagerRef.current) return;
+      
+      const trimmed = newName.trim().replace(/^\//, "").replace(/\/$/, "");
+      if (!trimmed || trimmed === item.name) return;
+      
+      const oldPath = item.path;
+      const newPath = item.path.replace(item.name, trimmed);
+      
+      try {
+        // Update in filesystem
+        if (item.isFolder) {
+          await fs.mkdir(newPath);
+          // TODO: Copy folder contents recursively
+          await fs.rm(oldPath, true);
+        } else {
+          const data = await fs.readFile(oldPath);
+          const stat = await fs.stat(oldPath).catch(() => null);
+          const mimeType = stat?.mimeType || "application/octet-stream";
+          const buf = data instanceof ArrayBuffer ? data : ((data as Uint8Array).buffer as ArrayBuffer);
+          await fs.writeFile(newPath, buf, { mimeType });
+          await fs.rm(oldPath);
         }
         
-        // Load content into the new file's Yjs document
-        loadTextIntoEditor(path, content);
-        setOpenTabs((t) => [...t, { path, type: fileType }]);
-        setActiveTabPath(path);
-        setCurrentPath(path);
+        // Update in FileTreeManager
+        const nodeKey = fileTreeManagerRef.current.getNodeKeyByPath(oldPath);
+        if (nodeKey) {
+          fileTreeManagerRef.current.updateNodeValue(nodeKey, { 
+            name: trimmed, 
+            path: newPath 
+          });
+        }
+        
+        // Update current path if this was the active file
+        if (currentPath === oldPath) {
+          setCurrentPath(newPath);
+          setAddTargetPath(newPath);
+        }
+        
+        console.log(`✅ Renamed ${oldPath} to ${newPath}`);
+      } catch (e) {
+        console.error("Rename failed:", e);
       }
     },
-    [fs, openTabs, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
+    [fs, currentPath]
   );
 
   // Handle tab reordering
@@ -2849,6 +2521,37 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       });
     },
     [openTabs, activeTabPath, currentPath, basePath, fs, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
+  );
+
+  // Handle file delete
+  const handleFileDelete = useCallback(
+    async (item: TreeItem) => {
+      if (!fs || !fileTreeManagerRef.current) return;
+      
+      const fullPath = basePath ? `${basePath}/${item.path}` : item.path;
+      
+      try {
+        // Delete from filesystem
+        await fs.rm(fullPath, item.isFolder);
+        
+        // Delete from FileTreeManager
+        const nodeKey = fileTreeManagerRef.current.getNodeKeyByPath(item.path);
+        if (nodeKey) {
+          fileTreeManagerRef.current.deleteNode(nodeKey);
+        }
+        
+        // Close tab if this file was open
+        const tabToClose = openTabs.find(t => t.path === fullPath);
+        if (tabToClose) {
+          handleTabClose(fullPath);
+        }
+        
+        console.log(`✅ Deleted ${fullPath}`);
+      } catch (e) {
+        console.error("Delete failed:", e);
+      }
+    },
+    [fs, basePath, openTabs, handleTabClose]
   );
 
   const handleCompile = async () => {
@@ -3498,70 +3201,16 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     if (typeof window === "undefined") return;
     
     try {
-      // CRITICAL: Force sync filetree before sharing to ensure latest state
-      console.log('📤 Syncing filetree before share...');
+      // 🗑️ REMOVED: JSON filetree metadata system - using basic share URL only
+      console.log('📤 Using basic share URL (JSON filetree metadata removed)');
       
-      // Check if helper functions are available
-      if (!serializeFiletree || !arraysEqual) {
-        console.warn('📤 Helper functions not available, using basic share URL');
-        // Fallback to basic URL without sync
-        const baseUrl = window.location.origin + window.location.pathname;
-        const urlParams = new URLSearchParams();
-        urlParams.set('project', id);
-        urlParams.set('recipient', 'true');
-        setShareUrl(`${baseUrl}?${urlParams.toString()}`);
-        setShareModalOpen(true);
-        return;
-      }
-      
-      // Get current filetree state
-      const currentFiletreeBinary = new TextEncoder().encode(filetreeRef.current?.getText('filetree').toString() || '{}');
-      const latestFiletreeBinary = await serializeFiletree();
-      
-      // Always update filetree Y.js document with latest state before sharing
-      if (!arraysEqual(currentFiletreeBinary, latestFiletreeBinary)) {
-        console.log('📤 Updating filetree with latest state before share...');
-        filetreeRef.current?.getText('filetree').delete(0, filetreeRef.current?.getText('filetree').length);
-        filetreeRef.current?.getText('filetree').insert(0, new TextDecoder().decode(latestFiletreeBinary));
-        console.log('📤 Filetree synced for sharing');
-      } else {
-        console.log('📤 Filetree already up to date for sharing');
-      }
-      
-      // Get current WebRTC signaling configuration
-      const webrtcConfig = getWebRTCSignalingConfig();
-      
-      // Find the first enabled signaling server
-      const workingServer = webrtcConfig.customServers.length > 0 
-        ? webrtcConfig.customServers[0].replace(/\/$/, '') // Remove trailing slash
-        : null;
-      
-      // Build share URL with project ID and signaling server
       const baseUrl = window.location.origin + window.location.pathname;
       const urlParams = new URLSearchParams();
-      
-      // Always include project ID
       urlParams.set('project', id);
-      
-      // Mark as recipient to ensure they lose on first sync
       urlParams.set('recipient', 'true');
-      
-      // Include signaling server if available and WebRTC is enabled
-      if (webrtcConfig.enabled && workingServer) {
-        urlParams.set('server', workingServer);
-      }
-      
-      const shareUrl = `${baseUrl}?${urlParams.toString()}`;
-      
-      // Set share URL and open modal
-      setShareUrl(shareUrl);
+      setShareUrl(`${baseUrl}?${urlParams.toString()}`);
       setShareModalOpen(true);
-      
-      // Optional: Show success message with both encoded and decoded versions
-      console.log('Share URL generated (encoded):', shareUrl);
-      console.log('Share URL (decoded):', decodeURIComponent(shareUrl));
-      console.log('Project ID:', id);
-      console.log('Signaling Server:', workingServer);
+      return;
       
     } catch (error) {
       console.error('Failed to generate share URL:', error);
@@ -3605,37 +3254,124 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
   const { isMobile } = useResponsive();
   const [mounted, setMounted] = useState(false);
-  const [mobileAddModalType, setMobileAddModalType] = useState<"file" | "folder" | null>(null);
+  const [addModalType, setAddModalType] = useState<"file" | "folder" | null>(null);
+  
+  // Debug: Log all modal state changes
+  useEffect(() => {
+    console.log('🔍 Modal state changed to:', addModalType);
+  }, [addModalType]);
   
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const handleMobileAdd = async (name: string) => {
-    if (!fs) return;
-    const type = mobileAddModalType;
-    setMobileAddModalType(null);
+  const handleAdd = async (name: string) => {
+    if (!fs || !fileTreeManagerRef.current) return;
+    const type = addModalType;
+    setAddModalType(null);
     
     const trimmed = name.trim().replace(/^\//, "").replace(/\/$/, "");
     if (!trimmed) return;
     
-    // For mobile, we just add to the root directory for simplicity unless there's a selected folder
-    // But since we don't track selected folder explicitly for mobile UI yet, we'll use basePath
-    const basePath = `/projects/${id}`;
-    const newPath = `${basePath}/${trimmed}`;
-    
     try {
-      if (type === "folder") {
-        await fs.mkdir(newPath);
-      } else {
-        const emptyBuf = new Uint8Array(0).buffer as ArrayBuffer;
-        await fs.writeFile(newPath, emptyBuf, { mimeType: "text/plain" });
-        handleTabSelect(newPath); // Auto-open new files
+      if (type === "file") {
+        const filePath = addTargetPath === "/" ? `/${trimmed}` : `${addTargetPath}/${trimmed}`;
+        
+        // Create file in filesystem
+        await fs.writeFile(filePath, new Uint8Array().buffer as ArrayBuffer, { mimeType: "text/plain" });
+        console.log('📄 Created new file:', filePath);
+        
+        // Add to FileTreeManager
+        const fileMetadata = {
+          path: filePath,
+          name: trimmed,
+          size: 0,
+          mimeType: "text/plain",
+          type: "text" as const,
+          lastModified: Date.now(),
+          transferChannel: "yjs" as const,
+          isFolder: false,
+        };
+        fileTreeManagerRef.current.createFile(fileMetadata);
+        
+      } else if (type === "folder") {
+        const folderPath = addTargetPath === "/" ? `/${trimmed}` : `${addTargetPath}/${trimmed}`;
+        
+        // Create folder in filesystem
+        await fs.mkdir(folderPath);
+        console.log('📁 Created new folder:', folderPath);
+        
+        // Add to FileTreeManager
+        fileTreeManagerRef.current.createFolder(trimmed, folderPath);
       }
-      setRefreshTrigger(t => t + 1);
-    } catch (e) {
-      console.error("Failed to create file/folder:", e);
+      setRefreshTrigger((t) => t + 1);
+    } catch (error) {
+      console.error('Failed to create item:', error);
     }
+  };
+
+  // Sync filesystem files to FileTreeManager
+  const syncFilesystemToFileTree = async (fileTreeManager: FileTreeManager, idbfs: any, basePath: string) => {
+    console.log('🔄 Syncing filesystem to FileTreeManager...');
+    
+    const scanDirectory = async (dirPath: string, relativePath: string = '') => {
+      try {
+        const entries = await idbfs.readdir(dirPath);
+        const { dirs, files } = entries;
+        
+        // Process files
+        for (const file of files) {
+          // Use relative path within project (not including /projects/UUID)
+          const filePath = relativePath ? `${relativePath}/${file.name}` : file.name;
+          const fullPath = dirPath === '/' ? `/${file.name}` : `${dirPath}/${file.name}`;
+          
+          try {
+            const stats = await idbfs.stat(fullPath);
+            const fileMetadata = {
+              path: filePath, // Store relative path like file.txt or folder/file.txt
+              name: file.name,
+              size: stats.size || 0,
+              mimeType: file.name.endsWith('.tex') ? 'text/x-tex' : 
+                       file.name.endsWith('.typ') ? 'text/x-typst' : 
+                       file.name.endsWith('.jpg') ? 'image/jpeg' :
+                       file.name.endsWith('.png') ? 'image/png' :
+                       file.name.endsWith('.pdf') ? 'application/pdf' : 'text/plain',
+              type: 'text' as const,
+              lastModified: stats.mtime || Date.now(),
+              transferChannel: 'yjs' as const,
+              isFolder: false,
+            };
+            
+            fileTreeManager.createFile(fileMetadata);
+            console.log(`📄 Synced file: ${filePath}`);
+          } catch (error) {
+            console.warn(`Failed to sync file ${filePath}:`, error);
+          }
+        }
+        
+        // Process directories
+        for (const dir of dirs) {
+          // Use relative path within project (not including /projects/UUID)
+          const dirPathRelative = relativePath ? `${relativePath}/${dir.name}` : dir.name;
+          const fullPath = dirPath === '/' ? `/${dir.name}` : `${dirPath}/${dir.name}`;
+          
+          try {
+            fileTreeManager.createFolder(dir.name, dirPathRelative);
+            console.log(`📁 Synced folder: ${dirPathRelative}`);
+            
+            // Recursively scan subdirectory
+            await scanDirectory(fullPath, dirPathRelative);
+          } catch (error) {
+            console.warn(`Failed to sync folder ${dirPathRelative}:`, error);
+          }
+        }
+      } catch (error) {
+        console.warn(`Failed to scan directory ${dirPath}:`, error);
+      }
+    };
+    
+    await scanDirectory(basePath);
+    console.log('✅ Filesystem sync complete');
   };
 
   if (mounted && isMobile) {
@@ -3653,11 +3389,11 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           fs={fs}
           onAddFile={() => {
             setSidebarTab("files");
-            setMobileAddModalType("file");
+            setAddModalType("file");
           }}
           onAddFolder={() => {
             setSidebarTab("files");
-            setMobileAddModalType("folder");
+            setAddModalType("folder");
           }}
           onUploadFile={() => {
             setSidebarTab("files");
@@ -3669,18 +3405,23 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           }}
           filesPanel={(searchQuery: string) => (
             <div className="h-full relative pb-10">
-              <FileTree
-                fs={fs}
-                basePath={basePath}
+              <OrderedFileTree
+                fileTreeManager={fileTreeManagerRef.current}
                 currentPath={currentPath}
-                onFileSelect={handleFileSelect}
-                refreshTrigger={refreshTrigger}
-                onRefresh={() => setRefreshTrigger(t => t + 1)}
-                searchQuery={searchQuery}
-                showHiddenYjsDocs={showHiddenYjsDocs}
+                basePath={basePath}
+                onFileSelect={(item) => {
+                  handleFileSelect(item.path);
+                  setCurrentPath(item.path);
+                  setAddTargetPath(item.path);
+                }}
+                onFileRename={handleFileRename}
+                onFileDelete={handleFileDelete}
+                onFolderCreate={(name) => {
+                  // TODO: Implement folder creation in FileTreeManager
+                  console.log('Create folder:', name);
+                }}
+                className="h-full"
               />
-              {/* Hidden file inputs for upload actions handled by FileTree implicitly, 
-                  we just trigger them via DOM queries in the callbacks */}
             </div>
           )}
           editorPanel={
@@ -3851,13 +3592,16 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       />
       <NameModal
-        isOpen={mobileAddModalType !== null}
-        title={mobileAddModalType === "folder" ? "New folder" : "New file"}
+        isOpen={addModalType !== null}
+        title={addModalType === "folder" ? "New folder" : "New file"}
         initialValue=""
-        placeholder={mobileAddModalType === "folder" ? "folder-name" : "filename.txt"}
+        placeholder={addModalType === "folder" ? "folder-name" : "filename.txt"}
         submitLabel="Create"
-        onClose={() => setMobileAddModalType(null)}
-        onConfirm={handleMobileAdd}
+        onClose={() => {
+          console.log('Modal onClose called');
+          setAddModalType(null);
+        }}
+        onConfirm={handleAdd}
       />
     </>
   );
@@ -4046,23 +3790,25 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                   </button>
                   <button
                     onClick={() => {
-                      document.querySelector<HTMLInputElement>('input[webkitdirectory]')?.click();
+                      console.log('Add file button clicked');
+                      setAddModalType("file");
+                      setAddTargetPath(basePath);
+                      console.log('Modal type set to:', "file");
                     }}
                     className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors"
-                    title="Upload folder"
-                  >
-                    <IconFolderPlus />
-                  </button>
-                  <button
-                    onClick={() => setAddActionsOpen(!addActionsOpen)}
-                    className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-                      addActionsOpen 
-                        ? "bg-[var(--accent)] text-white"
-                        : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)]"
-                    }`}
                     title="Add file"
                   >
                     <IconFilePlus />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAddModalType("folder");
+                      setAddTargetPath(basePath);
+                    }}
+                    className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors"
+                    title="Add folder"
+                  >
+                    <IconFolderPlus />
                   </button>
                 </>
               )}
@@ -4088,28 +3834,28 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
         </div>
         
                 
-        {/* File actions for files tab - no wrapper div */}
-        {sidebarTab === "files" && (
-          <FileActions 
-            fs={fs} 
-            basePath={addTargetPath} 
-            onAction={() => setRefreshTrigger((t) => t + 1)} 
-            expanded={addActionsOpen}
-          />
-        )}
+        {/* File actions for files tab - REMOVED REDUNDANT DROPDOWN */}
+        {/* Individual buttons above provide all needed actions */}
         
         {/* Content area */}
         <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
           {sidebarTab === "files" && (
-            <FileTree
-              fs={fs}
-              basePath={basePath}
+            <OrderedFileTree
+              fileTreeManager={fileTreeManagerRef.current}
               currentPath={currentPath}
-              onFileSelect={handleFileSelect}
-              onRefresh={() => setRefreshTrigger((t) => t + 1)}
-              refreshTrigger={refreshTrigger}
-              onFileDeleted={handleFileDeleted}
-              showHiddenYjsDocs={showHiddenYjsDocs}
+              basePath={basePath}
+              onFileSelect={(item) => {
+                handleFileSelect(item.path);
+                setCurrentPath(item.path);
+                setAddTargetPath(item.path);
+              }}
+              onFileRename={handleFileRename}
+              onFileDelete={handleFileDelete}
+              onFolderCreate={(name) => {
+                // TODO: Implement folder creation in FileTreeManager
+                console.log('Create folder:', name);
+              }}
+              className="h-full"
             />
           )}
           {sidebarTab === "chats" && (
@@ -4123,10 +3869,9 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                 setActiveTabPath(chatPath);
               }}
               refreshTrigger={refreshTrigger}
-              onRefresh={() => {
-                setRefreshTrigger((t) => t + 1);
-              }}
-              activeChatId={activeTab?.type === "chat" ? activeTab.path.replace("/ai-chat/", "") : undefined}
+              onRefresh={() => setRefreshTrigger(t => t + 1)}
+              searchQuery={searchQuery}
+              activeChatId={activeTabPath?.replace('/ai-chat/', '')}
             />
           )}
           {sidebarTab === "search" && (
@@ -4882,6 +4627,19 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
           </div>
         </div>
       )}
+      {/* NameModal for desktop */}
+      <NameModal
+        isOpen={addModalType !== null}
+        title={addModalType === "folder" ? "New folder" : "New file"}
+        initialValue=""
+        placeholder={addModalType === "folder" ? "folder-name" : "filename.txt"}
+        submitLabel="Create"
+        onClose={() => {
+          console.log('Modal onClose called');
+          setAddModalType(null);
+        }}
+        onConfirm={handleAdd}
+      />
     </div>
   );
 }

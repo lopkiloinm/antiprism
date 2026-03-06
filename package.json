@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@bottxrnif/latex-json-ast-converter": "^1.0.0",
+    "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-xml": "^6.0.2",
     "@codemirror/merge": "^6.12.0",
     "@codemirror/state": "^6.4.1",
@@ -53,7 +54,8 @@
     "y-indexeddb": "^9.0.12",
     "y-webrtc": "^10.3.0",
     "y-websocket": "^3.0.0",
-    "yjs": "^13.6.29"
+    "yjs": "^13.6.29",
+    "yjs-orderedtree": "^1.0.1-beta.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

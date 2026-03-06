@@ -145,39 +145,7 @@ async function loadDir(fs: IdbfsFs, path: string, showHiddenYjsDocs = false, bas
   // Replace nodes with deduplicated version
   const finalNodes = uniqueNodes;
   
-  // Add hidden Y.js documents if enabled and we're in the project directory
-  if (showHiddenYjsDocs && path === basePath) {
-    console.log(`🔍 Adding hidden Y.js documents to project directory: ${basePath}`);
-    
-    // Check if virtual files already exist to avoid duplicates
-    const existingFileNames = finalNodes.map(n => n.name);
-    
-    // Add filetree Y.js document
-    if (!existingFileNames.includes(".yjs-filetree.json")) {
-      finalNodes.push({ 
-        name: ".yjs-filetree.json", 
-        path: `${basePath}/.yjs-filetree.json`, 
-        type: "file", 
-        size: 0,
-        isVirtual: true,
-        virtualType: "filetree"
-      });
-    }
-    
-    // Add chat metadata Y.js document
-    if (!existingFileNames.includes(".yjs-chats.json")) {
-      finalNodes.push({ 
-        name: ".yjs-chats.json", 
-        path: `${basePath}/.yjs-chats.json`, 
-        type: "file", 
-        size: 0,
-        isVirtual: true,
-        virtualType: "chats"
-      });
-    }
-    
-    console.log(`🔍 Added virtual files in ${basePath}:`, finalNodes.filter(n => n.isVirtual).map(n => n.name));
-  }
+  // Legacy Y.js virtual files removed - we now use .filetree.json for metadata
   
   return finalNodes;
 }

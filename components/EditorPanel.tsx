@@ -12,6 +12,7 @@ import { yCollab } from "y-codemirror.next";
 import { EditorState } from "@codemirror/state";
 import { scrollPastEnd } from "@codemirror/view";
 import { latex } from "codemirror-lang-latex";
+import { json } from "@codemirror/lang-json";
 import type { Theme } from "@/lib/settings";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
@@ -157,7 +158,17 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
 
     const indentStr = " ".repeat(Math.max(1, Math.min(8, Math.round(tabSize))));
     const isTypst = currentPath.toLowerCase().endsWith(".typ");
-    const langSupport = isTypst && typstSupport ? typstSupport : latex();
+    const isJson = currentPath.toLowerCase().endsWith(".json");
+    
+    // Use appropriate language support
+    let langSupport: LanguageSupport | undefined;
+    if (isTypst && typstSupport) {
+      langSupport = typstSupport;
+    } else if (isJson) {
+      langSupport = json();
+    } else {
+      langSupport = latex();
+    }
 
     const isLightTheme = theme === "light" || theme === "sepia";
 
@@ -246,7 +257,7 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
       EditorView.theme({
         "&.cm-editor .cm-scroller": { fontSize: `${Math.max(10, Math.min(24, fontSize))}px` },
       }),
-      langSupport,
+      ...(langSupport ? [langSupport] : []),
       yCollab(ytext, provider.awareness, { undoManager }),
       ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       scrollPastEnd(),
