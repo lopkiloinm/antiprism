@@ -419,6 +419,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const fileTreeManagerRef = useRef<FileTreeManager | null>(null);
   const fileTreeDocRef = useRef<Y.Doc | null>(null);
   const fileTreeProviderRef = useRef<WebrtcProvider | null>(null);
+  const directoryProvidersRef = useRef<Map<string, WebrtcProvider>>(new Map());
   const editorRef = useRef<EditorPanelHandle | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   
@@ -1046,6 +1047,25 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         fileTreeManagerRef.current = fileTreeManager;
         console.log('🌳 FileTreeManager created with yjs-orderedtree');
 
+        // Initialize WebRTC providers for each directory
+        const directoryMaps = fileTreeManager.getAllDirectoryMaps();
+        console.log(`📡 Setting up WebRTC providers for ${directoryMaps.size} directories`);
+        
+        directoryMaps.forEach((directoryMap, directoryPath) => {
+          // Get the directory document from FileTreeManager
+          const directoryDoc = fileTreeManager.getDirectoryDoc(directoryPath);
+          
+          if (!directoryDoc) {
+            console.warn(`📡 No document found for directory: ${directoryPath}`);
+            return;
+          }
+          
+          const directoryProvider = new WebrtcProvider(`${id}-directory-${directoryPath.replace(/\//g, '-')}`, directoryDoc, providerOptions);
+          
+          directoryProvidersRef.current.set(directoryPath, directoryProvider);
+          console.log(`📡 WebRTC provider initialized for directory: ${directoryPath}`);
+        });
+
         const idbfs = await mount();
         fsRef.current = idbfs;
         console.log('📂 File system mounted');
@@ -1367,6 +1387,13 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       fileTreeDocRef.current?.destroy();
       fileTreeDocRef.current = null;
       fileTreeManagerRef.current = null;
+      
+      // Cleanup directory providers
+      directoryProvidersRef.current.forEach((provider, directoryPath) => {
+        provider.destroy();
+        console.log(`📡 Cleaned up WebRTC provider for directory: ${directoryPath}`);
+      });
+      directoryProvidersRef.current.clear();
     };
   }, [id]);
 
