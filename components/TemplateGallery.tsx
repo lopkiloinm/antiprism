@@ -77,7 +77,7 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
       const content = await response.text();
       
       // 2. Create a new project
-      const project = createProject(`New ${template.name}`);
+      const project = await createProject(`New ${template.name}`);
       
       // 3. Mount filesystem and write the file
       const fs = await mount();

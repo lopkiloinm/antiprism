@@ -1251,7 +1251,7 @@ I'm here to help you get started with your document. Here's what you can do:
 ✨ **Generate content** - I can help write sections, format citations, and more
 
 What would you like to work on today?`,
-                markdown: true
+                markdown: "true"
               };
               
               await saveProjectChatMessages(id, welcomeChatId, [welcomeMessage]);
@@ -3562,7 +3562,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
             fileTreeProviderRef.current = new WebrtcProvider(
               `${id}-filetree`,
               fileTreeDocRef.current,
-              { signaling: webrtcConfig.customServers[0] }
+              { signaling: [webrtcConfig.customServers[0]] }
             );
             console.log('🔗 Recreated WebRTC provider after folder creation');
           }
@@ -3983,24 +3983,6 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               <IconFolder />
               {/* Accent indicator with 4-level system */}
               {sidebarTab === "files" ? (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[var(--accent)] rounded-r transition-all group-hover:h-5 group-hover:w-1" />
-              ) : (
-                /* Level 1 hover accent for non-active buttons */
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
-              )}
-            </button>
-            <button
-              onClick={() => setSidebarTab("templates")}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-all relative group ${
-                sidebarTab === "templates" 
-                  ? "text-[var(--foreground)]" 
-                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
-              }`}
-              title="Templates"
-            >
-              <IconTemplates />
-              {/* Accent indicator with 4-level system */}
-              {sidebarTab === "templates" ? (
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[var(--accent)] rounded-r transition-all group-hover:h-5 group-hover:w-1" />
               ) : (
                 /* Level 1 hover accent for non-active buttons */

@@ -185,7 +185,7 @@ export class FileTreeManager {
   /**
    * Check if the FileTreeManager is ready
    */
-  isReady(): boolean {
+  isFileTreeManagerReady(): boolean {
     return this.isReady;
   }
 
@@ -999,13 +999,6 @@ export class FileTreeManager {
    */
   getYTree(): YTree {
     return this.yTree;
-  }
-
-  /**
-   * Get the underlying YMap instance
-   */
-  getYMap(): Y.Map<any> {
-    return this.yMap;
   }
 
   /**

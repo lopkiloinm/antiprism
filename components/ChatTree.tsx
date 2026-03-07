@@ -324,7 +324,13 @@ export function ChatTree({ projectId, chatTreeManager, onChatSelect, refreshTrig
               projectId={projectId}
               onChatSelect={onChatSelect}
               onRefresh={onRefresh}
-              onOpenRenameModal={setRenameModal}
+              onOpenRenameModal={(chat) => setRenameModal({
+  id: chat.id,
+  title: chat.title,
+  createdAt: chat.createdAt,
+  modelId: chat.modelId,
+  children: []
+})}
               level={0}
               refreshTrigger={refreshTrigger}
               activeChatId={activeChatId}

@@ -15,7 +15,7 @@ export interface ChatNodeValue {
   children: string[];
 }
 
-export type SortCriteria = 'title-asc' | 'title-desc' | 'created' | 'created-oldest';
+export type SortCriteria = 'title-asc' | 'title-desc' | 'created' | 'created-oldest' | 'model';
 
 /**
  * Manages chat tree using YJS Ordered Tree (matching FileTreeManager pattern exactly)
