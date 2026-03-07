@@ -70,7 +70,7 @@ function generateUniqueId(): string {
   return `proj-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-export function createProject(name: string): Project {
+export async function createProject(name: string): Promise<Project> {
   const projects = getProjects();
   let id: string;
   let attempts = 0;
@@ -82,6 +82,19 @@ export function createProject(name: string): Project {
   const project: Project = { id, name, createdAt: Date.now() };
   projects.unshift(project);
   saveJson(STORAGE_KEY_PROJECTS, projects);
+
+  // Also add to user tree if UserManager is available
+  try {
+    if (typeof window !== 'undefined') {
+      const { UserManager } = await import('./userManager');
+      const userManager = UserManager.getInstance();
+      await userManager.createProjectInUserTree(id, name);
+      console.log('📁 Added project to user tree:', name);
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to add project to user tree:', error);
+  }
+
   return project;
 }
 

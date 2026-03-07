@@ -66,66 +66,21 @@ export function ShareModal({ isOpen, shareUrl, projectName, onClose }: ShareModa
         </h2>
 
         {/* Share URL Input */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-            Share Link
-          </label>
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              type="text"
-              value={shareUrl}
-              readOnly
-              className="flex-1 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] font-mono"
-            />
-            <button
-              onClick={handleCopy}
-              className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
-              title={copied ? "Copied!" : "Copy"}
-            >
-              {copied ? <IconCheckSquare /> : <IconCopy />}
-            </button>
-          </div>
-        </div>
-
-        {/* Warning Section */}
-        <div className="mb-4 p-3 rounded bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[color-mix(in_srgb,var(--accent)_22%,transparent)]">
-          <div className="flex items-start gap-2">
-            <div className="text-[var(--accent)] mt-0.5">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="text-sm">
-              <h3 className="font-semibold text-[var(--foreground)] mb-2">Important Security Notice</h3>
-              <ul className="text-[var(--muted)] space-y-1">
-                <li>• This is a <strong>peer-to-peer (P2P)</strong> connection</li>
-                <li>• Shared users will have <strong>full read/write permissions</strong></li>
-                <li>• All changes are <strong>immediately synced</strong> between participants</li>
-                <li>• <strong>No access control</strong> - anyone with the link can join</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Recommendations */}
-        <div className="mb-4 p-3 rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)]">
-          <div className="flex items-start gap-2">
-            <div className="text-[var(--muted)] mt-0.5">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="text-sm">
-              <h3 className="font-semibold text-[var(--foreground)] mb-2">Recommendations</h3>
-              <ul className="text-[var(--muted)] space-y-1">
-                <li>• <strong>Use Git</strong> for version control and collaboration</li>
-                <li>• <strong>Export project</strong> before sharing if you don't trust recipients</li>
-                <li>• <strong>Create a backup</strong> of important work</li>
-                <li>• Consider <strong>creating a separate project</strong> for collaboration</li>
-              </ul>
-            </div>
-          </div>
+        <div className="flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={shareUrl}
+            readOnly
+            className="flex-1 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] font-mono"
+          />
+          <button
+            onClick={handleCopy}
+            className="px-3 py-2 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
+            title={copied ? "Copied!" : "Copy"}
+          >
+            {copied ? <IconCheckSquare /> : <IconCopy />}
+          </button>
         </div>
       </div>
     </div>

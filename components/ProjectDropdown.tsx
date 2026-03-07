@@ -114,7 +114,7 @@ export function ProjectDropdown({
 
   const handleDuplicate = async () => {
     setOpen(false);
-    const newProject = createProject(`${projectName} (copy)`);
+    const newProject = await createProject(`${projectName} (copy)`);
     if (!fs) {
       router.push(`/project/${newProject.id}`);
       return;

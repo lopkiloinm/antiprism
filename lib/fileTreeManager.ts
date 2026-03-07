@@ -7,7 +7,7 @@ export interface FileMetadata {
   name: string;
   size: number;
   mimeType: string;
-  type: 'text' | 'binary';
+  type: 'text' | 'binary' | 'folder'; // ✅ Add 'folder' type
   lastModified: number;
   transferChannel: 'yjs' | 'webrtc';
   isFolder?: boolean;
@@ -32,10 +32,11 @@ export type SortCriteria = 'name-asc' | 'name-desc' | 'modified' | 'created' | '
  */
 export class FileTreeManager {
   private yTree: YTree;
-  private rootNodeId: string;
+  private rootNodeId: string = '';
   private yMap: Y.Map<any>;
   private directoryMaps: Map<string, Y.Map<any>> = new Map();
   private directoryDocs: Map<string, Y.Doc> = new Map();
+  private isReady: boolean = false; // ✅ Track ready state
 
   constructor(yMap: Y.Map<any>) {
     // Ensure yMap is properly set
@@ -65,10 +66,31 @@ export class FileTreeManager {
     
     // Get root node (should always exist after initialization)
     const rootChildren = this.yTree.getNodeChildrenFromKey("root");
-    this.rootNodeId = rootChildren[0] || this.createRootNode();
+    
+    // ✅ FIXED: Initialize rootNodeId properly for both new and existing trees
+    if (rootChildren.length > 0) {
+      this.rootNodeId = rootChildren[0]; // Use existing root from loaded tree
+      console.log('🌳 Using existing root node from loaded tree:', this.rootNodeId);
+    } else {
+      // For new trees, initializeRoot should have already set this.rootNodeId
+      // If not, create a new root node
+      if (!this.rootNodeId) {
+        this.rootNodeId = this.createRootNode();
+        console.log('🌳 Created new root node:', this.rootNodeId);
+      } else {
+        console.log('🌳 Using root node ID from initializeRoot:', this.rootNodeId);
+      }
+    }
+    
+    console.log('🌳 Final root node ID:', this.rootNodeId);
+    console.log('🌳 Root children found:', rootChildren.length);
     
     // Initialize directory maps for existing directories
     this.initializeDirectoryMaps();
+    
+    // ✅ Set ready state when initialization is complete
+    this.isReady = true;
+    console.log('🌳 FileTreeManager is ready!');
   }
 
   private initializeRoot(): void {
@@ -78,6 +100,9 @@ export class FileTreeManager {
       name: "root",
       created: Date.now(),
     });
+    // ✅ FIXED: Store the root node ID so it's available later
+    this.rootNodeId = rootNodeKey;
+    console.log('🌳 Initialized root node with ID:', rootNodeKey);
   }
 
   /**
@@ -117,48 +142,29 @@ export class FileTreeManager {
     
     console.log(`🗂️ Created new directory map bound to Y.Doc with ID: ${directoryMapId}`);
     
-    // Only store reference in main yMap if it exists (for root FileTreeManager)
-    if (this.yMap) {
-      console.log(`🗂️ Storing directory map reference in main yMap`);
-      console.log(`🗂️ yMap type:`, typeof this.yMap);
-      console.log(`🗂️ yMap constructor:`, this.yMap.constructor.name);
-      console.log(`🗂️ yMap has set method:`, typeof this.yMap.set);
-      
-      try {
-        // Store only JSON-encodable data in main yMap
-        this.yMap.set(directoryMapId, {
-          path: directoryPath,
-          created: Date.now(),
-          type: 'directory-map'
-        });
-        console.log(`🗂️ Successfully stored directory map reference in main yMap`);
-      } catch (error) {
-        console.error(`🚨 Failed to store directory map reference in main yMap:`, error);
-        if (error instanceof Error) {
-          console.error(`🚨 Error details:`, error.message);
-          console.error(`🚨 Error stack:`, error.stack);
-        } else {
-          console.error(`🚨 Error details:`, String(error));
-        }
-        // Continue anyway - the directory map will still work locally
-      }
-    } else {
-      console.warn(`🗂️ this.yMap is undefined, not storing directory map reference in main yMap`);
-    }
+    // Don't store directory map metadata in main yMap to avoid conflicts with yjs-orderedtree
+    // The directory maps are stored locally in the directoryMaps Map
+    console.log(`�️ Created directory map for: ${directoryPath}`);
     
     // Initialize YTree for this directory (following yjs-orderedtree API)
     if (!checkForYTree(directoryMap)) {
       console.log(`🗂️ Initializing YTree for directory: ${directoryPath}`);
-      const directoryYTree = new YTree(directoryMap);
-      const rootNodeKey = directoryYTree.generateNodeKey();
-      directoryYTree.createNode("root", rootNodeKey, {
-        type: "directory",
-        path: directoryPath,
-        name: directoryPath.split('/').pop() || 'root',
-        created: Date.now(),
-      });
-      
-      console.log(`📁 Created YTree structure for directory: ${directoryPath}`);
+      try {
+        const directoryYTree = new YTree(directoryMap);
+        const rootNodeKey = directoryYTree.generateNodeKey();
+        directoryYTree.createNode("root", rootNodeKey, {
+          type: "directory",
+          path: directoryPath,
+          name: directoryPath.split('/').pop() || 'root',
+          created: Date.now(),
+        });
+        
+        console.log(`📁 Created YTree structure for directory: ${directoryPath}`);
+      } catch (ytreeError) {
+        console.error('🚨 Failed to create YTree structure:', ytreeError);
+        // Don't throw - the directory map itself was created successfully
+        // The YTree can be initialized later when needed
+      }
     }
     
     // Cache the directory map and document
@@ -167,6 +173,20 @@ export class FileTreeManager {
     console.log(`🗂️ Cached directory map and document for: ${directoryPath}`);
     
     return directoryMap;
+  }
+
+  /**
+   * Get the Y.Map used by this FileTreeManager (for recreation)
+   */
+  getYMap(): Y.Map<any> {
+    return this.yMap;
+  }
+
+  /**
+   * Check if the FileTreeManager is ready
+   */
+  isReady(): boolean {
+    return this.isReady;
   }
 
   /**
@@ -204,147 +224,219 @@ export class FileTreeManager {
    * Add a file to the tree with proper hierarchy
    */
   createFile(metadata: FileMetadata): string {
-    const nodeId = this.yTree.generateNodeKey();
+    try {
+      const nodeId = this.yTree.generateNodeKey();
 
-    // Parse the path to get the directory hierarchy (relative within project)
-    const pathParts = metadata.path.split('/').filter(Boolean);
-    let currentParentKey = this.rootNodeId;
+      // Parse the path to get the directory hierarchy (relative within project)
+      const pathParts = metadata.path.split('/').filter(Boolean);
+      let currentParentKey = this.rootNodeId;
 
-    // Create/find parent directories in the hierarchy
-    for (let i = 0; i < pathParts.length - 1; i++) {
-      const dirName = pathParts[i];
-      
-      // Check if this directory already exists as a child of current parent
-      const existingChildren = this.yTree.getNodeChildrenFromKey(currentParentKey);
-      const existingDir = existingChildren.find((childId: string) => {
-        const childData = this.yTree.getNodeValueFromKey(childId);
-        return childData?.name === dirName && childData?.isFolder;
-      });
-      
-      if (existingDir) {
-        currentParentKey = existingDir;
-      } else {
-        // Create missing directory
-        const dirNodeId = this.yTree.generateNodeKey();
+      // Create/find parent directories in the hierarchy
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const dirName = pathParts[i];
         
-        const dirMetadata = {
-          path: pathParts.slice(0, i + 1).join('/'), // Relative path within project
-          name: dirName,
-          size: 0,
-          mimeType: 'folder',
-          type: 'binary',
-          lastModified: Date.now(),
-          transferChannel: 'yjs',
-          isFolder: true,
-        };
+        // Check if this directory already exists as a child of current parent
+        const existingChildren = this.yTree.getNodeChildrenFromKey(currentParentKey);
+        const existingDir = existingChildren.find((childId: string) => {
+          const childData = this.yTree.getNodeValueFromKey(childId);
+          return childData?.name === dirName && childData?.isFolder;
+        });
         
-        this.yTree.createNode(currentParentKey, dirNodeId, dirMetadata);
-        
-        currentParentKey = dirNodeId;
-        console.log('📁 Created directory node:', dirName);
+        if (existingDir) {
+          currentParentKey = existingDir;
+        } else {
+          // Create missing directory
+          const dirNodeId = this.yTree.generateNodeKey();
+          
+          const dirMetadata = {
+            path: pathParts.slice(0, i + 1).join('/'), // Relative path within project
+            name: dirName,
+            size: 0,
+            mimeType: 'folder',
+            type: 'folder' as const, // ✅ Use 'folder' type
+            lastModified: Date.now(),
+            transferChannel: 'yjs' as const,
+            isFolder: true,
+          };
+          
+          this.yTree.createNode(currentParentKey, dirNodeId, dirMetadata);
+          
+          currentParentKey = dirNodeId;
+          console.log('📁 Created directory node:', dirName);
+        }
       }
+
+      // Create the file node in the correct parent directory
+      const fileMetadata = {
+        path: metadata.path, // Relative path within project
+        name: metadata.name,
+        size: metadata.size,
+        mimeType: metadata.mimeType,
+        type: metadata.type,
+        lastModified: metadata.lastModified,
+        transferChannel: metadata.transferChannel,
+        isFolder: false,
+      };
+      
+      // Validate parent exists before creating file
+      const parentExists = this.yTree.getNodeValueFromKey(currentParentKey) !== undefined;
+      if (!parentExists) {
+        console.error('🚨 Cannot create file - parent node does not exist:', currentParentKey);
+        throw new Error(`Parent node not found: ${currentParentKey}`);
+      }
+      
+      this.yTree.createNode(currentParentKey, nodeId, fileMetadata);
+      
+      // Position the new file correctly (folders first, then alphabetical)
+      this.positionNewNode(nodeId, currentParentKey, false);
+
+      console.log('📄 Created file node:', metadata.path);
+      return nodeId;
+    } catch (error) {
+      console.error('🚨 Failed to create file:', metadata.path, error);
+      throw error;
     }
-
-    // Create the file node in the correct parent directory
-    const fileMetadata = {
-      path: metadata.path, // Relative path within project
-      name: metadata.name,
-      size: metadata.size,
-      mimeType: metadata.mimeType,
-      type: metadata.type,
-      lastModified: metadata.lastModified,
-      transferChannel: metadata.transferChannel,
-      isFolder: false,
-    };
-    
-    this.yTree.createNode(currentParentKey, nodeId, fileMetadata);
-
-    console.log('📄 Created file node:', metadata.path);
-    return nodeId;
   }
 
   /**
    * Create a folder and initialize its directory map
    */
   createFolder(name: string, path: string): string {
-    const nodeId = this.yTree.generateNodeKey();
-    
-    // Parse the path to get the directory hierarchy
-    const pathParts = path.split('/').filter(Boolean);
-    let currentParentKey = this.rootNodeId;
+    try {
+      console.log('🔧 createFolder called with:', { name, path });
+      
+      const nodeId = this.yTree.generateNodeKey();
+      
+      // Parse the path to get the directory hierarchy
+      const pathParts = path.split('/').filter(Boolean);
+      let currentParentKey = this.rootNodeId;
+      
+      console.log('🔧 Path parts:', pathParts, 'Length:', pathParts.length);
+      console.log('🔧 Initial parent key:', currentParentKey);
 
-    // Create/find parent directories in the hierarchy
-    for (let i = 0; i < pathParts.length - 1; i++) {
-      const dirName = pathParts[i];
-      
-      // Check if this directory already exists as a child of current parent
-      const existingChildren = this.yTree.getNodeChildrenFromKey(currentParentKey);
-      const existingDir = existingChildren.find((childId: string) => {
-        const childData = this.yTree.getNodeValueFromKey(childId);
-        return childData?.name === dirName && childData?.isFolder;
-      });
-      
-      if (existingDir) {
-        currentParentKey = existingDir;
-      } else {
-        // Create missing directory
-        const dirNodeId = this.yTree.generateNodeKey();
+      // Create/find parent directories in the hierarchy
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const dirName = pathParts[i];
         
-        const dirMetadata = {
-          path: '/' + pathParts.slice(0, i + 1).join('/'),
-          name: dirName,
-          size: 0,
-          mimeType: 'folder',
-          type: 'binary' as const,
-          lastModified: Date.now(),
-          transferChannel: 'yjs' as const,
-          isFolder: true,
-        };
+        // Check if this directory already exists as a child of current parent
+        const existingChildren = this.yTree.getNodeChildrenFromKey(currentParentKey);
+        const existingDir = existingChildren.find((childId: string) => {
+          const childData = this.yTree.getNodeValueFromKey(childId);
+          return childData?.name === dirName && childData?.isFolder;
+        });
         
-        this.yTree.createNode(currentParentKey, dirNodeId, dirMetadata);
-        
-        currentParentKey = dirNodeId;
-        console.log('📁 Created directory node:', dirName);
+        if (existingDir) {
+          currentParentKey = existingDir;
+        } else {
+          // Create missing directory
+          const dirNodeId = this.yTree.generateNodeKey();
+          
+          const dirMetadata = {
+            path: '/' + pathParts.slice(0, i + 1).join('/'),
+            name: dirName,
+            size: 0,
+            mimeType: 'folder',
+            type: 'folder' as const, // ✅ Use 'folder' type
+            lastModified: Date.now(),
+            transferChannel: 'yjs' as const,
+            isFolder: true,
+          };
+          
+          this.yTree.createNode(currentParentKey, dirNodeId, dirMetadata);
+          
+          currentParentKey = dirNodeId;
+          console.log('📁 Created directory node:', dirName);
+        }
       }
+
+      console.log('🔧 Final parent key for folder:', currentParentKey);
+
+      // Create the folder node in the correct parent directory
+      const folderMetadata = {
+        path,
+        name,
+        size: 0,
+        mimeType: 'folder',
+        type: 'folder' as const, // ✅ Use 'folder' type
+        lastModified: Date.now(),
+        transferChannel: 'yjs' as const,
+        isFolder: true,
+      };
+      
+      console.log('🔧 Creating folder with metadata:', folderMetadata);
+      
+      // Validate parent exists before creating folder
+      const parentExists = this.yTree.getNodeValueFromKey(currentParentKey) !== undefined;
+      if (!parentExists) {
+        console.error('🚨 Cannot create folder - parent node does not exist:', currentParentKey);
+        throw new Error(`Parent node not found: ${currentParentKey}`);
+      }
+      
+      this.yTree.createNode(currentParentKey, nodeId, folderMetadata);
+      
+      console.log('🔧 Folder created in YTree with node ID:', nodeId, 'under parent:', currentParentKey);
+      
+      // Position the new folder correctly (folders first, then alphabetical)
+      this.positionNewNode(nodeId, currentParentKey, true);
+
+      console.log('📁 Created folder with type:', folderMetadata.type, 'path:', path);
+
+      // Initialize directory map for this folder (with error handling)
+      try {
+        this.getOrCreateDirectoryMap(path);
+        console.log('📁 Successfully initialized directory map for:', path);
+      } catch (dirError) {
+        console.warn('⚠️ Failed to initialize directory map for folder:', path, dirError);
+        // Continue anyway - the folder was created, just without a directory map
+      }
+
+      console.log('📁 Created folder node with directory map:', path);
+      return nodeId;
+    } catch (error) {
+      console.error('🚨 Failed to create folder:', path, error);
+      throw error;
     }
-
-    // Create the folder node in the correct parent directory
-    const folderMetadata = {
-      path,
-      name,
-      size: 0,
-      mimeType: 'folder',
-      type: 'binary' as const,
-      lastModified: Date.now(),
-      transferChannel: 'yjs' as const,
-      isFolder: true,
-    };
-    
-    this.yTree.createNode(currentParentKey, nodeId, folderMetadata);
-
-    // Initialize directory map for this folder
-    this.getOrCreateDirectoryMap(path);
-
-    console.log('📁 Created folder node with directory map:', path);
-    return nodeId;
   }
 
   /**
    * Delete a node and its descendants
    */
   deleteNode(nodeKey: string): void {
-    this.yTree.deleteNodeAndDescendants(nodeKey);
-    console.log('🗑️ Deleted node:', nodeKey);
+    try {
+      // Validate node exists before deleting
+      const nodeValue = this.yTree.getNodeValueFromKey(nodeKey);
+      if (!nodeValue) {
+        console.warn('⚠️ Cannot delete node - node not found:', nodeKey);
+        return;
+      }
+      
+      this.yTree.deleteNodeAndDescendants(nodeKey);
+      console.log('🗑️ Deleted node:', nodeKey);
+    } catch (error) {
+      console.error('🚨 Failed to delete node:', nodeKey, error);
+    }
   }
 
   /**
    * Update node value
    */
   updateNodeValue(nodeKey: string, value: Partial<FileMetadata>): void {
-    const currentValue = this.yTree.getNodeValueFromKey(nodeKey);
-    if (currentValue) {
-      this.yTree.setNodeValueFromKey(nodeKey, { ...currentValue, ...value });
-      console.log('✏️ Updated node value:', nodeKey, value);
+    try {
+      const currentValue = this.yTree.getNodeValueFromKey(nodeKey);
+      if (currentValue) {
+        // Validate that the node still exists before updating
+        const nodeExists = this.yTree.getNodeValueFromKey(nodeKey) !== undefined;
+        if (nodeExists) {
+          this.yTree.setNodeValueFromKey(nodeKey, { ...currentValue, ...value });
+          console.log('✏️ Updated node value:', nodeKey, value);
+        } else {
+          console.warn('⚠️ Cannot update node - node no longer exists:', nodeKey);
+        }
+      } else {
+        console.warn('⚠️ Cannot update node - current value not found:', nodeKey);
+      }
+    } catch (error) {
+      console.error('🚨 Failed to update node value:', nodeKey, error);
     }
   }
 
@@ -352,8 +444,26 @@ export class FileTreeManager {
    * Move node to new parent
    */
   moveNode(nodeKey: string, newParentKey: string): void {
-    this.yTree.moveChildToParent(nodeKey, newParentKey);
-    console.log('📁 Moved node:', nodeKey, 'to parent:', newParentKey);
+    try {
+      // Validate nodes exist before moving
+      const sourceNode = this.yTree.getNodeValueFromKey(nodeKey);
+      const targetParent = this.yTree.getNodeValueFromKey(newParentKey);
+      
+      if (!sourceNode) {
+        console.warn('⚠️ Cannot move node - source node not found:', nodeKey);
+        return;
+      }
+      
+      if (!targetParent) {
+        console.warn('⚠️ Cannot move node - target parent not found:', newParentKey);
+        return;
+      }
+      
+      this.yTree.moveChildToParent(nodeKey, newParentKey);
+      console.log('📁 Moved node:', nodeKey, 'to parent:', newParentKey);
+    } catch (error) {
+      console.error('🚨 Failed to move node:', nodeKey, error);
+    }
   }
 
   /**
@@ -388,6 +498,26 @@ export class FileTreeManager {
    */
   moveItem(nodeId: string, targetParentId: string, targetIndex?: number): void {
     try {
+      // Validate nodes exist before moving
+      const sourceNode = this.yTree.getNodeValueFromKey(nodeId);
+      const targetParent = this.yTree.getNodeValueFromKey(targetParentId);
+      
+      if (!sourceNode) {
+        console.warn('⚠️ Cannot move item - source node not found:', nodeId);
+        return;
+      }
+      
+      if (!targetParent) {
+        console.warn('⚠️ Cannot move item - target parent not found:', targetParentId);
+        return;
+      }
+      
+      // Prevent moving a node into itself
+      if (nodeId === targetParentId) {
+        console.warn('⚠️ Cannot move node into itself:', nodeId);
+        return;
+      }
+      
       this.yTree.moveChildToParent(nodeId, targetParentId);
       
       if (targetIndex !== undefined) {
@@ -400,57 +530,219 @@ export class FileTreeManager {
         } else {
           // Insert after the node at targetIndex - 1
           const targetNode = children[targetIndex - 1];
-          this.yTree.setNodeAfter(nodeId, targetNode);
+          if (targetNode) {
+            this.yTree.setNodeAfter(nodeId, targetNode);
+          }
         }
       }
       
       console.log('🔄 Moved node:', nodeId, 'to parent:', targetParentId);
     } catch (error) {
-      console.error('Failed to move node:', nodeId, error);
+      console.error('🚨 Failed to move node:', nodeId, error);
     }
   }
 
   /**
-   * Sort the tree by specified criteria
+   * Sort tree items using yjs-orderedtree API with folder-first ordering
+   * Now sorts ALL directory levels, not just root level
    */
   sortTreeItems(criteria: SortCriteria): void {
-    const allItems = this.getTreeItems();
-    const sorted = this.sortItems(
-      allItems.map(item => ({ id: item.id, value: item })),
-      criteria
-    );
+    console.log('🔄 Sorting ALL directory trees by criteria:', criteria);
+    console.log(`📁 Found ${this.directoryMaps.size} directory maps to sort`);
     
-    // Apply the new order using YTree's built-in ordering methods
-    // Note: We need to reorder based on the actual YTree structure
-    const parentGroups = new Map<string, string[]>();
+    // ✅ Sort the main/root tree
+    this.sortSingleTree(this.yTree, criteria, 'root');
     
-    // Group items by parent
-    sorted.forEach((item, index) => {
-      const parentId = item.value.parentId;
-      if (!parentGroups.has(parentId)) {
-        parentGroups.set(parentId, []);
-      }
-      parentGroups.get(parentId)!.push(item.id);
+    // ✅ Sort each directory tree individually
+    this.directoryMaps.forEach((directoryMap, directoryPath) => {
+      const directoryYTree = new YTree(directoryMap);
+      this.sortSingleTree(directoryYTree, criteria, directoryPath);
     });
     
-    // Apply ordering within each parent group
-    parentGroups.forEach((childIds, parentId) => {
-      childIds.forEach((childId, index) => {
-        if (index === 0) {
-          this.yTree.setNodeOrderToStart(childId);
-        } else if (index === childIds.length - 1) {
-          this.yTree.setNodeOrderToEnd(childId);
-        } else {
-          // Insert after the previous item
-          const previousChildId = childIds[index - 1];
-          this.yTree.setNodeAfter(childId, previousChildId);
-        }
-      });
-    });
-    
-    console.log('🔄 Sorted tree items by criteria:', criteria);
+    console.log('✅ Completed sorting all directories');
   }
 
+  /**
+   * Sort a single YTree instance with the given criteria
+   */
+  private sortSingleTree(yTree: YTree, criteria: SortCriteria, treeContext: string): void {
+    try {
+      // Get all items in this tree
+      const items = this.getItemsFromTree(yTree);
+      
+      if (items.length === 0) {
+        console.log(`📁 No items to sort in ${treeContext}`);
+        return;
+      }
+      
+      // Group items by parent
+      const parentGroups = new Map<string, TreeItem[]>();
+      
+      items.forEach(item => {
+        const parentId = item.parentId || this.rootNodeId;
+        if (!parentGroups.has(parentId)) {
+          parentGroups.set(parentId, []);
+        }
+        parentGroups.get(parentId)!.push(item);
+      });
+      
+      // Sort each parent group using folder-first logic
+      parentGroups.forEach((items, parentId) => {
+        const sortedItems = this.sortItemsWithCriteria(items, criteria);
+        this.applyOrderingToTree(yTree, sortedItems, parentId);
+      });
+      
+      console.log(`📁 Sorted ${items.length} items in ${treeContext}`);
+    } catch (error) {
+      console.error(`❌ Failed to sort tree ${treeContext}:`, error);
+    }
+  }
+
+  /**
+   * Get items from a specific YTree instance
+   */
+  private getItemsFromTree(yTree: YTree): TreeItem[] {
+    const items: TreeItem[] = [];
+    
+    // Get root children
+    const rootChildren = yTree.getNodeChildrenFromKey(this.rootNodeId);
+    const sortedRootChildren = yTree.sortChildrenByOrder(rootChildren, this.rootNodeId);
+    
+    const collectItems = (nodeKey: string, parentId: string) => {
+      const value = yTree.getNodeValueFromKey(nodeKey);
+      if (value) {
+        const treeItem: TreeItem = {
+          ...value as FileMetadata,
+          id: nodeKey,
+          parentId: parentId,
+          children: yTree.getNodeChildrenFromKey(nodeKey),
+        };
+        items.push(treeItem);
+        
+        // Recursively collect children
+        const children = yTree.getNodeChildrenFromKey(nodeKey);
+        const sortedChildren = yTree.sortChildrenByOrder(children, nodeKey);
+        sortedChildren.forEach((childKey: string) => {
+          collectItems(childKey, nodeKey);
+        });
+      }
+    };
+    
+    sortedRootChildren.forEach((childKey: string) => {
+      collectItems(childKey, this.rootNodeId);
+    });
+    
+    return items;
+  }
+
+  /**
+   * Apply ordering to a specific YTree instance
+   */
+  private applyOrderingToTree(yTree: YTree, sortedItems: TreeItem[], parentId: string): void {
+    if (sortedItems.length === 0) return;
+    
+    sortedItems.forEach((item, index) => {
+      if (index === 0) {
+        // First item goes to start
+        yTree.setNodeOrderToStart(item.id);
+      } else {
+        // Each subsequent item goes after the previous one
+        const previousItem = sortedItems[index - 1];
+        yTree.setNodeAfter(item.id, previousItem.id);
+      }
+    });
+  }
+  
+  /**
+   * Sort items by criteria with folders first
+   */
+  private sortItemsWithCriteria(items: TreeItem[], criteria: SortCriteria): TreeItem[] {
+    // Separate folders and files
+    const folders = items.filter(item => item.isFolder);
+    const files = items.filter(item => !item.isFolder);
+    
+    // Sort folders
+    const sortedFolders = this.sortByCriteria(folders, criteria);
+    
+    // Sort files  
+    const sortedFiles = this.sortByCriteria(files, criteria);
+    
+    // Combine: folders first, then files
+    return [...sortedFolders, ...sortedFiles];
+  }
+  
+  /**
+   * Sort items by specific criteria
+   */
+  private sortByCriteria(items: TreeItem[], criteria: SortCriteria): TreeItem[] {
+    return [...items].sort((a, b) => {
+      switch (criteria) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name);
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
+        case 'modified':
+          return (b.lastModified || 0) - (a.lastModified || 0);
+        case 'created':
+          return (b.lastModified || 0) - (a.lastModified || 0); // Use lastModified as proxy for created
+        case 'type':
+          return a.mimeType.localeCompare(b.mimeType);
+        default:
+          return 0;
+      }
+    });
+  }
+  
+  /**
+   * Position a new node correctly (folders first, then alphabetical)
+   */
+  private positionNewNode(nodeId: string, parentId: string, isFolder: boolean): void {
+    const siblings = this.yTree.getNodeChildrenFromKey(parentId);
+    const sortedSiblings = this.yTree.sortChildrenByOrder(siblings, parentId);
+    
+    // Get sibling metadata to determine correct position
+    const siblingItems = sortedSiblings
+      .filter((id: string) => id !== nodeId) // Exclude the new node
+      .map((id: string) => ({
+        id,
+        value: this.yTree.getNodeValueFromKey(id),
+        isFolder: this.yTree.getNodeValueFromKey(id)?.isFolder || false
+      }))
+      .filter((item: any) => item.value); // Only existing nodes
+    
+    // Find the correct position
+    let insertAfter: string | null = null;
+    
+    for (const sibling of siblingItems) {
+      // If this is a file and we're inserting a folder, stop here
+      if (isFolder && !sibling.isFolder) {
+        break;
+      }
+      
+      // If both are same type, compare names
+      if (sibling.isFolder === isFolder) {
+        const newNodeName = this.yTree.getNodeValueFromKey(nodeId)?.name || '';
+        const siblingName = sibling.value?.name || '';
+        
+        if (newNodeName < siblingName) {
+          break;
+        }
+      }
+      
+      insertAfter = sibling.id;
+    }
+    
+    // Apply the positioning
+    if (insertAfter) {
+      this.yTree.setNodeAfter(nodeId, insertAfter);
+    } else {
+      this.yTree.setNodeOrderToStart(nodeId);
+    }
+    
+    console.log(`📍 Positioned new ${isFolder ? 'folder' : 'file'} node:`, nodeId);
+  }
+
+  
   /**
    * Get all tree items with directory map references
    */
@@ -486,13 +778,19 @@ export class FileTreeManager {
         });
       }
     };
-
-    // Start from root children
+    
+    // Start from root children in sorted order
     const rootChildren = this.yTree.getNodeChildrenFromKey(this.rootNodeId);
-    rootChildren.forEach((childKey: string) => {
+    const sortedRootChildren = this.yTree.sortChildrenByOrder(rootChildren, this.rootNodeId);
+    
+    console.log('🔍 getTreeItems - Root children:', sortedRootChildren.length);
+    sortedRootChildren.forEach((childKey: string) => {
+      const value = this.yTree.getNodeValueFromKey(childKey);
+      console.log('🔍 Root child:', value?.name, value?.type, value?.isFolder);
       collectItems(childKey, this.rootNodeId);
     });
-
+    
+    console.log('🔍 getTreeItems - Total items:', items.length);
     return items;
   }
 
@@ -602,7 +900,7 @@ export class FileTreeManager {
       name,
       size: 0,
       mimeType: 'folder',
-      type: 'binary' as const,
+      type: 'folder' as const, // ✅ Use 'folder' type
       lastModified: Date.now(),
       transferChannel: 'yjs' as const,
       isFolder: true,

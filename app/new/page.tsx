@@ -8,8 +8,11 @@ export default function NewProjectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const p = createProject("Untitled Project");
-    router.replace(`/project/${p.id}`);
+    const initProject = async () => {
+      const p = await createProject("Untitled Project");
+      router.replace(`/project/${p.id}`);
+    };
+    initProject();
   }, [router]);
 
   return (

@@ -685,22 +685,22 @@ export function GitPanelReal({
           <button
             type="button"
             onClick={() => setShowBranchDropdown(!showBranchDropdown)}
-            className="flex items-center gap-1 text-xs bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-2 py-1 rounded hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
           >
             {branch}
-            <span className="w-3 h-3 flex items-center">
-              {showBranchDropdown ? <IconChevronUp /> : <IconChevronDown />}
+            <span className={`transition-transform ${showBranchDropdown ? 'rotate-180' : ''}`}>
+              <IconChevronDown />
             </span>
           </button>
           {showBranchDropdown && (
-            <div className="absolute left-0 top-full mt-1 z-50 min-w-[120px] rounded border border-[var(--border)] bg-[var(--background)] py-1">
+            <div className="absolute left-0 top-full mt-1 z-50 min-w-[120px] bg-[var(--background)] border border-[var(--border)] rounded shadow-lg overflow-hidden">
               <button
                 onClick={() => {
                   setBranch("main");
                   setShowBranchDropdown(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-xs text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
-                  branch === "main" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                className={`w-full text-left px-2 py-1.5 text-xs hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] transition-colors ${
+                  branch === "main" ? "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]" : "text-[var(--foreground)]"
                 }`}
               >
                 main
@@ -710,8 +710,8 @@ export function GitPanelReal({
                   setBranch("feature");
                   setShowBranchDropdown(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-xs text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
-                  branch === "feature" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                className={`w-full text-left px-2 py-1.5 text-xs hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] transition-colors ${
+                  branch === "feature" ? "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]" : "text-[var(--foreground)]"
                 }`}
               >
                 feature
@@ -721,8 +721,8 @@ export function GitPanelReal({
                   setBranch("develop");
                   setShowBranchDropdown(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-xs text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2 ${
-                  branch === "develop" ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]" : ""
+                className={`w-full text-left px-2 py-1.5 text-xs hover:bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] transition-colors ${
+                  branch === "develop" ? "bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)]" : "text-[var(--foreground)]"
                 }`}
               >
                 develop

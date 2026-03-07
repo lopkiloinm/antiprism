@@ -8,6 +8,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic.js";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
+import { IndexeddbPersistence } from "y-indexeddb";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
 import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig, getShowHiddenYjsDocs, setShowHiddenYjsDocs } from "@/lib/settings";
@@ -27,7 +28,7 @@ import { BigChatMessage } from "@/components/BigChatMessage";
 import { SmallChatMessage } from "@/components/SmallChatMessage";
 import { ChatTelemetry } from "@/components/ChatTelemetry";
 import { ProjectDropdown } from "@/components/ProjectDropdown";
-import { IconSearch, IconChevronDown, IconChevronUp, IconChevronLeft, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload, IconWifi, IconWifiOff, IconLock, IconUsers, IconFolder, IconGitBranch, IconHome, IconToggleLeft, IconToggleRight, IconWrench } from "@/components/Icons";
+import { IconSearch, IconChevronDown, IconChevronUp, IconChevronLeft, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload, IconWifi, IconWifiOff, IconLock, IconUsers, IconFolder, IconGitBranch, IconHome, IconToggleLeft, IconToggleRight, IconWrench, IconTemplates } from "@/components/Icons";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { WebRTCStatus } from "@/components/WebRTCStatus";
 import { ToolsPanel } from "@/components/ToolsPanel";
@@ -58,7 +59,9 @@ import { generateVLResponse, initializeVLModel, isVLModelLoaded, isVLModelLoadin
 import { IconX } from "@/components/Icons";
 import { MobileProjectLayout } from "@/components/MobileProjectLayout";
 import { useResponsive } from "@/hooks/useResponsive";
-import { createProjectChat, getProjectChatMessages, saveProjectChatMessages, listProjectChats } from "@/lib/chatStore";
+import { createProjectChat, getProjectChatMessages, saveProjectChatMessages, listProjectChats, type ChatSession, type ChatMessage } from "@/lib/chatStore";
+import { ChatTreeManager, type ChatTreeItem } from "@/lib/chatTreeManager";
+import { UserManager } from "@/lib/userManager";
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, getModelById } from "@/lib/modelConfig";
 import { compileLatexToPdf, ensureLatexReady } from "@/lib/latexCompiler";
 import { compileTypstToPdf, ensureTypstReady } from "@/lib/typstCompiler";
@@ -189,6 +192,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [smallChatMessages, setSmallChatMessages] = useState<
     { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
   >([]);
+  const [chatCreationModalOpen, setChatCreationModalOpen] = useState(false);
+  const [chatTreeManager, setChatTreeManager] = useState<ChatTreeManager | null>(null);
   
   // Simple fixed height when chat input is present - will be calculated after showAIPanel is defined
   let chatInputPadding = 0;
@@ -229,10 +234,80 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
   
-  // Refresh filetree when showHiddenYjsDocs state changes
+  // Initialize UserManager and register project
   useEffect(() => {
-    setRefreshTrigger(t => t + 1);
-  }, [showHiddenYjsDocs]);
+    const initializeUserAndProject = async () => {
+      try {
+        const userManager = UserManager.getInstance();
+        const user = await userManager.getCurrentUser();
+        
+        // Add project to user tree if not already there
+        await userManager.createProjectInUserTree(id, projectName);
+        
+        // Update project access time
+        await userManager.updateProjectAccess(id);
+        
+        console.log('👤 User and project initialized:', user.id, id);
+      } catch (error) {
+        console.warn('⚠️ Failed to initialize user/project:', error);
+      }
+    };
+    
+    initializeUserAndProject();
+  }, [id, projectName]);
+
+  // Register project managers with UserManager
+  useEffect(() => {
+    if (fileTreeManagerRef.current && chatTreeManager) {
+      const userManager = UserManager.getInstance();
+      userManager.registerProjectManagers(id, fileTreeManagerRef.current, chatTreeManager);
+      console.log('📋 Registered project managers with UserManager:', id);
+    }
+  }, [id, chatTreeManager]);
+
+  // Initialize ChatTreeManager
+  useEffect(() => {
+    // Create Y.Doc and Y.Map for chat tree (matching FileTreeManager pattern exactly)
+    const chatDoc = new Y.Doc();
+    const chatMap = chatDoc.getMap(`${id}-chat-tree`); // ✅ Use project-specific map name
+    
+    // Create WebRTC provider for chat tree (matching FileTreeManager pattern)
+    // Use simple config to avoid providerOptions scope issues
+    const chatProvider = new WebrtcProvider(`${id}-chat-tree`, chatDoc, {
+      signaling: ['wss://signaling.yjs.dev'],
+      maxConns: 35
+    });
+    
+    // Add IndexedDB persistence for chat tree (matching FileTreeManager pattern)
+    const chatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
+    
+    // Wait for persistence to load before creating ChatTreeManager
+    chatPersistence.whenSynced.then(() => {
+      console.log(`📂 Chat persistence synced for project: ${id}`);
+      
+      // Create ChatTreeManager only after persistence is ready
+      const manager = new ChatTreeManager(chatMap, id);
+      setChatTreeManager(manager);
+      
+      manager.whenReady().then(() => {
+        console.log('🌳 ChatTreeManager ready for project:', id);
+      }).catch((error) => {
+        console.error('🚨 ChatTreeManager failed to load:', error);
+      });
+    }).catch((error) => {
+      console.error('🚨 Chat persistence failed to sync:', error);
+      // Still create manager even if persistence fails
+      const manager = new ChatTreeManager(chatMap, id);
+      setChatTreeManager(manager);
+    });
+    
+    return () => {
+      // Cleanup chat document, provider, and persistence
+      chatPersistence.destroy();
+      chatProvider.destroy();
+      chatDoc.destroy();
+    };
+  }, [id]);
 
   // Global search functionality
   const [searchResults, setSearchResults] = useState<Array<{
@@ -953,10 +1028,10 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
     setFs(null);
     setOpenTabs([]);
     setActiveTabPath("");
-    setCurrentPath("");
+    setCurrentPath(basePath); // 🎯 FIX: Set to project root immediately
     setAddTargetPath(basePath);
 
-    console.log('🚀 Init function called, id:', id);
+    console.log('🚀 Init function called, id:', id, 'basePath:', basePath);
     const init = async () => {
       try {
         console.log('🚀 Starting initialization...');
@@ -1036,13 +1111,13 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         // Create YJS document and WebRTC provider for filetree
         const fileTreeDoc = new Y.Doc();
         const fileTreeProvider = new WebrtcProvider(`${id}-filetree`, fileTreeDoc, providerOptions);
-        const fileTreeMap = fileTreeDoc.getMap('filetree');
+        const fileTreeMap = fileTreeDoc.getMap(`${id}-filetree`);
         
         // Store in refs for cleanup
         fileTreeDocRef.current = fileTreeDoc;
         fileTreeProviderRef.current = fileTreeProvider;
         
-        // Create FileTreeManager
+        // Create FileTreeManager (paths already set correctly during initialization)
         const fileTreeManager = new FileTreeManager(fileTreeMap);
         fileTreeManagerRef.current = fileTreeManager;
         console.log('🌳 FileTreeManager created with yjs-orderedtree');
@@ -1069,6 +1144,19 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         const idbfs = await mount();
         fsRef.current = idbfs;
         console.log('📂 File system mounted');
+        
+        // 🎯 CRITICAL: Create directories BEFORE any file operations
+        // Ensure parent directories exist: /projects, then /projects/{id}
+        for (const dir of ["/projects", basePath]) {
+          if (cancelled) return;
+          try {
+            await idbfs.mkdir(dir);
+            console.log('📁 Created directory:', dir);
+          } catch {
+            console.log('📁 Directory already exists:', dir);
+          }
+        }
+        
         if (cancelled) return;
 
         // Sync existing filesystem files to FileTreeManager
@@ -1077,16 +1165,6 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         const mainPath = `${basePath}/main.tex`;
         const mainTypPath = `${basePath}/main.typ`;
         const diagramPath = `${basePath}/diagram.jpg`;
-
-        // Ensure parent directories exist: /projects, then /projects/{id}
-        for (const dir of ["/projects", basePath]) {
-          if (cancelled) return;
-          try {
-            await idbfs.mkdir(dir);
-          } catch {
-            // may exist
-          }
-        }
 
         if (cancelled) return;
         const importedMarkerPath = `${basePath}/.antiprism_imported`;
@@ -1148,6 +1226,39 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
             } catch (e) {
               if (!String(e).includes("already exists")) throw e;
             }
+          }
+
+          // Create initial welcome chat for new projects
+          try {
+            if (chatTreeManager) {
+              await chatTreeManager.whenReady();
+              const welcomeChatId = chatTreeManager.createChat({
+                title: "Welcome Chat",
+                createdAt: Date.now(),
+                modelId: DEFAULT_MODEL_ID
+              });
+              
+              // Add welcome message
+              const welcomeMessage: ChatMessage = {
+                role: "assistant",
+                content: `🎉 **Welcome to your new Antiprism project!**
+
+I'm here to help you get started with your document. Here's what you can do:
+
+📝 **Edit your document** - I can see you have a \`main.tex\` file ready to edit
+🤖 **Ask for help** - I can assist with LaTeX, explain concepts, or help structure your document
+🔍 **Research** - I can help find information and cite sources
+✨ **Generate content** - I can help write sections, format citations, and more
+
+What would you like to work on today?`,
+                markdown: true
+              };
+              
+              await saveProjectChatMessages(id, welcomeChatId, [welcomeMessage]);
+              console.log('🎉 Created welcome chat with message for new project:', welcomeChatId);
+            }
+          } catch (error) {
+            console.warn('⚠️ Failed to create welcome chat:', error);
           }
           if (typContent?.trim() && !hasMainTyp) {
             try {
@@ -1336,7 +1447,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           console.log('📂 No initial file found, creating empty project');
           setOpenTabs([]);
           setActiveTabPath("");
-          setCurrentPath("");
+          setCurrentPath(basePath); // 🎯 FIX: Keep project root, not empty string
         }
 
         if (cancelled) return;
@@ -2555,7 +2666,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     async (item: TreeItem) => {
       if (!fs || !fileTreeManagerRef.current) return;
       
-      const fullPath = basePath ? `${basePath}/${item.path}` : item.path;
+      const fullPath = basePath ? `${basePath}${item.path.startsWith('/') ? '' : '/'}${item.path}` : item.path;
       
       try {
         // Delete from filesystem
@@ -2871,6 +2982,37 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   const getCurrentChatContext = () => {
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
     return activeTab?.type === "chat" ? "big" : "small";
+  };
+
+  // Handle chat creation with modal
+  const handleCreateChat = async (chatName: string) => {
+    const trimmedName = chatName.trim();
+    if (!trimmedName || !chatTreeManager) return;
+    
+    // Wait for ChatTreeManager to be fully initialized
+    try {
+      await chatTreeManager.whenReady();
+    } catch (error) {
+      console.error('🚨 ChatTreeManager failed to initialize:', error);
+      return;
+    }
+    
+    // Create chat using ChatTreeManager
+    const chatId = chatTreeManager.createChat({
+      title: trimmedName,
+      createdAt: Date.now(),
+      modelId: selectedModelId
+    });
+    
+    // Open the chat with proper title
+    const chatPath = `/ai-chat/${chatId}`;
+    setOpenTabs((t) => [...t, { path: chatPath, type: "chat", title: trimmedName }]);
+    setActiveTabPath(chatPath);
+    setRefreshTrigger((t) => t + 1); // Refresh ChatTree
+    
+    setChatCreationModalOpen(false);
+    
+    console.log('💬 Created chat with ChatTreeManager:', trimmedName);
   };
 
   const handleSendChat = async () => {
@@ -3302,15 +3444,60 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     
     try {
       if (type === "file") {
-        const filePath = addTargetPath === "/" ? `/${trimmed}` : `${addTargetPath}/${trimmed}`;
+        // 🎯 ROBUST: Ensure addTargetPath is a valid directory path
+        let targetDir = addTargetPath;
+        
+        // If addTargetPath is empty or invalid, use currentPath or basePath
+        if (!targetDir || targetDir === "") {
+          targetDir = currentPath || basePath;
+        }
+        
+        // Ensure targetDir is a directory (not a file)
+        if (targetDir && !targetDir.endsWith("/")) {
+          // Check if it's a file by trying to stat it
+          try {
+            const stat = await fs.stat(targetDir);
+            if (stat && !stat.isDirectory) {
+              // It's a file, use its parent directory
+              targetDir = targetDir.substring(0, targetDir.lastIndexOf("/")) || basePath;
+            }
+          } catch {
+            // File doesn't exist, assume it's a directory path
+            targetDir = targetDir;
+          }
+        }
+        
+        // Normalize targetDir to ensure it starts with basePath
+        if (!targetDir.startsWith(basePath)) {
+          targetDir = targetDir.startsWith("/") 
+            ? `${basePath}${targetDir}` 
+            : `${basePath}/${targetDir}`;
+        }
+        
+        // Construct final file path
+        const filePath = targetDir === "/" || targetDir === basePath 
+          ? `${targetDir}/${trimmed}`.replace("//", "/")
+          : `${targetDir}/${trimmed}`;
+        
+        console.log('🎯 Creating file with paths:', {
+          addTargetPath,
+          currentPath,
+          basePath,
+          targetDir,
+          filePath
+        });
         
         // Create file in filesystem
         await fs.writeFile(filePath, new Uint8Array().buffer as ArrayBuffer, { mimeType: "text/plain" });
         console.log('📄 Created new file:', filePath);
         
-        // Add to FileTreeManager
+        // Add to FileTreeManager (convert full path to relative path)
+        const relativePath = filePath.startsWith(basePath) 
+          ? filePath.slice(basePath.length) || '/' 
+          : filePath;
+        
         const fileMetadata = {
-          path: filePath,
+          path: relativePath,
           name: trimmed,
           size: 0,
           mimeType: "text/plain",
@@ -3322,16 +3509,68 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         fileTreeManagerRef.current.createFile(fileMetadata);
         
       } else if (type === "folder") {
-        const folderPath = addTargetPath === "/" ? `/${trimmed}` : `${addTargetPath}/${trimmed}`;
+        // 🎯 ROBUST: Similar path handling for folders
+        let targetDir = addTargetPath;
+        
+        if (!targetDir || targetDir === "") {
+          targetDir = currentPath || basePath;
+        }
+        
+        // Normalize targetDir
+        if (!targetDir.startsWith(basePath)) {
+          targetDir = targetDir.startsWith("/") 
+            ? `${basePath}${targetDir}` 
+            : `${basePath}/${targetDir}`;
+        }
+        
+        const folderPath = targetDir === "/" || targetDir === basePath 
+          ? `${targetDir}/${trimmed}`.replace("//", "/")
+          : `${targetDir}/${trimmed}`;
         
         // Create folder in filesystem
         await fs.mkdir(folderPath);
         console.log('📁 Created new folder:', folderPath);
         
-        // Add to FileTreeManager
-        fileTreeManagerRef.current.createFolder(trimmed, folderPath);
+        // Add to FileTreeManager (convert full path to relative path)
+        const relativePath = folderPath.startsWith(basePath) 
+          ? folderPath.slice(basePath.length).replace(/^\//, '') || '' 
+          : folderPath.replace(/^\//, '');
+        
+        console.log('📁 Folder path conversion:', { folderPath, basePath, relativePath });
+        
+        // ✅ FIXED: Pause WebRTC to prevent YTree corruption during creation
+        if (fileTreeProviderRef.current) {
+          fileTreeProviderRef.current.destroy();
+          fileTreeProviderRef.current = null;
+        }
+        
+        // ✅ FIXED: Wait for folder creation to complete fully
+        const nodeId = fileTreeManagerRef.current.createFolder(trimmed, relativePath);
+        console.log('📁 Folder created in FileTreeManager with node ID:', nodeId);
+        
+        // ✅ FIXED: Sync filesystem to FileTreeManager (this fixes corruption without recreation)
+        if (fs && fileTreeManagerRef.current) {
+          console.log('🔄 Syncing filesystem to fix FileTreeManager state...');
+          await syncFilesystemToFileTree(fileTreeManagerRef.current, fs, basePath);
+          console.log('🔄 Filesystem sync completed');
+        }
+        
+        // ✅ FIXED: Recreate WebRTC provider after folder creation
+        if (fileTreeDocRef.current) {
+          const webrtcConfig = getWebRTCSignalingConfig();
+          if (webrtcConfig.enabled && webrtcConfig.customServers.length > 0) {
+            fileTreeProviderRef.current = new WebrtcProvider(
+              `${id}-filetree`,
+              fileTreeDocRef.current,
+              { signaling: webrtcConfig.customServers[0] }
+            );
+            console.log('🔗 Recreated WebRTC provider after folder creation');
+          }
+        }
+        
+        // ✅ FIXED: Trigger refresh AFTER sync is complete
+        setRefreshTrigger((t) => t + 1);
       }
-      setRefreshTrigger((t) => t + 1);
     } catch (error) {
       console.error('Failed to create item:', error);
     }
@@ -3369,8 +3608,18 @@ Buffer manager exists: ${!!getBufferMgr()}`;
               isFolder: false,
             };
             
-            fileTreeManager.createFile(fileMetadata);
-            console.log(`📄 Synced file: ${filePath}`);
+            // Check if file already exists in tree before creating
+            const existingFiles = fileTreeManager.getTreeItems();
+            const fileExists = existingFiles.some(item => 
+              !item.isFolder && item.path === filePath
+            );
+            
+            if (!fileExists) {
+              fileTreeManager.createFile(fileMetadata);
+              console.log(`📄 Synced new file: ${filePath}`);
+            } else {
+              console.log(`📄 File already exists, skipping: ${filePath}`);
+            }
           } catch (error) {
             console.warn(`Failed to sync file ${filePath}:`, error);
           }
@@ -3383,11 +3632,23 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           const fullPath = dirPath === '/' ? `/${dir.name}` : `${dirPath}/${dir.name}`;
           
           try {
-            fileTreeManager.createFolder(dir.name, dirPathRelative);
-            console.log(`📁 Synced folder: ${dirPathRelative}`);
+            // Check if folder already exists in tree before creating
+            const existingFiles = fileTreeManager.getTreeItems();
+            const folderExists = existingFiles.some(item => 
+              item.isFolder && item.path === dirPathRelative
+            );
             
-            // Recursively scan subdirectory
-            await scanDirectory(fullPath, dirPathRelative);
+            if (!folderExists) {
+              fileTreeManager.createFolder(dir.name, dirPathRelative);
+              console.log(`📁 Synced new folder: ${dirPathRelative}`);
+              
+              // Recursively scan subdirectory
+              await scanDirectory(fullPath, dirPathRelative);
+            } else {
+              console.log(`📁 Folder already exists, skipping: ${dirPathRelative}`);
+              // Still scan subdirectory to check for new files inside
+              await scanDirectory(fullPath, dirPathRelative);
+            }
           } catch (error) {
             console.warn(`Failed to sync folder ${dirPathRelative}:`, error);
           }
@@ -3436,17 +3697,21 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                 fileTreeManager={fileTreeManagerRef.current}
                 currentPath={currentPath}
                 basePath={basePath}
-                onFileSelect={(item) => {
-                  handleFileSelect(item.path);
-                  setCurrentPath(item.path);
-                  setAddTargetPath(item.path);
+                refreshTrigger={refreshTrigger}
+                onFileSelect={(path) => {
+                  handleFileSelect(path);
+                  // Convert relative path to full path for file actions
+                  const fullPath = path.startsWith('/') ? path : `${basePath}/${path}`;
+                  setCurrentPath(fullPath);
+                  setAddTargetPath(fullPath);
                 }}
                 onFileRename={handleFileRename}
                 onFileDelete={handleFileDelete}
-                onFolderCreate={(name) => {
+                onFolderCreate={(name: string) => {
                   // TODO: Implement folder creation in FileTreeManager
                   console.log('Create folder:', name);
                 }}
+                onFindFile={() => setFindFileModalOpen(true)}
                 className="h-full"
               />
             </div>
@@ -3699,45 +3964,111 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
           <div className="flex flex-col gap-1 p-2">
             <button
               onClick={() => router.push("/")}
-              className="w-8 h-8 flex items-center justify-center rounded transition-colors text-[var(--muted)] hover:text-[var(--foreground)]"
+              className="w-8 h-8 flex items-center justify-center rounded transition-all relative group text-[var(--muted)] hover:text-[var(--foreground)]"
               title="Home"
             >
               <IconHome />
+              {/* Hover accent for non-active buttons */}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
             </button>
             <button
               onClick={() => setSidebarTab("files")}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "files" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-all relative group ${
+                sidebarTab === "files" 
+                  ? "text-[var(--foreground)]" 
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
               title="Files"
             >
               <IconFolder />
+              {/* Accent indicator with 4-level system */}
+              {sidebarTab === "files" ? (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[var(--accent)] rounded-r transition-all group-hover:h-5 group-hover:w-1" />
+              ) : (
+                /* Level 1 hover accent for non-active buttons */
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+              )}
+            </button>
+            <button
+              onClick={() => setSidebarTab("templates")}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-all relative group ${
+                sidebarTab === "templates" 
+                  ? "text-[var(--foreground)]" 
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
+              title="Templates"
+            >
+              <IconTemplates />
+              {/* Accent indicator with 4-level system */}
+              {sidebarTab === "templates" ? (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[var(--accent)] rounded-r transition-all group-hover:h-5 group-hover:w-1" />
+              ) : (
+                /* Level 1 hover accent for non-active buttons */
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+              )}
             </button>
             <button
               onClick={() => setSidebarTab("chats")}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "chats" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-all relative group ${
+                sidebarTab === "chats" 
+                  ? "text-[var(--foreground)]" 
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
               title="Chats"
             >
               <IconMessageSquare />
+              {/* Accent indicator with 4-level system */}
+              {sidebarTab === "chats" ? (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[var(--accent)] rounded-r transition-all group-hover:h-5 group-hover:w-1" />
+              ) : (
+                /* Level 1 hover accent for non-active buttons */
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+              )}
             </button>
             <button
               onClick={() => setSidebarTab("search")}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "search" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-all relative group ${
+                sidebarTab === "search" 
+                  ? "text-[var(--foreground)]" 
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
               title="Global search"
             >
               <IconSearch />
+              {/* Accent indicator with 4-level system */}
+              {sidebarTab === "search" ? (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[var(--accent)] rounded-r transition-all group-hover:h-5 group-hover:w-1" />
+              ) : (
+                /* Level 1 hover accent for non-active buttons */
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+              )}
             </button>
             <button
               onClick={() => setSidebarTab("git")}
-              className={`w-8 h-8 flex items-center justify-center rounded transition-colors ${sidebarTab === "git" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+              className={`w-8 h-8 flex items-center justify-center rounded transition-all relative group ${
+                sidebarTab === "git" 
+                  ? "text-[var(--foreground)]" 
+                  : "text-[var(--muted)] hover:text-[var(--foreground)]"
+              }`}
               title="Git"
             >
               <IconGitBranch />
+              {/* Accent indicator with 4-level system */}
+              {sidebarTab === "git" ? (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-[var(--accent)] rounded-r transition-all group-hover:h-5 group-hover:w-1" />
+              ) : (
+                /* Level 1 hover accent for non-active buttons */
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+              )}
             </button>
             <button
               onClick={handleShare}
-              className="w-8 h-8 rounded flex items-center justify-center transition-colors text-[var(--muted)] hover:text-[var(--foreground)]"
+              className="w-8 h-8 rounded flex items-center justify-center transition-all relative group text-[var(--muted)] hover:text-[var(--foreground)]"
               title="Share project"
             >
               <IconShare2 />
+              {/* Hover accent for non-active buttons */}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
             </button>
           </div>
         
@@ -3769,26 +4100,6 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
 
       {/* Main sidebar */}
       <aside style={{ width: sidebarWidth, minWidth: sidebarWidth > 0 ? 180 : 0, maxWidth: 480, transition: "width 0.15s ease-out" }} className="border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden">
-        {(sidebarTab === "files" || sidebarTab === "chats") && (
-        <div className="h-12 flex items-center justify-center gap-2 px-3 border-b border-[var(--border)] shrink-0">
-          {sidebarTab === "files" && (
-            <button
-              onClick={() => setFindFileModalOpen(true)}
-              className="w-full px-3 py-1.5 text-sm bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
-            >
-              Find a file
-            </button>
-          )}
-          {sidebarTab === "chats" && (
-            <button
-              onClick={() => setFindConversationModalOpen(true)}
-              className="w-full px-3 py-1.5 text-sm bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] border border-[var(--border)] text-[var(--foreground)] rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors"
-            >
-              Find a conversation
-            </button>
-          )}
-        </div>
-      )}
         <div className="px-3 py-2 border-b border-[var(--border)] shrink-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <ProjectDropdown
@@ -3819,7 +4130,6 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                     onClick={() => {
                       console.log('Add file button clicked');
                       setAddModalType("file");
-                      setAddTargetPath(basePath);
                       console.log('Modal type set to:', "file");
                     }}
                     className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors"
@@ -3830,7 +4140,6 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                   <button
                     onClick={() => {
                       setAddModalType("folder");
-                      setAddTargetPath(basePath);
                     }}
                     className="w-8 h-8 rounded flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors"
                     title="Add folder"
@@ -3843,13 +4152,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               {/* Chat action */}
               {sidebarTab === "chats" && (
                 <button
-                  onClick={() => {
-                    const chat = createProjectChat(id, selectedModelId);
-                    const chatPath = `/ai-chat/${chat.id}`;
-                    setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
-                    setActiveTabPath(chatPath);
-                    setRefreshTrigger((t) => t + 1); // Refresh ChatTree
-                  }}
+                  onClick={() => setChatCreationModalOpen(true)}
                   className="w-8 h-8 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] flex items-center justify-center transition-colors"
                   title="New chat"
                 >
@@ -3871,27 +4174,35 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               fileTreeManager={fileTreeManagerRef.current}
               currentPath={currentPath}
               basePath={basePath}
-              onFileSelect={(item) => {
-                handleFileSelect(item.path);
-                setCurrentPath(item.path);
-                setAddTargetPath(item.path);
+              refreshTrigger={refreshTrigger}
+              onFileSelect={(path) => {
+                handleFileSelect(path);
+                // Convert relative path to full path for file actions
+                const fullPath = path.startsWith('/') ? path : `${basePath}/${path}`;
+                setCurrentPath(fullPath);
+                setAddTargetPath(fullPath);
               }}
               onFileRename={handleFileRename}
               onFileDelete={handleFileDelete}
-              onFolderCreate={(name) => {
+              onFolderCreate={(name: string) => {
                 // TODO: Implement folder creation in FileTreeManager
                 console.log('Create folder:', name);
               }}
+              onFindFile={() => setFindFileModalOpen(true)}
               className="h-full"
             />
           )}
           {sidebarTab === "chats" && (
             <ChatTree
               projectId={id}
+              chatTreeManager={chatTreeManager}
               onChatSelect={(chatId) => {
                 const chatPath = `/ai-chat/${chatId}`;
                 if (!openTabs.find((t) => t.path === chatPath)) {
-                  setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
+                  // Get chat title from ChatTreeManager
+                  const chat = chatTreeManager?.getChat(chatId);
+                  const chatTitle = chat?.title || 'New Chat';
+                  setOpenTabs((t) => [...t, { path: chatPath, type: "chat", title: chatTitle }]);
                 }
                 setActiveTabPath(chatPath);
               }}
@@ -3899,6 +4210,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               onRefresh={() => setRefreshTrigger(t => t + 1)}
               searchQuery={searchQuery}
               activeChatId={activeTabPath?.replace('/ai-chat/', '')}
+              onFindConversation={() => setFindConversationModalOpen(true)}
             />
           )}
           {sidebarTab === "search" && (
@@ -4001,15 +4313,15 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
           )}
         </div>
         
-        {/* Resizable divider for outline */}
-        <ResizableDivider 
+        {/* Resizable divider for outline - Only show in files tab */}
+        {sidebarTab === "files" && <ResizableDivider 
           direction="vertical" 
           onResize={(d) => setOutlineHeight((h) => Math.max(80, Math.min(400, h - d)))}
           onDoubleClick={() => setOutlineHeight((h) => h > 80 ? 80 : 400)}
-        />
+        />}
         
-        {/* Document outline at bottom */}
-        <div className="border-t border-[var(--border)] flex flex-col" style={{ height: outlineHeight, minHeight: 80, maxHeight: 400 }}>
+        {/* Document outline at bottom - Only show in files tab */}
+        {sidebarTab === "files" && <div className="border-t border-[var(--border)] flex flex-col" style={{ height: outlineHeight, minHeight: 80, maxHeight: 400 }}>
           <div className="px-3 py-2 flex items-center gap-2 shrink-0">
             <IconBookOpen />
             <span className="text-xs font-medium text-[var(--foreground)]">Outline</span>
@@ -4030,11 +4342,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               
               if (bufferMgr && activeTabPath) {
                 bufferMgr.saveActiveToCache();
-                let content = bufferMgr.getCachedContent(activeTabPath);
-                
-                if (!content || content.trim() === '') {
-                  content = bufferMgr.getBufferContent();
-                }
+                const content = bufferMgr.getBufferContent();
                 
                 if (content && content.trim()) {
                   entries = parseOutline(content, activeTabPath);
@@ -4073,7 +4381,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               ));
             })()}
           </div>
-        </div>
+        </div>}
       </aside>
       <ResizableDivider direction="horizontal" onResize={(d) => setSidebarWidth((w) => Math.max(180, Math.min(480, w + d)))} onDoubleClick={() => setSidebarWidth((w) => w > 0 ? 0 : 256)} />
       <main className="flex-1 flex min-w-0 min-h-0">
@@ -4124,7 +4432,6 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                   activePath={activeTabPath}
                   onSelect={handleTabSelect}
                   onClose={handleTabClose}
-                  onToggleTools={() => setToolsPanelOpen(!toolsPanelOpen)}
                   onReorder={handleTabReorder}
                 />
               </div>
@@ -4361,7 +4668,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       <button
                         onClick={handleFormatDocument}
                         disabled={isFormatting}
-                        className="absolute -top-12 right-0 w-10 h-10 bg-[var(--accent)] text-white rounded-full shadow-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center z-50"
+                        className="absolute -top-12 right-0 w-10 h-10 bg-[var(--accent)] text-white rounded-full shadow-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center z-40"
                         title="Format document"
                       >
                         {isFormatting ? (
@@ -4580,7 +4887,10 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                 <ChatConversationResults query={findConversationQuery} projectId={id} onChatSelect={(chatId) => {
                   const chatPath = `/ai-chat/${chatId}`;
                   if (!openTabs.find((t) => t.path === chatPath)) {
-                    setOpenTabs((t) => [...t, { path: chatPath, type: "chat" }]);
+                    // Get chat title from ChatTreeManager
+                    const chat = chatTreeManager?.getChat(chatId);
+                    const chatTitle = chat?.title || 'New Chat';
+                    setOpenTabs((t) => [...t, { path: chatPath, type: "chat", title: chatTitle }]);
                   }
                   setActiveTabPath(chatPath);
                   setFindConversationModalOpen(false);
@@ -4666,6 +4976,17 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
           setAddModalType(null);
         }}
         onConfirm={handleAdd}
+      />
+      
+      {/* Chat Creation Modal */}
+      <NameModal
+        isOpen={chatCreationModalOpen}
+        title="New Chat"
+        initialValue=""
+        placeholder="Enter chat name..."
+        submitLabel="Create"
+        onClose={() => setChatCreationModalOpen(false)}
+        onConfirm={handleCreateChat}
       />
     </div>
   );

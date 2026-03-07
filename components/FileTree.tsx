@@ -5,6 +5,7 @@ import JSZip from "jszip";
 import { NameModal } from "./NameModal";
 import { IconFileText, IconFolder, IconFolderOpen, IconImage, IconLoader, IconPencil, IconDownload, IconTrash2, IconFileCode, IconFileJson, IconFileCog, IconBraces, IconPalette, IconFile, IconFileArchive } from "./Icons";
 import { useContextMenu } from "@/contexts/ContextMenuContext";
+import { FileTreeManager, TreeItem } from "@/lib/fileTreeManager";
 
 export function getFileIcon(path: string) {
   const name = path.split("/").pop()?.toLowerCase() ?? "";
@@ -102,6 +103,7 @@ interface FileTreeProps {
   onFileDeleted?: (path: string, isFolder: boolean) => void;
   searchQuery?: string;
   showHiddenYjsDocs?: boolean;
+  fileTreeManager?: FileTreeManager; 
 }
 
 async function loadDir(fs: IdbfsFs, path: string, showHiddenYjsDocs = false, basePath = "/"): Promise<TreeNode[]> {
@@ -322,7 +324,7 @@ function filterNodes(nodes: TreeNode[], q: string): TreeNode[] {
   return nodes.filter((n) => n.name.toLowerCase().includes(lower));
 }
 
-export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefresh, refreshTrigger, onFileDeleted, searchQuery, showHiddenYjsDocs = false }: FileTreeProps) {
+export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefresh, refreshTrigger, onFileDeleted, searchQuery, showHiddenYjsDocs = false, fileTreeManager }: FileTreeProps) {
   const [rootNodes, setRootNodes] = useState<TreeNode[]>([]);
   const [renameModal, setRenameModal] = useState<{
     name: string;
@@ -331,9 +333,31 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
   } | null>(null);
 
   useEffect(() => {
+    // ✅ PRIORITY: Use FileTreeManager data if available (immediate state)
+    if (fileTreeManager) {
+      try {
+        const treeItems = fileTreeManager.getTreeItems();
+        const treeNodes = treeItems.map((item: TreeItem) => ({
+          name: item.name,
+          path: item.path,
+          type: item.isFolder ? "folder" as const : "file" as const,
+          size: item.size,
+          modified: item.lastModified,
+          expanded: false,
+          children: [] // Will be loaded on demand
+        }));
+        setRootNodes(treeNodes);
+        console.log('🌳 Loaded tree from FileTreeManager:', treeNodes.length, 'items');
+        return;
+      } catch (error) {
+        console.warn('⚠️ Failed to load from FileTreeManager, falling back to filesystem:', error);
+      }
+    }
+    
+    // ❌ FALLBACK: Use filesystem (slower, missing YJS metadata)
     if (!fs) return;
     loadDir(fs, basePath, showHiddenYjsDocs, basePath).then(setRootNodes);
-  }, [fs, basePath, refreshTrigger, showHiddenYjsDocs]);
+  }, [fs, basePath, refreshTrigger, showHiddenYjsDocs, fileTreeManager]);
 
   const performRename = async (newName: string) => {
     if (!fs || !renameModal) return;

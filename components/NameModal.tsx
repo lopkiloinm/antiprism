@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { IconPlus } from "./Icons";
 
 interface NameModalProps {
   isOpen: boolean;
@@ -61,27 +62,21 @@ export function NameModal({
       >
         <h2 className="text-sm font-semibold text-[var(--foreground)] mb-3">{title}</h2>
         <form onSubmit={handleSubmit}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="w-full px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] focus:border-transparent mb-3"
-            placeholder={placeholder}
-          />
-          <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2 rounded text-sm text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)] transition-colors"
-            >
-              Cancel
-            </button>
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="flex-1 px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] focus:border-transparent"
+              placeholder={placeholder}
+            />
             <button
               type="submit"
-              className="px-3 py-2 rounded text-sm bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-medium transition-colors"
+              className="w-10 h-10 rounded flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white transition-colors"
+              title={label}
             >
-              {label}
+              <IconPlus />
             </button>
           </div>
         </form>

@@ -1,13 +1,13 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { IconTool } from "./Icons";
 
 export const SETTINGS_TAB_PATH = "__settings__";
 
 interface Tab {
   path: string;
   type: "text" | "image" | "settings" | "chat";
+  title?: string; // Optional title for chat tabs
   readOnly?: boolean;
   diffData?: {
     filePath: string;
@@ -23,15 +23,17 @@ interface FileTabsProps {
   activePath: string | null;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
-  onToggleTools?: () => void;
   onReorder?: (newTabs: Tab[]) => void;
 }
 
 function getTabLabel(tab: Tab): string {
   if (tab.type === "settings" || tab.path === SETTINGS_TAB_PATH) return "Settings";
   if (tab.type === "chat") {
+    // Use the provided title first, then fall back to localStorage
+    if (tab.title) return tab.title;
+    
     const chatId = tab.path.replace("/ai-chat/", "");
-    // Get the actual chat title from localStorage
+    // Get the actual chat title from localStorage (fallback)
     try {
       const stored = localStorage.getItem("antiprism_chats");
       if (stored) {
@@ -45,7 +47,7 @@ function getTabLabel(tab: Tab): string {
   return tab.path.split("/").filter(Boolean).pop() || tab.path;
 }
 
-export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools, onReorder }: FileTabsProps) {
+export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder }: FileTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
   const [isHovering, setIsHovering] = useState(false);
@@ -276,17 +278,6 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onToggleTools, o
               }}
             />
           )}
-        </div>
-      )}
-      {onToggleTools && (
-        <div className="ml-auto flex items-center h-full border-l border-[var(--border)]">
-          <button
-            onClick={onToggleTools}
-            className="px-3 h-full flex items-center justify-center bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] hover:text-[var(--foreground)] transition-colors"
-            title="Toggle tools panel"
-          >
-            <IconTool />
-          </button>
         </div>
       )}
       </div>

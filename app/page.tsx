@@ -107,8 +107,8 @@ export default function DashboardPage() {
     }
   };
 
-  const handleNewProject = () => {
-    const project = createProject("Untitled Project");
+  const handleNewProject = async () => {
+    const project = await createProject("Untitled Project");
     setRefresh((r) => r + 1);
     router.push(`/project/${project.id}`);
   };
@@ -122,7 +122,7 @@ export default function DashboardPage() {
       if (!file) return;
       try {
         console.log("Starting zip import:", file.name, file.size);
-        const project = createProject(file.name.replace(/\.zip$/i, "") || "Imported Project");
+        const project = await createProject(file.name.replace(/\.zip$/i, "") || "Imported Project");
         console.log("Created project:", project.id);
         
         const zip = await JSZip.loadAsync(file);
@@ -208,7 +208,7 @@ export default function DashboardPage() {
       const files = (e.target as HTMLInputElement).files;
       if (!files?.length) return;
       try {
-        const project = createProject("Imported Folder");
+        const project = await createProject("Imported Folder");
         const fs = await mount();
         const basePath = `/projects/${project.id}`;
         for (const dir of ["/projects", basePath]) {

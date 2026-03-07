@@ -142,9 +142,9 @@ export function ChatInput({
             <button
               onClick={() => setChatMode("agent")}
               className={`px-2 py-1 text-xs font-medium transition-colors ${chatMode === "agent" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-              title="Agent mode: create new LaTeX files"
+              title="Create mode: create new LaTeX files"
             >
-              Agent
+              Create
             </button>
           </div>
           {selectedModelId && onModelChange && (
