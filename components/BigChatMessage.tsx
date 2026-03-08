@@ -1,5 +1,12 @@
 import React from "react";
-import ReactMarkdown from "react-markdown";
+import { Streamdown } from "streamdown";
+import { code } from "@streamdown/code";
+import { math } from "@streamdown/math";
+import { mermaid } from "@streamdown/mermaid";
+import { cjk } from "@streamdown/cjk";
+import "katex/dist/katex.min.css";
+import "streamdown/styles.css";
+import { ThinkingRenderer, stripThinkingTags } from "./ThinkingRenderer";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -14,10 +21,11 @@ interface BigChatMessageProps {
   message: ChatMessage;
   isLast: boolean;
   lastMessageRef?: React.RefObject<HTMLPreElement>;
+  isStreaming?: boolean;
 }
 
-export function BigChatMessage({ message, isLast, lastMessageRef }: BigChatMessageProps) {
-  const mdClasses = "prose prose-sm max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5";
+export function BigChatMessage({ message, isLast, lastMessageRef, isStreaming = false }: BigChatMessageProps) {
+  const streamdownClasses = "max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5";
 
   return (
     <div className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} mb-4`}>
@@ -42,9 +50,20 @@ export function BigChatMessage({ message, isLast, lastMessageRef }: BigChatMessa
             {message.content}
           </pre>
         ) : message.role === "assistant" ? (
-          <div className={mdClasses}>
-            <ReactMarkdown>{message.content}</ReactMarkdown>
-          </div>
+          <>
+            {/* Render thinking content separately above the message */}
+            <ThinkingRenderer content={message.content} isStreaming={isStreaming} />
+            
+            {/* Render main message content without thinking tags */}
+            <div className={streamdownClasses}>
+              <Streamdown 
+                plugins={{ code, math, mermaid, cjk }}
+                animated={false}
+              >
+                {stripThinkingTags(message.content)}
+              </Streamdown>
+            </div>
+          </>
         ) : (
           <span className="whitespace-pre-wrap">{message.content}</span>
         )}

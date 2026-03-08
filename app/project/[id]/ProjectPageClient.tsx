@@ -4869,6 +4869,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                                   message={m}
                                   isLast={i === msgs.length - 1}
                                   lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
+                                  isStreaming={isGenerating && i === msgs.length - 1}
                                 />
                               ))}
                             </div>
