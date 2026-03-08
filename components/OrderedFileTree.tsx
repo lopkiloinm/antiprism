@@ -47,23 +47,19 @@ export function OrderedFileTree({
 
   // Update items when manager changes or refreshTrigger fires
   useEffect(() => {
-    if (!fileTreeManager) return;
+    if (!fileTreeManager) {
+      setItems([]);
+      setIsLoading(false);
+      return;
+    }
 
     const updateItems = () => {
       const treeItems = fileTreeManager.getTreeItems();
       setItems(treeItems);
       setIsLoading(false);
-      console.log('🌳 Updated items from FileTreeManager:', treeItems.length, 'items');
     };
 
-    // Initial load
     updateItems();
-
-    // Listen for changes (this would need to be implemented in FileTreeManager)
-    // For now, just update periodically
-    const interval = setInterval(updateItems, 1000);
-
-    return () => clearInterval(interval);
   }, [fileTreeManager, refreshTrigger]); // ✅ Add refreshTrigger dependency
 
   // Handle sorting change
@@ -78,8 +74,6 @@ export function OrderedFileTree({
       // Trigger re-render by getting updated items
       const updatedItems = fileTreeManager.getTreeItems();
       setItems(updatedItems);
-      
-      console.log('🔄 Applied sorting:', criteria);
     }
   };
 
@@ -171,9 +165,6 @@ export function OrderedFileTree({
   const buildTreeStructure = (flatItems: TreeItem[]): { rootItems: TreeItem[], itemMap: Map<string, TreeItem> } => {
     const itemMap = new Map<string, TreeItem>();
     const rootItems: TreeItem[] = [];
-
-    console.log('🔍 Building tree from items:', flatItems.length);
-    console.log('🔍 Items:', flatItems.map(item => ({ id: item.id, name: item.name, path: item.path, parentId: item.parentId })));
 
     // Create map of all items
     flatItems.forEach(item => {

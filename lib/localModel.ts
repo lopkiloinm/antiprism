@@ -26,7 +26,6 @@ import {
   type AgentMode,
   type PriorMessage,
 } from "./agent";
-import { LFM25_12B } from "./modelConfig";
 
 export function checkWebGPUSupport(): boolean {
   return _checkWebGPUSupport();
@@ -62,13 +61,19 @@ export async function generateChatResponse(
   streamCallbacks?: StreamCallbacks,
   priorMessages?: PriorMessage[]
 ): Promise<AgentResponse> {
+  const activeModelDef = _getActiveModelDef();
+  const maxContextTokensForDoc = Math.max(
+    1,
+    activeModelDef.maxContextTokens - activeModelDef.reservedTokens
+  );
+
   const docContext =
     mode === "agent"
       ? undefined
       : context && context.length > 0
         ? mode === "ask"
           ? context
-          : await truncateToTokenLimit(context, LFM25_12B.MAX_CONTEXT_TOKENS_FOR_DOC)
+          : await truncateToTokenLimit(context, maxContextTokensForDoc)
         : undefined;
   const messages = buildMessages(userMessage, docContext, mode, priorMessages);
 

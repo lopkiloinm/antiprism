@@ -1,6 +1,27 @@
 "use client";
 
+import { getModelById, DEFAULT_MODEL_ID, type ModelDef } from "./modelConfig";
+
 const PREFIX = "antiprism.";
+
+function normalizeModelSettingKey(modelId: string): string {
+  return modelId.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+// --- Active model ---
+export function getActiveModelId(): string {
+  const stored = get("activeModelId", DEFAULT_MODEL_ID, (v) => {
+    const def = getModelById(v);
+    return def ? v : null;
+  });
+  return stored;
+}
+
+export function setActiveModelId(modelId: string): void {
+  const def = getModelById(modelId);
+  if (!def) throw new Error(`Invalid model ID: ${modelId}`);
+  set("activeModelId", modelId);
+}
 
 // --- LaTeX engine ---
 export type LaTeXEngine = "xetex" | "luatex" | "pdftex";
@@ -83,30 +104,39 @@ export function setAutoCompileOnChange(on: boolean): void {
 }
 
 // --- AI (chat / generation) ---
-const AI_MAX_NEW_TOKENS_MIN = 256;
-const AI_MAX_NEW_TOKENS_MAX = 2048;
-const AI_MAX_NEW_TOKENS_DEFAULT = 1024;
+const AI_MAX_NEW_TOKENS_MIN = 0;
+const AI_MAX_NEW_TOKENS_MAX = 131072;
+const AI_MAX_NEW_TOKENS_DEFAULT = 0;
 
-export function getAiMaxNewTokens(): number {
+function parseAiMaxNewTokensValue(v: string): string | null {
+  const x = parseInt(v, 10);
+  return !Number.isNaN(x) && x >= AI_MAX_NEW_TOKENS_MIN && x <= AI_MAX_NEW_TOKENS_MAX
+    ? String(x)
+    : null;
+}
+
+export function getAiMaxNewTokens(modelId?: string): number {
+  const key = modelId ? `aiMaxNewTokens.${normalizeModelSettingKey(modelId)}` : "aiMaxNewTokens";
+  const defaultValue = String(AI_MAX_NEW_TOKENS_DEFAULT);
   const n = get(
-    "aiMaxNewTokens",
-    String(AI_MAX_NEW_TOKENS_DEFAULT),
-    (v) => {
-      const x = parseInt(v, 10);
-      return !Number.isNaN(x) && x >= AI_MAX_NEW_TOKENS_MIN && x <= AI_MAX_NEW_TOKENS_MAX
-        ? String(x)
-        : null;
-    }
+    key,
+    modelId ? get("aiMaxNewTokens", defaultValue, parseAiMaxNewTokensValue) : String(AI_MAX_NEW_TOKENS_DEFAULT),
+    parseAiMaxNewTokensValue
   );
   return parseInt(n, 10);
 }
 
-export function setAiMaxNewTokens(value: number): void {
+export function setAiMaxNewTokens(value: number, modelId?: string): void {
   const n = Math.max(
     AI_MAX_NEW_TOKENS_MIN,
     Math.min(AI_MAX_NEW_TOKENS_MAX, Math.round(value))
   );
-  set("aiMaxNewTokens", String(n));
+  const key = modelId ? `aiMaxNewTokens.${normalizeModelSettingKey(modelId)}` : "aiMaxNewTokens";
+  if (n === 0) {
+    unset(key);
+    return;
+  }
+  set(key, String(n));
 }
 
 export const AI_MAX_NEW_TOKENS_LIMITS = {
@@ -155,17 +185,26 @@ export const AI_TOP_P_LIMITS = { min: AI_TOP_P_MIN, max: AI_TOP_P_MAX } as const
 // --- AI Context Window ---
 const AI_CONTEXT_WINDOW_DEFAULT = "32768";
 
-export function getAiContextWindow(): number {
-  const v = get("aiContextWindow", AI_CONTEXT_WINDOW_DEFAULT, (s) => {
-    const n = parseInt(s, 10);
-    return !Number.isNaN(n) && (n === 32768 || n === 262144) ? s : null;
-  });
+function parseAiContextWindowValue(s: string): string | null {
+  const n = parseInt(s, 10);
+  return !Number.isNaN(n) && (n === 32768 || n === 262144) ? s : null;
+}
+
+export function getAiContextWindow(modelId?: string): number {
+  const key = modelId ? `aiContextWindow.${normalizeModelSettingKey(modelId)}` : "aiContextWindow";
+  const defaultValue = modelId ? String(getModelById(modelId).maxContextTokens) : AI_CONTEXT_WINDOW_DEFAULT;
+  const v = get(
+    key,
+    modelId ? get("aiContextWindow", defaultValue, parseAiContextWindowValue) : AI_CONTEXT_WINDOW_DEFAULT,
+    parseAiContextWindowValue
+  );
   return parseInt(v, 10);
 }
 
-export function setAiContextWindow(value: number): void {
+export function setAiContextWindow(value: number, modelId?: string): void {
   const n = [32768, 262144].includes(value) ? value : parseInt(AI_CONTEXT_WINDOW_DEFAULT, 10);
-  set("aiContextWindow", String(n));
+  const key = modelId ? `aiContextWindow.${normalizeModelSettingKey(modelId)}` : "aiContextWindow";
+  set(key, String(n));
 }
 
 // --- AI Vision Processing ---
@@ -369,6 +408,15 @@ function set(key: string, value: string): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(PREFIX + key, value);
+  } catch {
+    /* ignore */
+  }
+}
+
+function unset(key: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(PREFIX + key);
   } catch {
     /* ignore */
   }

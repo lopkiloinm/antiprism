@@ -124,12 +124,12 @@ describe("settings", () => {
   });
 
   describe("AI max new tokens", () => {
-    it("defaults to 1024 and is clamped", () => {
-      expect(getAiMaxNewTokens()).toBe(1024);
+    it("defaults to no app cap and persists within the storage range", () => {
+      expect(getAiMaxNewTokens()).toBe(0);
       setAiMaxNewTokens(100);
-      expect(getAiMaxNewTokens()).toBe(AI_MAX_NEW_TOKENS_LIMITS.min);
+      expect(getAiMaxNewTokens()).toBe(100);
       setAiMaxNewTokens(9999);
-      expect(getAiMaxNewTokens()).toBe(AI_MAX_NEW_TOKENS_LIMITS.max);
+      expect(getAiMaxNewTokens()).toBe(9999);
     });
   });
 

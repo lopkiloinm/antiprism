@@ -17,10 +17,10 @@ export interface FileDocument {
 export class FileDocumentManager {
   private documents = new Map<string, FileDocument>();
   private projectId: string;
-  private globalWebrtcProvider: WebrtcProvider;
+  private globalWebrtcProvider: WebrtcProvider | null;
   private providerOptions: any;
 
-  constructor(projectId: string, globalWebrtcProvider: WebrtcProvider, providerOptions: any = {}) {
+  constructor(projectId: string, globalWebrtcProvider: WebrtcProvider | null, providerOptions: any = {}) {
     this.projectId = projectId;
     this.globalWebrtcProvider = globalWebrtcProvider;
     this.providerOptions = providerOptions;
@@ -71,8 +71,33 @@ export class FileDocumentManager {
     const text = doc.getText("content");
     const persistence = new IndexeddbPersistence(docName, doc);
     
-    // Create WebRTC provider for this specific file
-    const webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc, this.providerOptions);
+    // Create WebRTC provider for this specific file only if we have signaling servers configured
+    let webrtcProvider: WebrtcProvider | undefined;
+    if (this.providerOptions && this.providerOptions.signaling && this.providerOptions.signaling.length > 0) {
+      webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc, this.providerOptions);
+      
+      // Log WebRTC connection status
+      webrtcProvider.on('status', (event: any) => {
+        console.log(`🌐 WebRTC status for ${filePath}:`, event.status);
+        yjsLogger.info("File WebRTC status", {
+          filePath,
+          docName,
+          status: event?.status,
+        });
+      });
+      
+      webrtcProvider.on('peers', (event: any) => {
+        console.log(`👥 WebRTC peers for ${filePath}:`, event.peers?.length ?? 0);
+        yjsLogger.info("File WebRTC peers", {
+          filePath,
+          docName,
+          peersConnected: event?.peers?.length ?? 0,
+          peers: event?.peers ?? [],
+        });
+      });
+    } else {
+      console.log(`📄 File document working offline (no WebRTC for ${filePath})`);
+    }
     
     // Create a promise that resolves when the IndexedDB has finished loading
     let loaded = false;
@@ -120,26 +145,6 @@ export class FileDocumentManager {
           done();
         }
       }, 3000);
-    });
-    
-    // Log WebRTC connection status
-    webrtcProvider.on('status', (event: any) => {
-      console.log(`🌐 WebRTC status for ${filePath}:`, event.status);
-      yjsLogger.info("File WebRTC status", {
-        filePath,
-        docName,
-        status: event?.status,
-      });
-    });
-    
-    webrtcProvider.on('peers', (event: any) => {
-      console.log(`👥 WebRTC peers for ${filePath}:`, event.peers?.length ?? 0);
-      yjsLogger.info("File WebRTC peers", {
-        filePath,
-        docName,
-        peersConnected: event?.peers?.length ?? 0,
-        peers: event?.peers ?? [],
-      });
     });
     
     doc.on('update', (update: any, origin: any) => {

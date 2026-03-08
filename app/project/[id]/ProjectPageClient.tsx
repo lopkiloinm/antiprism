@@ -77,9 +77,11 @@ import {
   getAutoCompileOnChange,
   getAutoCompileDebounceMs,
   getAiMaxNewTokens,
+  setAiMaxNewTokens,
   getAiTemperature,
   getAiTopP,
   getAiContextWindow,
+  setAiContextWindow,
   getAiVisionEnabled,
   getPromptAsk,
   getPromptCreate,
@@ -239,7 +241,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     const initializeUserAndProject = async () => {
       try {
         const userManager = UserManager.getInstance();
-        const user = await userManager.getCurrentUser();
+        // Force initialization if not already initialized
+        const user = await userManager.initializeUser();
         
         // Add project to user tree if not already there
         await userManager.createProjectInUserTree(id, projectName);
@@ -254,7 +257,22 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     };
     
     initializeUserAndProject();
-  }, [id, projectName]);
+  }, [id]); // Removed projectName from deps to avoid re-triggering on rename
+
+  useEffect(() => {
+    setWebrtcConfig(getWebRTCSignalingConfig());
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'antiprism.webrtcConfig') {
+        setWebrtcConfig(getWebRTCSignalingConfig());
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   // Register project managers with UserManager
   useEffect(() => {
@@ -267,44 +285,64 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
   // Initialize ChatTreeManager
   useEffect(() => {
+    let cancelled = false;
+
     // Create Y.Doc and Y.Map for chat tree (matching FileTreeManager pattern exactly)
     const chatDoc = new Y.Doc();
     const chatMap = chatDoc.getMap(`${id}-chat-tree`); // ✅ Use project-specific map name
     
-    // Create WebRTC provider for chat tree (matching FileTreeManager pattern)
-    // Use simple config to avoid providerOptions scope issues
-    const chatProvider = new WebrtcProvider(`${id}-chat-tree`, chatDoc, {
-      signaling: ['wss://signaling.yjs.dev'],
-      maxConns: 35
+    // Create WebRTC provider for chat tree using user's configuration (optional for collaboration)
+    const webrtcConfig = getWebRTCSignalingConfig();
+    console.log('🔗 WebRTC Config for chat:', {
+      enabled: webrtcConfig.enabled,
+      customServers: webrtcConfig.customServers,
+      maxConnections: webrtcConfig.maxConnections
     });
     
-    // Add IndexedDB persistence for chat tree (matching FileTreeManager pattern)
-    const chatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
-    
-    // Wait for persistence to load before creating ChatTreeManager
-    chatPersistence.whenSynced.then(() => {
-      console.log(`📂 Chat persistence synced for project: ${id}`);
-      
-      // Create ChatTreeManager only after persistence is ready
-      const manager = new ChatTreeManager(chatMap, id);
-      setChatTreeManager(manager);
-      
-      manager.whenReady().then(() => {
-        console.log('🌳 ChatTreeManager ready for project:', id);
-      }).catch((error) => {
-        console.error('🚨 ChatTreeManager failed to load:', error);
+    let chatProvider = null;
+    if (webrtcConfig.enabled && webrtcConfig.customServers.length > 0) {
+      chatProvider = new WebrtcProvider(`${id}-chat-tree`, chatDoc, {
+        signaling: webrtcConfig.customServers,
+        maxConns: webrtcConfig.maxConnections || 35
       });
-    }).catch((error) => {
-      console.error('🚨 Chat persistence failed to sync:', error);
-      // Still create manager even if persistence fails
-      const manager = new ChatTreeManager(chatMap, id);
-      setChatTreeManager(manager);
-    });
+      console.log('🔗 Chat WebRTC provider created');
+    } else {
+      console.log('💬 Chat working offline (no WebRTC)');
+    }
+    
+    // Add IndexedDB persistence for chat tree
+    const chatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
+
+    const initChatTree = async () => {
+      try {
+        await chatPersistence.whenSynced;
+        if (cancelled) return;
+
+        console.log(`📂 Chat persistence synced for project: ${id}`);
+
+        const manager = new ChatTreeManager(chatMap, id);
+        setChatTreeManager(manager);
+
+        manager.whenReady().then(() => {
+          console.log('🌳 ChatTreeManager ready for project:', id);
+        }).catch((error) => {
+          console.error('🚨 ChatTreeManager failed to load:', error);
+        });
+      } catch (error) {
+        if (cancelled) return;
+        console.error('🚨 Chat persistence failed to load:', error);
+      }
+    };
+
+    initChatTree();
     
     return () => {
+      cancelled = true;
       // Cleanup chat document, provider, and persistence
       chatPersistence.destroy();
-      chatProvider.destroy();
+      if (chatProvider) {
+        chatProvider.destroy();
+      }
       chatDoc.destroy();
     };
   }, [id]);
@@ -323,17 +361,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     const performSearch = async () => {
       if (sidebarTab === "search" && searchQuery.trim()) {
         const results: typeof searchResults = [];
-        
-        console.log('[Global Search] Searching for:', searchQuery);
-        console.log('[Global Search] allProjectFiles:', allProjectFiles?.length || 'null');
-        console.log('[Global Search] openTabs:', openTabs.length);
-        
+
         // Use FileDocumentManager for all files (avoids conflicts with y-indexeddb)
         const fileDocManager = fileDocManagerRef.current;
         
         if (fileDocManager && allProjectFiles && allProjectFiles.length > 0) {
-          console.log('[Global Search] Searching all project files via FileDocumentManager:', allProjectFiles.length);
-          
           for (const filePath of allProjectFiles) {
             try {
               // Skip binary files
@@ -369,16 +401,12 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                     }
                   });
                 }
-              } else {
-                console.log('[Global Search] No Yjs document for:', filePath);
               }
-            } catch (error) {
-              console.log('[Global Search] Error getting document for', filePath, error);
+            } catch {
             }
           }
         } else {
           // Fallback: search through currently open tabs
-          console.log('[Global Search] Fallback: searching open tabs only');
           
           if (fileDocManager) {
             openTabs.forEach(tab => {
@@ -408,15 +436,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                       }
                     });
                   }
-                } catch (error) {
-                  console.log('[Global Search] Error with open tab:', tab.path, error);
+                } catch {
                 }
               }
             });
           }
         }
-        
-        console.log('[Global Search] Found results:', results.length);
+
         setSearchResults(results);
       } else {
         setSearchResults([]);
@@ -456,12 +482,18 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [summaryContent, setSummaryContent] = useState("");
   const [summaryData, setSummaryData] = useState<any>(null);
   const [isFormatting, setIsFormatting] = useState(false);
-  const [webrtcConfig, setWebrtcConfig] = useState<WebRTCSignalingConfig>(getWebRTCSignalingConfig());
+  const [webrtcConfig, setWebrtcConfig] = useState<WebRTCSignalingConfig>({
+    enabled: false,
+    customServers: [],
+    password: "",
+    maxConnections: 35,
+  });
   const fsRef = useRef<any>(null);
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [editorFraction, setEditorFraction] = useState(0.5);
   const [outlineHeight, setOutlineHeight] = useState(400); // Default to maximum height
-  const [selectedModelId, setSelectedModelId] = useState<string>(DEFAULT_MODEL_ID);
+  const [selectedModelId, setSelectedModelId] = useState<string>(() => getActiveModelId());
+  const [settingsModelId, setSettingsModelId] = useState<string>(() => getActiveModelId());
   const [chatImageDataUrl, setChatImageDataUrl] = useState<string | null>(null);
 
   
@@ -471,10 +503,10 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [editorTabSize, setEditorTabSizeState] = useState(() => getEditorTabSize());
   const [editorLineWrapping, setEditorLineWrappingState] = useState(() => getEditorLineWrapping());
   const [autoCompileOnChange, setAutoCompileOnChangeState] = useState(() => getAutoCompileOnChange());
-  const [aiMaxNewTokens, setAiMaxNewTokensState] = useState(() => getAiMaxNewTokens());
+  const [aiMaxNewTokens, setAiMaxNewTokensState] = useState(() => getAiMaxNewTokens(getActiveModelId()));
   const [aiTemperature, setAiTemperatureState] = useState(() => getAiTemperature());
   const [aiTopP, setAiTopPState] = useState(() => getAiTopP());
-  const [aiContextWindow, setAiContextWindowState] = useState(() => getAiContextWindow());
+  const [aiContextWindow, setAiContextWindowState] = useState(() => getAiContextWindow(getActiveModelId()));
   const [aiVisionEnabled, setAiVisionEnabledState] = useState(() => getAiVisionEnabled());
   const [promptAsk, setPromptAskState] = useState(() => getPromptAsk());
   const [promptCreate, setPromptCreateState] = useState(() => getPromptCreate());
@@ -488,6 +520,12 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     inputTokens: number;
     contextUsed: number;
   } | null>(null);
+
+  useEffect(() => {
+    setAiMaxNewTokensState(getAiMaxNewTokens(settingsModelId));
+    setAiContextWindowState(getAiContextWindow(settingsModelId));
+  }, [settingsModelId]);
+
   const initRef = useRef(false);
   const providerRef = useRef<WebrtcProvider | null>(null);
   const fileDocManagerRef = useRef<FileDocumentManager | null>(null);
@@ -495,6 +533,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const fileTreeDocRef = useRef<Y.Doc | null>(null);
   const fileTreeProviderRef = useRef<WebrtcProvider | null>(null);
   const directoryProvidersRef = useRef<Map<string, WebrtcProvider>>(new Map());
+  const fileTreeReconcileScheduledRef = useRef<number | null>(null);
+  const isReconcilingFileTreeRef = useRef(false);
   const editorRef = useRef<EditorPanelHandle | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   
@@ -502,11 +542,14 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const autoCompileDoneRef = useRef(false);
   const handleCompileRef = useRef<(() => Promise<void>) | null>(null);
   const isCompilingRef = useRef(false);
+  const compileRunIdRef = useRef(0);
   const compilationCancelRef = useRef<(() => void) | null>(null);
   const gitDiffRef = useRef<HTMLDivElement>(null);
   const gitDiffViewRef = useRef<EditorView | null>(null);
   const yjsLastMutationLogRef = useRef(0);
   const yjsLastLengthRef = useRef(0);
+  const COLLABORATIVE_TEXT_SETTLE_MS = 1500;
+  const COLLABORATIVE_TREE_SETTLE_MS = 5000;
 
   // Initialize git diff viewer when git tab is selected
   useEffect(() => {
@@ -1040,20 +1083,20 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         const doc = new Y.Doc();
         const webrtcConfig = getWebRTCSignalingConfig();
         
+        console.log('🔗 WebRTC Config for file tree:', {
+          enabled: webrtcConfig.enabled,
+          customServers: webrtcConfig.customServers,
+          maxConnections: webrtcConfig.maxConnections
+        });
+        
         // Configure WebRTC provider based on user settings
         const providerOptions: any = {};
         if (webrtcConfig.enabled) {
           if (webrtcConfig.customServers.length > 0) {
             providerOptions.signaling = webrtcConfig.customServers;
           } else {
-            // Use multiple public signaling servers for redundancy
-            providerOptions.signaling = [
-              'ws://localhost:4444', // Local server for testing
-              'wss://signaling.yjs.dev',
-              'wss://y-webrtc-signaling-eu.herokuapp.com', 
-              'wss://y-webrtc-signaling-us.herokuapp.com',
-              'wss://y-webrtc-eu.fly.dev'
-            ];
+            console.warn('⚠️ WebRTC enabled but no custom servers configured - skipping WebRTC');
+            // Don't create provider if no servers configured
           }
           if (webrtcConfig.password) {
             providerOptions.password = webrtcConfig.password;
@@ -1065,32 +1108,41 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
           providerOptions.maxConns = 0;
         }
         
-        const prov = new WebrtcProvider(id, doc, providerOptions);
-        yjsLogger.info("Created WebRTC provider", { 
-          roomId: id, 
-          docGuid: doc.guid,
-          enabled: webrtcConfig.enabled,
-          signalingServers: providerOptions.signaling,
-          signalingServerCount: providerOptions.signaling.length,
-          hasPassword: !!webrtcConfig.password,
-          maxConnections: webrtcConfig.maxConnections
-        });
-        prov.on("status", (event: any) => {
-          yjsLogger.info("Global WebRTC provider status", {
-            roomId: id,
+        // Only create WebRTC provider if servers are configured
+        let prov = null;
+        if (webrtcConfig.enabled && webrtcConfig.customServers.length > 0) {
+          prov = new WebrtcProvider(id, doc, providerOptions);
+          yjsLogger.info("Created WebRTC provider", { 
+            roomId: id, 
             docGuid: doc.guid,
-            status: event?.status,
+            enabled: webrtcConfig.enabled,
+            signalingServers: providerOptions.signaling,
+            signalingServerCount: providerOptions.signaling.length,
+            hasPassword: !!webrtcConfig.password,
+            maxConnections: webrtcConfig.maxConnections
           });
-        });
-        prov.on("peers", (event: any) => {
-          yjsLogger.info("Global WebRTC provider peers", {
-            roomId: id,
+        } else {
+          console.log('🔗 WebRTC provider not created - disabled or no servers configured');
+        }
+        
+        if (prov) {
+          prov.on("status", (event: any) => {
+            yjsLogger.info("Global WebRTC provider status", {
+              roomId: id,
+              docGuid: doc.guid,
+              status: event?.status,
+            });
+          });
+          prov.on("peers", (event: any) => {
+            yjsLogger.info("Global WebRTC provider peers", {
+              roomId: id,
             peersConnected: event?.peers?.length ?? 0,
             peers: event?.peers ?? [],
             webrtcPeers: event?.webrtcPeers ?? [],
             bcPeers: event?.bcPeers ?? [],
           });
         });
+        
         doc.on("update", (update: Uint8Array, origin: any) => {
           yjsLogger.info("Global Y.Doc update", {
             roomId: id,
@@ -1100,27 +1152,66 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
             origin: typeof origin === "string" ? origin : origin?.constructor?.name ?? "unknown",
           });
         });
+        }
         
         providerRef.current = prov;
 
         // Create File document manager for per-file persistence
-        const fileDocManager = new FileDocumentManager(id, prov, providerOptions);
+        let fileDocManager = new FileDocumentManager(id, prov, providerOptions);
         fileDocManagerRef.current = fileDocManager;
         console.log('📂 File document manager created');
 
-        // Create YJS document and WebRTC provider for filetree
+        // Create YJS document for filetree (works with or without WebRTC)
         const fileTreeDoc = new Y.Doc();
-        const fileTreeProvider = new WebrtcProvider(`${id}-filetree`, fileTreeDoc, providerOptions);
         const fileTreeMap = fileTreeDoc.getMap(`${id}-filetree`);
+        const projectMetaMap = fileTreeDoc.getMap(`${id}-project-meta`);
+        
+        // Only create WebRTC provider if WebRTC is enabled and servers are configured
+        let fileTreeProvider = null;
+        if (webrtcConfig.enabled && webrtcConfig.customServers.length > 0) {
+          fileTreeProvider = new WebrtcProvider(`${id}-filetree`, fileTreeDoc, providerOptions);
+          console.log('🔗 FileTree WebRTC provider created');
+        } else {
+          console.log('📁 FileTree working offline (no WebRTC)');
+        }
         
         // Store in refs for cleanup
         fileTreeDocRef.current = fileTreeDoc;
         fileTreeProviderRef.current = fileTreeProvider;
-        
+
+        const fileTreePersistence = new IndexeddbPersistence(`antiprism-filetree-${id}`, fileTreeDoc);
+        const waitForFileTreePersistence = async () => {
+          try {
+            await fileTreePersistence.whenSynced;
+            console.log('📂 FileTree persistence loaded');
+          } catch (error) {
+            console.warn('Failed to sync file tree persistence:', error);
+          }
+        };
+
+        await waitForFileTreePersistence();
+
         // Create FileTreeManager (paths already set correctly during initialization)
         const fileTreeManager = new FileTreeManager(fileTreeMap);
         fileTreeManagerRef.current = fileTreeManager;
         console.log('🌳 FileTreeManager created with yjs-orderedtree');
+
+        const scheduleFileTreeReconciliation = () => {
+          if (fileTreeReconcileScheduledRef.current != null) {
+            window.clearTimeout(fileTreeReconcileScheduledRef.current);
+          }
+          fileTreeReconcileScheduledRef.current = window.setTimeout(async () => {
+            fileTreeReconcileScheduledRef.current = null;
+            if (!fsRef.current || !fileTreeManagerRef.current) return;
+            await reconcileFileTreeToFilesystem(fileTreeManagerRef.current, fsRef.current, basePath);
+            setRefreshTrigger((t) => t + 1);
+          }, 120);
+        };
+
+        fileTreeDoc.on("update", () => {
+          scheduleFileTreeReconciliation();
+        });
+        setRefreshTrigger((t) => t + 1);
 
         // Initialize WebRTC providers for each directory
         const directoryMaps = fileTreeManager.getAllDirectoryMaps();
@@ -1159,8 +1250,59 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         
         if (cancelled) return;
 
-        // Sync existing filesystem files to FileTreeManager
-        await syncFilesystemToFileTree(fileTreeManager, idbfs, basePath);
+        const isCollaborativeSession = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
+
+        const hasSharedTreeState = () => {
+          return fileTreeManager.getTreeItems().length > 0 || projectMetaMap.get("defaultsSeeded") === true;
+        };
+
+        const waitForAuthoritativeTreeState = async () => {
+          await Promise.race([
+            waitForFileTreePersistence(),
+            new Promise((resolve) => window.setTimeout(resolve, COLLABORATIVE_TREE_SETTLE_MS)),
+          ]);
+
+          if (!isCollaborativeSession) {
+            return hasSharedTreeState();
+          }
+
+          if (hasSharedTreeState()) {
+            return true;
+          }
+
+          return await new Promise<boolean>((resolve) => {
+            const timeout = window.setTimeout(() => {
+              fileTreeDoc.off("update", handleUpdate);
+              resolve(hasSharedTreeState());
+            }, COLLABORATIVE_TREE_SETTLE_MS);
+
+            const handleUpdate = () => {
+              if (hasSharedTreeState()) {
+                window.clearTimeout(timeout);
+                fileTreeDoc.off("update", handleUpdate);
+                resolve(true);
+              }
+            };
+
+            fileTreeDoc.on("update", handleUpdate);
+          });
+        };
+
+        const hasSharedTreeItemsAfterSettle = await waitForAuthoritativeTreeState();
+        const shouldBootstrapTreeFromFilesystem = !hasSharedTreeItemsAfterSettle;
+
+        if (shouldBootstrapTreeFromFilesystem) {
+          await syncFilesystemToFileTree(fileTreeManager, idbfs, basePath);
+        }
+
+        await reconcileFileTreeToFilesystem(fileTreeManager, idbfs, basePath);
+        setRefreshTrigger((t) => t + 1);
+
+        if (isCollaborativeSession) {
+          await waitForAuthoritativeTreeState();
+          await reconcileFileTreeToFilesystem(fileTreeManager, idbfs, basePath);
+          setRefreshTrigger((t) => t + 1);
+        }
 
         const mainPath = `${basePath}/main.tex`;
         const mainTypPath = `${basePath}/main.typ`;
@@ -1175,7 +1317,9 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         const hasMainTex = files.some((f: { name: string }) => f.name === "main.tex");
         const hasMainTyp = files.some((f: { name: string }) => f.name === "main.typ");
         const hasDiagram = files.some((f: { name: string }) => f.name === "diagram.jpg");
-        const isNewProject = !isImported && isEmpty;
+        const hasSharedTreeItems = fileTreeManager.getTreeItems().length > 0;
+        const defaultsSeeded = projectMetaMap.get("defaultsSeeded") === true;
+        const isNewProject = !isImported && isEmpty && !hasSharedTreeItems && !defaultsSeeded;
 
         // Cache existing binary files for display
         if (!isNewProject) {
@@ -1208,6 +1352,19 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         }
 
         if (isNewProject) {
+          // Check if chatTreeManager is already loaded from effect, if not, create it locally just for the welcome message
+          let localChatManager = chatTreeManager;
+          if (!localChatManager) {
+            // Since we know this is a new project, we can just instantiate it to write the first chat.
+            // The effect will overwrite it soon, but we need it *now* for initialization.
+            const chatDoc = new Y.Doc();
+            const chatMap = chatDoc.getMap(`${id}-chat-tree`);
+            // Add persistence so the message saves
+            const localChatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
+            await localChatPersistence.whenSynced;
+            localChatManager = new ChatTreeManager(chatMap, id);
+          }
+
           // + New only: seed from public (fetch all in parallel to avoid partial state on Strict Mode double-mount)
           const [resTex, resTyp, resDiagram] = await Promise.all([
             fetch(`${BASE}/main.tex`),
@@ -1230,12 +1387,12 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
 
           // Create initial welcome chat for new projects
           try {
-            if (chatTreeManager) {
-              await chatTreeManager.whenReady();
-              const welcomeChatId = chatTreeManager.createChat({
+            if (localChatManager) {
+              await localChatManager.whenReady();
+              const welcomeChatId = localChatManager.createChat({
                 title: "Welcome Chat",
                 createdAt: Date.now(),
-                modelId: DEFAULT_MODEL_ID
+                modelId: getActiveModelId()
               });
               
               // Add welcome message
@@ -1313,6 +1470,8 @@ What would you like to work on today?`,
           // Sync newly created files to FileTreeManager
           console.log('🔄 Syncing newly created files to FileTreeManager...');
           await syncFilesystemToFileTree(fileTreeManager, idbfs, basePath);
+          projectMetaMap.set("defaultsSeeded", true);
+          setRefreshTrigger((t) => t + 1);
         }
 
         if (cancelled) return;
@@ -1393,7 +1552,10 @@ What would you like to work on today?`,
             await waitForIndexedDb();
             
             // Check if Yjs already has content (from persistence)
-            const existingContent = text.toString();
+            let existingContent = text.toString();
+            if (existingContent.length === 0) {
+              existingContent = await waitForCollaborativeTextSettle(initialPath);
+            }
             console.log('🔍 Existing Yjs content length after IndexedDB load:', existingContent.length);
             
             // Only read from filesystem if Yjs is empty (respect persistence!)
@@ -1495,6 +1657,10 @@ What would you like to work on today?`,
       // Cleanup FileTreeManager and its YJS document
       fileTreeProviderRef.current?.destroy();
       fileTreeProviderRef.current = null;
+      if (fileTreeReconcileScheduledRef.current != null) {
+        window.clearTimeout(fileTreeReconcileScheduledRef.current);
+        fileTreeReconcileScheduledRef.current = null;
+      }
       fileTreeDocRef.current?.destroy();
       fileTreeDocRef.current = null;
       fileTreeManagerRef.current = null;
@@ -2290,6 +2456,19 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     }
   }, [getBufferMgr]);
 
+  const waitForCollaborativeTextSettle = useCallback(async (path: string) => {
+    const manager = fileDocManagerRef.current;
+    if (!manager) return "";
+
+    const provider = manager.getWebrtcProvider(path);
+    if (!provider) {
+      return manager.getDocument(path, true).text.toString();
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, COLLABORATIVE_TEXT_SETTLE_MS));
+    return manager.getDocument(path, true).text.toString();
+  }, [COLLABORATIVE_TEXT_SETTLE_MS]);
+
   const loadTextIntoEditor = useCallback(
     async (path: string, content: string) => {
       if (!fileDocManagerRef.current) return;
@@ -2310,7 +2489,11 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       });
       
       // Check if Yjs already has content (from persistence)
-      const existingContent = ytext.toString();
+      let existingContent = ytext.toString();
+
+      if (existingContent.length === 0) {
+        existingContent = await waitForCollaborativeTextSettle(path);
+      }
       
       // 🚨 CRITICAL FIX: Don't overwrite inactive tabs during tab switching
       // Skip filesystem writes for now - Yjs persistence handles content saving
@@ -2373,7 +2556,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       }
     },
-    [activeTabPath, fs]
+    [activeTabPath, fs, waitForCollaborativeTextSettle]
   );
 
   /** Resolve the text content for a file from cache or filesystem. */
@@ -2498,12 +2681,56 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       
       const oldPath = item.path;
       const newPath = item.path.replace(item.name, trimmed);
+      const nodeKey = fileTreeManagerRef.current.getNodeKeyByPath(oldPath);
+
+      if (nodeKey) {
+        fileTreeManagerRef.current.updateNodeValue(nodeKey, {
+          name: trimmed,
+          path: newPath
+        });
+      }
+
+      if (item.isFolder) {
+        const descendants = fileTreeManagerRef.current
+          .getTreeItems()
+          .filter((treeItem) => treeItem.path.startsWith(oldPath + "/"));
+
+        descendants.forEach((treeItem) => {
+          fileTreeManagerRef.current?.updateNodeValue(treeItem.id, {
+            path: `${newPath}${treeItem.path.slice(oldPath.length)}`,
+          });
+        });
+      }
+
+      setRefreshTrigger((t) => t + 1);
+
+      setOpenTabs((tabs) =>
+        tabs.map((tab) => {
+          if (tab.path === oldPath || tab.path.startsWith(oldPath + "/")) {
+            return {
+              ...tab,
+              path: `${newPath}${tab.path.slice(oldPath.length)}`,
+            };
+          }
+          return tab;
+        })
+      );
+
+      if (activeTabPath === oldPath || activeTabPath.startsWith(oldPath + "/")) {
+        setActiveTabPath(`${newPath}${activeTabPath.slice(oldPath.length)}`);
+      }
+
+      if (currentPath === oldPath || currentPath.startsWith(oldPath + "/")) {
+        const nextCurrentPath = `${newPath}${currentPath.slice(oldPath.length)}`;
+        setCurrentPath(nextCurrentPath);
+        setAddTargetPath(nextCurrentPath);
+      }
       
       try {
-        // Update in filesystem
-        if (item.isFolder) {
+        if (typeof (fs as any).rename === "function") {
+          await (fs as any).rename(oldPath, newPath);
+        } else if (item.isFolder) {
           await fs.mkdir(newPath);
-          // TODO: Copy folder contents recursively
           await fs.rm(oldPath, true);
         } else {
           const data = await fs.readFile(oldPath);
@@ -2513,28 +2740,14 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           await fs.writeFile(newPath, buf, { mimeType });
           await fs.rm(oldPath);
         }
-        
-        // Update in FileTreeManager
-        const nodeKey = fileTreeManagerRef.current.getNodeKeyByPath(oldPath);
-        if (nodeKey) {
-          fileTreeManagerRef.current.updateNodeValue(nodeKey, { 
-            name: trimmed, 
-            path: newPath 
-          });
-        }
-        
-        // Update current path if this was the active file
-        if (currentPath === oldPath) {
-          setCurrentPath(newPath);
-          setAddTargetPath(newPath);
-        }
-        
+
         console.log(`✅ Renamed ${oldPath} to ${newPath}`);
       } catch (e) {
         console.error("Rename failed:", e);
+        await syncFilesystemToFileTree(fileTreeManagerRef.current, fs, basePath);
       }
     },
-    [fs, currentPath]
+    [fs, activeTabPath, currentPath, basePath]
   );
 
   // Handle tab reordering
@@ -2667,37 +2880,36 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       if (!fs || !fileTreeManagerRef.current) return;
       
       const fullPath = basePath ? `${basePath}${item.path.startsWith('/') ? '' : '/'}${item.path}` : item.path;
+      const isFolder = item.isFolder === true;
+      const nodeKey = fileTreeManagerRef.current.getNodeKeyByPath(item.path);
+
+      if (nodeKey) {
+        fileTreeManagerRef.current.deleteNode(nodeKey);
+      }
+
+      setRefreshTrigger((t) => t + 1);
+
+      await handleFileDeleted(fullPath, isFolder);
       
       try {
-        // Delete from filesystem
-        await fs.rm(fullPath, item.isFolder);
-        
-        // Delete from FileTreeManager
-        const nodeKey = fileTreeManagerRef.current.getNodeKeyByPath(item.path);
-        if (nodeKey) {
-          fileTreeManagerRef.current.deleteNode(nodeKey);
-        }
-        
-        // Close tab if this file was open
-        const tabToClose = openTabs.find(t => t.path === fullPath);
-        if (tabToClose) {
-          handleTabClose(fullPath);
-        }
-        
+        await fs.rm(fullPath, isFolder);
+
         console.log(`✅ Deleted ${fullPath}`);
       } catch (e) {
         console.error("Delete failed:", e);
+        await syncFilesystemToFileTree(fileTreeManagerRef.current, fs, basePath);
       }
     },
-    [fs, basePath, openTabs, handleTabClose]
+    [fs, basePath, handleFileDeleted]
   );
 
   const handleCompile = async () => {
     const currentYText = getCurrentYText();
-    if (!compilerReady || !currentYText || !fs) return;
+    if (!currentYText || !fs) return;
     const fsInstance = fs;
     const currentActivePath = activeTabPathRef.current;
     const compileEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const compileRunId = ++compileRunIdRef.current;
     
     // Create cancellation token for this compilation
     let cancelled = false;
@@ -2708,7 +2920,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       compileEventId,
       currentActivePath,
       currentYTextLength: currentYText.length,
-      compilerReady,
+      latexReady,
+      typstReady,
     });
 
     // Only compile when the active tab is an actual LaTeX or Typst source file.
@@ -2722,6 +2935,18 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         currentActivePath,
         activeIsTex,
         activeIsTypst,
+      });
+      return;
+    }
+
+    if ((activeIsTex && !latexReady) || (activeIsTypst && !typstReady)) {
+      typstLogger.info("handleCompile skipped: compiler for active tab not ready", {
+        compileEventId,
+        currentActivePath,
+        activeIsTex,
+        activeIsTypst,
+        latexReady,
+        typstReady,
       });
       return;
     }
@@ -2867,6 +3092,18 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       const pdfBlob = useTypst
         ? await compileTypstToPdf(typSource!, additionalFiles)
         : await compileLatexWithFallback();
+
+      if (cancelled || compileRunId !== compileRunIdRef.current || activeTabPathRef.current !== currentActivePath) {
+        typstLogger.info("handleCompile ignored stale result", {
+          compileEventId,
+          compileRunId,
+          latestRunId: compileRunIdRef.current,
+          currentActivePath,
+          latestActivePath: activeTabPathRef.current,
+        });
+        return;
+      }
+
       setLastCompileMs(Math.round(performance.now() - start));
       typstLogger.info("handleCompile success", {
         compileEventId,
@@ -2887,11 +3124,13 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         stack: e instanceof Error ? e.stack : undefined,
       });
     } finally {
-      setIsCompiling(false);
-      compilationCancelRef.current = null; // Clear cancellation ref
+      if (compileRunId === compileRunIdRef.current) {
+        setIsCompiling(false);
+        compilationCancelRef.current = null; // Clear cancellation ref
+      }
       typstLogger.info("handleCompile finally", {
         compileEventId,
-        isCompiling: false,
+        isCompiling: compileRunId === compileRunIdRef.current ? false : isCompilingRef.current,
       });
     }
   };
@@ -2905,11 +3144,16 @@ Buffer manager exists: ${!!getBufferMgr()}`;
 
   useEffect(() => {
     const currentYText = getCurrentYText();
-    if (compilerReady && currentYText && fs && !autoCompileDoneRef.current && !isCompiling) {
+    const currentPath = activeTabPathRef.current;
+    const isTex = currentPath.toLowerCase().endsWith('.tex');
+    const isTyp = currentPath.toLowerCase().endsWith('.typ');
+    const activeCompilerReady = (isTex && latexReady) || (isTyp && typstReady);
+
+    if (activeCompilerReady && currentYText && fs && !autoCompileDoneRef.current && !isCompiling) {
       autoCompileDoneRef.current = true;
       void handleCompile();
     }
-  }, [compilerReady, fs, isCompiling, handleCompile, activeTabPath]); // ✅ Add activeTabPath to trigger when switching files
+  }, [latexReady, typstReady, fs, isCompiling, handleCompile, activeTabPath]); // ✅ Add activeTabPath to trigger when switching files
 
   // 🔧 FIX: Reset autoCompileDoneRef when switching files to prevent broken compilation
   useEffect(() => {
@@ -2928,7 +3172,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
   }, [isCompiling]);
 
   useEffect(() => {
-    if (!autoCompileOnChange || !compilerReady || !fs) return;
+    const currentPath = activeTabPathRef.current;
+    const isTex = currentPath.toLowerCase().endsWith('.tex');
+    const isTyp = currentPath.toLowerCase().endsWith('.typ');
+    const activeCompilerReady = (isTex && latexReady) || (isTyp && typstReady);
+
+    if (!autoCompileOnChange || !activeCompilerReady || !fs) return;
     
     let timer: ReturnType<typeof setTimeout> | null = null;
     let currentYText: Y.Text | null = null;
@@ -2977,7 +3226,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       }
       if (timer) clearTimeout(timer);
     };
-  }, [autoCompileOnChange, autoCompileDebounceMs, compilerReady, fs, activeTabPath]); // ✅ Add activeTabPath to re-observe when switching files
+  }, [autoCompileOnChange, autoCompileDebounceMs, latexReady, typstReady, fs, activeTabPath]); // ✅ Add activeTabPath to re-observe when switching files
 
   const getCurrentChatContext = () => {
     const activeTab = openTabs.find((t) => t.path === activeTabPath);
@@ -3370,13 +3619,16 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     if (typeof window === "undefined") return;
     
     try {
-      // 🗑️ REMOVED: JSON filetree metadata system - using basic share URL only
-      console.log('📤 Using basic share URL (JSON filetree metadata removed)');
-      
       const baseUrl = window.location.origin + window.location.pathname;
       const urlParams = new URLSearchParams();
-      urlParams.set('project', id);
-      urlParams.set('recipient', 'true');
+
+      const signalingConfig = getWebRTCSignalingConfig();
+      const activeServer = signalingConfig.customServers.find((server) => typeof server === "string" && server.trim());
+
+      if (activeServer) {
+        urlParams.set('server', activeServer.replace(/\/$/, ''));
+      }
+
       setShareUrl(`${baseUrl}?${urlParams.toString()}`);
       setShareModalOpen(true);
       return;
@@ -3487,10 +3739,6 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           filePath
         });
         
-        // Create file in filesystem
-        await fs.writeFile(filePath, new Uint8Array().buffer as ArrayBuffer, { mimeType: "text/plain" });
-        console.log('📄 Created new file:', filePath);
-        
         // Add to FileTreeManager (convert full path to relative path)
         const relativePath = filePath.startsWith(basePath) 
           ? filePath.slice(basePath.length) || '/' 
@@ -3506,7 +3754,17 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           transferChannel: "yjs" as const,
           isFolder: false,
         };
-        fileTreeManagerRef.current.createFile(fileMetadata);
+        const nodeId = fileTreeManagerRef.current.createFile(fileMetadata);
+        setRefreshTrigger((t) => t + 1);
+
+        try {
+          await fs.writeFile(filePath, new Uint8Array().buffer as ArrayBuffer, { mimeType: "text/plain" });
+          console.log('📄 Created new file:', filePath);
+        } catch (error) {
+          fileTreeManagerRef.current.deleteNode(nodeId);
+          setRefreshTrigger((t) => t + 1);
+          throw error;
+        }
         
       } else if (type === "folder") {
         // 🎯 ROBUST: Similar path handling for folders
@@ -3527,54 +3785,120 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           ? `${targetDir}/${trimmed}`.replace("//", "/")
           : `${targetDir}/${trimmed}`;
         
-        // Create folder in filesystem
-        await fs.mkdir(folderPath);
-        console.log('📁 Created new folder:', folderPath);
-        
         // Add to FileTreeManager (convert full path to relative path)
         const relativePath = folderPath.startsWith(basePath) 
           ? folderPath.slice(basePath.length).replace(/^\//, '') || '' 
           : folderPath.replace(/^\//, '');
         
         console.log('📁 Folder path conversion:', { folderPath, basePath, relativePath });
-        
-        // ✅ FIXED: Pause WebRTC to prevent YTree corruption during creation
-        if (fileTreeProviderRef.current) {
-          fileTreeProviderRef.current.destroy();
-          fileTreeProviderRef.current = null;
-        }
-        
-        // ✅ FIXED: Wait for folder creation to complete fully
+
         const nodeId = fileTreeManagerRef.current.createFolder(trimmed, relativePath);
         console.log('📁 Folder created in FileTreeManager with node ID:', nodeId);
-        
-        // ✅ FIXED: Sync filesystem to FileTreeManager (this fixes corruption without recreation)
-        if (fs && fileTreeManagerRef.current) {
-          console.log('🔄 Syncing filesystem to fix FileTreeManager state...');
-          await syncFilesystemToFileTree(fileTreeManagerRef.current, fs, basePath);
-          console.log('🔄 Filesystem sync completed');
-        }
-        
-        // ✅ FIXED: Recreate WebRTC provider after folder creation
-        if (fileTreeDocRef.current) {
-          const webrtcConfig = getWebRTCSignalingConfig();
-          if (webrtcConfig.enabled && webrtcConfig.customServers.length > 0) {
-            fileTreeProviderRef.current = new WebrtcProvider(
-              `${id}-filetree`,
-              fileTreeDocRef.current,
-              { signaling: [webrtcConfig.customServers[0]] }
-            );
-            console.log('🔗 Recreated WebRTC provider after folder creation');
-          }
-        }
-        
-        // ✅ FIXED: Trigger refresh AFTER sync is complete
         setRefreshTrigger((t) => t + 1);
+
+        try {
+          await fs.mkdir(folderPath);
+          console.log('📁 Created new folder:', folderPath);
+        } catch (error) {
+          fileTreeManagerRef.current.deleteNode(nodeId);
+          setRefreshTrigger((t) => t + 1);
+          throw error;
+        }
       }
     } catch (error) {
       console.error('Failed to create item:', error);
     }
   };
+
+  const reconcileFileTreeToFilesystem = useCallback(async (fileTreeManager: FileTreeManager, idbfs: any, projectBasePath: string) => {
+    if (isReconcilingFileTreeRef.current) return;
+    isReconcilingFileTreeRef.current = true;
+
+    try {
+      const treeItems = fileTreeManager.getTreeItems();
+      const desiredFolders = new Set<string>();
+      const desiredFiles = new Set<string>();
+
+      for (const item of treeItems) {
+        const fullPath = `${projectBasePath}/${item.path}`.replace(/\/+/g, "/");
+        if (item.isFolder) {
+          desiredFolders.add(fullPath);
+        } else {
+          desiredFiles.add(fullPath);
+        }
+      }
+
+      const ensureParentDirectories = async (fullPath: string) => {
+        const parentDir = fullPath.substring(0, fullPath.lastIndexOf("/")) || projectBasePath;
+        if (!parentDir || parentDir === "/") return;
+        const relativeParts = parentDir.slice(projectBasePath.length).split("/").filter(Boolean);
+        let currentDir = projectBasePath;
+        for (const part of relativeParts) {
+          currentDir = `${currentDir}/${part}`.replace(/\/+/g, "/");
+          const exists = await idbfs.exists(currentDir).catch(() => false);
+          if (!exists) {
+            await idbfs.mkdir(currentDir).catch(() => undefined);
+          }
+        }
+      };
+
+      const walkFilesystem = async (dirPath: string): Promise<{ folders: string[]; files: string[] }> => {
+        const folders: string[] = [];
+        const files: string[] = [];
+        const { dirs, files: dirFiles } = await idbfs.readdir(dirPath).catch(() => ({ dirs: [] as { name: string }[], files: [] as { name: string }[] }));
+
+        for (const dir of dirs) {
+          const fullPath = `${dirPath}/${dir.name}`.replace(/\/+/g, "/");
+          folders.push(fullPath);
+          const nested = await walkFilesystem(fullPath);
+          folders.push(...nested.folders);
+          files.push(...nested.files);
+        }
+
+        for (const file of dirFiles) {
+          files.push(`${dirPath}/${file.name}`.replace(/\/+/g, "/"));
+        }
+
+        return { folders, files };
+      };
+
+      const existing = await walkFilesystem(projectBasePath);
+
+      const desiredFolderList = Array.from(desiredFolders).sort((a, b) => a.localeCompare(b));
+      for (const folderPath of desiredFolderList) {
+        const exists = await idbfs.exists(folderPath).catch(() => false);
+        if (!exists) {
+          await ensureParentDirectories(folderPath);
+          await idbfs.mkdir(folderPath).catch(() => undefined);
+        }
+      }
+
+      const desiredFileList = Array.from(desiredFiles).sort((a, b) => a.localeCompare(b));
+      for (const filePath of desiredFileList) {
+        const exists = await idbfs.exists(filePath).catch(() => false);
+        if (!exists) {
+          await ensureParentDirectories(filePath);
+          await idbfs.writeFile(filePath, new Uint8Array().buffer as ArrayBuffer, { mimeType: "application/octet-stream" }).catch(() => undefined);
+        }
+      }
+
+      const extraFiles = existing.files
+        .filter((path) => !desiredFiles.has(path))
+        .filter((path) => path !== `${projectBasePath}/.antiprism_imported`);
+      for (const extraFile of extraFiles) {
+        await idbfs.rm(extraFile, false).catch(() => undefined);
+      }
+
+      const extraFolders = existing.folders
+        .filter((path) => !desiredFolders.has(path))
+        .sort((a, b) => b.length - a.length);
+      for (const extraFolder of extraFolders) {
+        await idbfs.rm(extraFolder, true).catch(() => undefined);
+      }
+    } finally {
+      isReconcilingFileTreeRef.current = false;
+    }
+  }, []);
 
   // Sync filesystem files to FileTreeManager
   const syncFilesystemToFileTree = async (fileTreeManager: FileTreeManager, idbfs: any, basePath: string) => {
@@ -3762,6 +4086,9 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     aiTopP={aiTopP}
                     aiContextWindow={aiContextWindow.toString()}
                     aiVisionEnabled={aiVisionEnabled}
+                    settingsModelId={settingsModelId}
+                    settingsModel={getModelById(settingsModelId)}
+                    availableModels={AVAILABLE_MODELS}
                     promptAsk={promptAsk}
                     promptCreate={promptCreate}
                     theme={theme}
@@ -3773,11 +4100,19 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                     onEditorLineWrappingChange={setEditorLineWrappingState}
                     onAutoCompileOnChangeChange={setAutoCompileOnChangeState}
                     onAutoCompileDebounceMsChange={setAutoCompileDebounceMsState}
-                    onAiMaxNewTokensChange={setAiMaxNewTokensState}
+                    onAiMaxNewTokensChange={(value) => {
+                      setAiMaxNewTokensState(value);
+                      setAiMaxNewTokens(value, settingsModelId);
+                    }}
                     onAiTemperatureChange={setAiTemperatureState}
                     onAiTopPChange={setAiTopPState}
-                    onAiContextWindowChange={(v) => setAiContextWindowState(parseInt(v, 10))}
+                    onAiContextWindowChange={(v) => {
+                      const value = parseInt(v, 10);
+                      setAiContextWindowState(value);
+                      setAiContextWindow(value, settingsModelId);
+                    }}
                     onAiVisionEnabledChange={setAiVisionEnabledState}
+                    onSettingsModelChange={setSettingsModelId}
                     onPromptAskChange={setPromptAskState}
                     onPromptCreateChange={setPromptCreateState}
                     onThemeChange={setTheme}
@@ -3793,10 +4128,10 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                       setEditorLineWrappingState(getEditorLineWrapping());
                       setAutoCompileOnChangeState(getAutoCompileOnChange());
                       setAutoCompileDebounceMsState(getAutoCompileDebounceMs());
-                      setAiMaxNewTokensState(getAiMaxNewTokens());
+                      setAiMaxNewTokensState(getAiMaxNewTokens(settingsModelId));
                       setAiTemperatureState(getAiTemperature());
                       setAiTopPState(getAiTopP());
-                      setAiContextWindowState(getAiContextWindow());
+                      setAiContextWindowState(getAiContextWindow(settingsModelId));
                       setAiVisionEnabledState(getAiVisionEnabled());
                       setPromptAskState(getPromptAsk());
                       setPromptCreateState(getPromptCreate());
@@ -4434,6 +4769,9 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                           aiTopP={aiTopP}
                           aiContextWindow={aiContextWindow.toString()}
                           aiVisionEnabled={aiVisionEnabled}
+                          settingsModelId={settingsModelId}
+                          settingsModel={getModelById(settingsModelId)}
+                          availableModels={AVAILABLE_MODELS}
                           promptAsk={promptAsk}
                           promptCreate={promptCreate}
                           theme={theme}
@@ -4446,11 +4784,19 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                           onEditorLineWrappingChange={setEditorLineWrappingState}
                           onAutoCompileOnChangeChange={setAutoCompileOnChangeState}
                           onAutoCompileDebounceMsChange={setAutoCompileDebounceMsState}
-                          onAiMaxNewTokensChange={setAiMaxNewTokensState}
+                          onAiMaxNewTokensChange={(value) => {
+                            setAiMaxNewTokensState(value);
+                            setAiMaxNewTokens(value, settingsModelId);
+                          }}
                           onAiTemperatureChange={setAiTemperatureState}
                           onAiTopPChange={setAiTopPState}
-                          onAiContextWindowChange={(v) => setAiContextWindowState(parseInt(v, 10))}
+                          onAiContextWindowChange={(v) => {
+                            const value = parseInt(v, 10);
+                            setAiContextWindowState(value);
+                            setAiContextWindow(value, settingsModelId);
+                          }}
                           onAiVisionEnabledChange={setAiVisionEnabledState}
+                          onSettingsModelChange={setSettingsModelId}
                           onPromptAskChange={setPromptAskState}
                           onPromptCreateChange={setPromptCreateState}
                           onWebRTCSignalingConfigChange={setWebrtcConfig}
@@ -4465,10 +4811,10 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                             setEditorLineWrappingState(getEditorLineWrapping());
                             setAutoCompileOnChangeState(getAutoCompileOnChange());
                             setAutoCompileDebounceMsState(getAutoCompileDebounceMs());
-                            setAiMaxNewTokensState(getAiMaxNewTokens());
+                            setAiMaxNewTokensState(getAiMaxNewTokens(settingsModelId));
                             setAiTemperatureState(getAiTemperature());
                             setAiTopPState(getAiTopP());
-                            setAiContextWindowState(getAiContextWindow());
+                            setAiContextWindowState(getAiContextWindow(settingsModelId));
                             setAiVisionEnabledState(getAiVisionEnabled());
                             setPromptAskState(getPromptAsk());
                             setPromptCreateState(getPromptCreate());
@@ -4561,7 +4907,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       </>
                     );
                   }
-                  if (activeTab?.type === "text" && currentYDocRef.current && provider) {
+                  if (activeTab?.type === "text" && currentYDocRef.current) {
                     // Check if this is a diff tab
                     const isDiffTab = activeTabPath?.endsWith(':diff');
                     const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
@@ -4589,15 +4935,6 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                           />
                         ) : (
                           (() => {
-                            // Debug: Check what's happening
-                            console.log('🔍 Editor render check:', { 
-                              activeTabPath, 
-                              isDiffTab: activeTabPath?.endsWith(':diff'), 
-                              hasDiffData: !!diffData, 
-                              isInitialized, 
-                              activeTab 
-                            });
-                            
                             // Don't render until fully initialized
                             if (!isInitialized) {
                               return (
@@ -4608,12 +4945,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                             }
                             
                             const currentYText = getCurrentYText();
-                            console.log('🎯 EditorPanel ytext:', { 
-                              activeTabPath, 
-                              hasYText: !!currentYText,
-                              yTextLength: currentYText?.length || 0
-                            });
-                            
+
                             // Only render EditorPanel when we have a valid ytext
                             if (!currentYText) {
                               return (

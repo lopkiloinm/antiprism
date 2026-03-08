@@ -149,48 +149,23 @@ export function ChatTree({ projectId, chatTreeManager, onChatSelect, refreshTrig
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Load chats from ChatTreeManager (matching OrderedFileTree pattern exactly)
-    const updateItems = async () => {
+    const updateItems = () => {
       try {
-        if (chatTreeManager) {
-          const loaded = chatTreeManager.getTreeItems();
-          
-          // Apply current sort criteria on initial load
-          if (loaded.length > 0) {
-            chatTreeManager.sortTreeItems(sortBy);
-            const sortedItems = chatTreeManager.getTreeItems();
-            setChats(sortedItems);
-          } else {
-            setChats(loaded);
-          }
-          
-          console.log(' Loaded and sorted chats from ChatTreeManager:', loaded.length, 'by:', sortBy);
+        if (!chatTreeManager) {
+          setChats([]);
+          return;
         }
+
+        chatTreeManager.sortTreeItems(sortBy);
+        setChats(chatTreeManager.getTreeItems());
       } catch (error) {
         console.error("Failed to load chats from ChatTreeManager:", error);
         setChats([]);
       }
     };
 
-    // Initial load
     updateItems();
-
-    // Listen for changes (this would need to be implemented in ChatTreeManager)
-    // For now, just update periodically and check for new chats
-    const interval = setInterval(async () => {
-      const previousCount = chats.length;
-      await updateItems();
-      // If new chats were added, re-sort them
-      if (chats.length > previousCount && chatTreeManager) {
-        console.log('🔄 New chats detected, re-sorting by:', sortBy);
-        chatTreeManager.sortTreeItems(sortBy);
-        const sortedItems = chatTreeManager.getTreeItems();
-        setChats(sortedItems);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [chatTreeManager, refreshTrigger, sortBy]); // Add sortBy dependency
+  }, [chatTreeManager, refreshTrigger, sortBy]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -218,11 +193,6 @@ export function ChatTree({ projectId, chatTreeManager, onChatSelect, refreshTrig
       const updatedItems = chatTreeManager.getTreeItems();
       setChats(updatedItems);
     }
-  };
-
-  // Sort chats based on criteria (now handled by ChatTreeManager)
-  const sortChats = (chats: ChatTreeItem[], criteria: SortCriteria): ChatTreeItem[] => {
-    return chats; // Sorting is now handled by ChatTreeManager
   };
 
   const performRename = async (newName: string) => {

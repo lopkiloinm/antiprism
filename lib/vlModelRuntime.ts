@@ -104,7 +104,7 @@ export function disposeVLModel() {
   etS = eiS = decS = tok = null; loading = false; loadP = null;
 }
 
-export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
+export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
   if (!isVLModelLoaded()) await initializeVLModel();
   
   // Handle Qwen3.5 with Transformers.js
@@ -144,7 +144,7 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
   return runDecode(emb, ids.length, cb, maxTok);
 }
 
-async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok = 512, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
+async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
   const model = (window as any).__qwenModel;
   const processor = (window as any).__qwenProcessor;
   const { RawImage, TextStreamer } = await import("@huggingface/transformers");
@@ -183,6 +183,14 @@ async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks
   // Prepare inputs
   const inputs = await processor(text, image);
   
+  // Calculate remaining context budget if no cap set
+  let effectiveMaxTok = maxTok;
+  if (!effectiveMaxTok || effectiveMaxTok <= 0) {
+    const VL = getVLModelDef();
+    const inputLength = inputs.input_ids.dims.at(-1);
+    effectiveMaxTok = Math.max(1, VL.maxContextTokens - inputLength);
+  }
+  
   // Generate response
   const streamer = new TextStreamer(processor.tokenizer, {
     skip_prompt: true,
@@ -192,9 +200,10 @@ async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks
     }
   });
   
+  const generationOptions = effectiveMaxTok && effectiveMaxTok > 0 ? { max_new_tokens: effectiveMaxTok } : {};
   const outputs = await model.generate({
     ...inputs,
-    max_new_tokens: maxTok,
+    ...generationOptions,
     streamer: streamer,
   });
   
@@ -846,7 +855,7 @@ function mergeImg(ids: number[], tokEmb: any, imgEmb: any) {
 }
 
 // --- Decoding ---
-async function runDecode(emb: any, seqLen: number, cb?: VLStreamCallbacks, maxTok = 512) {
+async function runDecode(emb: any, seqLen: number, cb?: VLStreamCallbacks, maxTok?: number) {
   const VL = getVLModelDef();
   const HIDDEN = VL.hiddenSize ?? 2048;
   const KV_HEADS = VL.numKVHeads ?? 8;
@@ -870,7 +879,7 @@ async function runDecode(emb: any, seqLen: number, cb?: VLStreamCallbacks, maxTo
   let curEmb = emb;
   let curLen = emb.dims[1];
 
-  for (let step = 0; step < maxTok; step++) {
+  for (let step = 0; maxTok == null || maxTok <= 0 || step < maxTok; step++) {
     const mask = new ort.Tensor("int64", new BigInt64Array(curLen).fill(1n), [1, curLen]);
     const feed: Record<string, any> = { inputs_embeds: curEmb, attention_mask: mask, ...cache };
     const out = await decS.run(feed);

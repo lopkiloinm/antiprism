@@ -106,12 +106,67 @@ interface FileTreeProps {
   fileTreeManager?: FileTreeManager; 
 }
 
+function joinProjectPath(basePath: string, relativePath: string): string {
+  if (!relativePath) return basePath;
+  const normalizedBase = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+  const normalizedRelative = relativePath.startsWith("/") ? relativePath.slice(1) : relativePath;
+  return `${normalizedBase}/${normalizedRelative}`;
+}
+
+function buildNodesFromTreeItems(treeItems: TreeItem[], basePath: string): TreeNode[] {
+  const nodeMap = new Map<string, TreeNode>();
+  const rootNodes: TreeNode[] = [];
+
+  treeItems.forEach((item) => {
+    const fullPath = joinProjectPath(basePath, item.path);
+    nodeMap.set(item.id, {
+      name: item.name,
+      path: fullPath,
+      type: item.isFolder ? "folder" : "file",
+      size: item.size,
+      children: [],
+      loaded: item.isFolder,
+    });
+  });
+
+  treeItems.forEach((item) => {
+    const node = nodeMap.get(item.id);
+    if (!node) return;
+
+    if (!item.parentId || !nodeMap.has(item.parentId)) {
+      rootNodes.push(node);
+      return;
+    }
+
+    const parentNode = nodeMap.get(item.parentId);
+    if (!parentNode) {
+      rootNodes.push(node);
+      return;
+    }
+
+    parentNode.children = parentNode.children || [];
+    parentNode.children.push(node);
+  });
+
+  const sortNodes = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach((node) => {
+      if (node.children && node.children.length > 0) {
+        sortNodes(node.children);
+      }
+    });
+  };
+
+  sortNodes(rootNodes);
+  return rootNodes;
+}
+
 async function loadDir(fs: IdbfsFs, path: string, showHiddenYjsDocs = false, basePath = "/"): Promise<TreeNode[]> {
   const { dirs, files } = await fs.readdir(path);
   const nodes: TreeNode[] = [];
-
-  console.log(`🔍 Loading directory: ${path}`, { dirs: dirs.length, files: files.length });
-  console.log(`🔍 Files found:`, files.map(f => f.name));
 
   // Sort directories alphabetically
   const sortedDirs = dirs.sort((a, b) => a.name.localeCompare(b.name));
@@ -128,22 +183,11 @@ async function loadDir(fs: IdbfsFs, path: string, showHiddenYjsDocs = false, bas
     nodes.push({ name: f.name, path: fullPath, type: "file", size: stat?.size ?? 0 });
   }
 
-  // Check for duplicates before adding virtual files
-  const duplicateCheck = nodes.reduce((acc, node) => {
-    if (acc[node.name]) {
-      console.warn(`⚠️ Duplicate file found: ${node.name} at paths ${acc[node.name]} and ${node.path}`);
-    }
-    acc[node.name] = node.path;
-    return acc;
-  }, {} as Record<string, string>);
-
   // Deduplicate nodes by path to ensure unique entries
   const uniqueNodes = nodes.filter((node, index, self) => 
     index === self.findIndex((n) => n.path === node.path)
   );
-  
-  console.log(`🔍 Deduplicated nodes: ${nodes.length} -> ${uniqueNodes.length}`);
-  
+
   // Replace nodes with deduplicated version
   const finalNodes = uniqueNodes;
   
@@ -333,30 +377,36 @@ export function FileTree({ fs, basePath = "/", currentPath, onFileSelect, onRefr
   } | null>(null);
 
   useEffect(() => {
-    // ✅ PRIORITY: Use FileTreeManager data if available (immediate state)
-    if (fileTreeManager) {
-      try {
-        const treeItems = fileTreeManager.getTreeItems();
-        const treeNodes = treeItems.map((item: TreeItem) => ({
-          name: item.name,
-          path: item.path,
-          type: item.isFolder ? "folder" as const : "file" as const,
-          size: item.size,
-          modified: item.lastModified,
-          expanded: false,
-          children: [] // Will be loaded on demand
-        }));
-        setRootNodes(treeNodes);
-        console.log('🌳 Loaded tree from FileTreeManager:', treeNodes.length, 'items');
-        return;
-      } catch (error) {
-        console.warn('⚠️ Failed to load from FileTreeManager, falling back to filesystem:', error);
+    let cancelled = false;
+
+    const loadNodes = async () => {
+      if (fileTreeManager) {
+        try {
+          const treeItems = fileTreeManager.getTreeItems();
+          if (treeItems.length > 0) {
+            const treeNodes = buildNodesFromTreeItems(treeItems, basePath);
+            if (!cancelled) {
+              setRootNodes(treeNodes);
+            }
+            return;
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to load from FileTreeManager, falling back to filesystem:', error);
+        }
       }
-    }
-    
-    // ❌ FALLBACK: Use filesystem (slower, missing YJS metadata)
-    if (!fs) return;
-    loadDir(fs, basePath, showHiddenYjsDocs, basePath).then(setRootNodes);
+
+      if (!fs) return;
+      const fsNodes = await loadDir(fs, basePath, showHiddenYjsDocs, basePath);
+      if (!cancelled) {
+        setRootNodes(fsNodes);
+      }
+    };
+
+    loadNodes();
+
+    return () => {
+      cancelled = true;
+    };
   }, [fs, basePath, refreshTrigger, showHiddenYjsDocs, fileTreeManager]);
 
   const performRename = async (newName: string) => {

@@ -34,9 +34,7 @@ export class UserTreeManager {
   private yTree: YTree;
   private rootNodeId: string;
   private yMap: Y.Map<any>;
-  private persistence: IndexeddbPersistence;
   private userId: string;
-  private whenLoaded: Promise<void>;
 
   // Project managers cache for quick access
   private projectManagers: Map<string, {
@@ -72,41 +70,7 @@ export class UserTreeManager {
     
     console.log('👤 UserTreeManager root node ID:', this.rootNodeId);
     
-    // Initialize IndexedDB persistence
-    const docName = `antiprism-user-tree-${userId}`;
-    const doc = yMap.doc!;
-    this.persistence = new IndexeddbPersistence(docName, doc);
-    
-    // Create promise for when persistence is loaded
-    this.whenLoaded = new Promise<void>((resolve) => {
-      let loaded = false;
-      const done = () => {
-        if (loaded) return;
-        loaded = true;
-        console.log(`📂 User tree persistence loaded for user: ${userId}`);
-        resolve();
-      };
-
-      this.persistence.on('synced', () => {
-        console.log(`🔄 User tree persistence synced for user: ${userId}`);
-        done();
-      });
-
-      this.persistence.on('load', () => {
-        console.log(`📥 User tree persistence loaded from IndexedDB: ${userId}`);
-        done();
-      });
-
-      // Timeout fallback
-      setTimeout(() => {
-        if (!loaded) {
-          console.warn(`⏰ User tree persistence load timeout for ${userId}, proceeding`);
-          done();
-        }
-      }, 1000);
-    });
-    
-    console.log('👤 UserTreeManager initialized with yjs-orderedtree and IndexedDB persistence');
+    console.log('👤 UserTreeManager initialized with yjs-orderedtree');
   }
 
   private initializeRoot(): void {
@@ -133,10 +97,10 @@ export class UserTreeManager {
   }
 
   /**
-   * Wait for persistence to load
+   * Wait for persistence to load (deprecated, returns immediately)
    */
   async whenReady(): Promise<void> {
-    return this.whenLoaded;
+    return Promise.resolve();
   }
 
   /**

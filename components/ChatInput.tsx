@@ -99,7 +99,7 @@ export function ChatInput({
   }, [chatInput]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       onSend();
     }
@@ -126,7 +126,7 @@ export function ChatInput({
         value={chatInput}
         onChange={(e) => setChatInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={chatMode === "ask" ? "Ask about your LaTeX…" : "Describe the document to create…"}
+        placeholder={chatMode === "ask" ? "Ask about your LaTeX… (⌘+Enter to send)" : "Describe the document to create… (⌘+Enter to send)"}
         rows={1}
       />
       <div className="flex items-center justify-between gap-2 px-2 py-1 shrink-0">

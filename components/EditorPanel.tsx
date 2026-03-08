@@ -111,7 +111,7 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
   }), []);
 
   const initEditor = useCallback(() => {
-    if (!containerRef.current || !ydoc || !ytext || !provider) return;
+    if (!containerRef.current || !ydoc || !ytext) return;
 
     if (viewRef.current) {
       viewRef.current.destroy();
@@ -150,11 +150,13 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
       hasProvider: !!provider,
     });
 
-    provider.awareness.setLocalStateField("user", {
-      name: "User " + Math.floor(Math.random() * 100),
-      color: "#3b82f6",
-      colorLight: "#3b82f633",
-    });
+    if (provider) {
+      provider.awareness.setLocalStateField("user", {
+        name: "User " + Math.floor(Math.random() * 100),
+        color: "#3b82f6",
+        colorLight: "#3b82f633",
+      });
+    }
 
     const indentStr = " ".repeat(Math.max(1, Math.min(8, Math.round(tabSize))));
     const isTypst = currentPath.toLowerCase().endsWith(".typ");
@@ -258,7 +260,7 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
         "&.cm-editor .cm-scroller": { fontSize: `${Math.max(10, Math.min(24, fontSize))}px` },
       }),
       ...(langSupport ? [langSupport] : []),
-      yCollab(ytext, provider.awareness, { undoManager }),
+      ...(provider ? [yCollab(ytext, provider.awareness, { undoManager })] : []),
       ...(readOnly ? [EditorState.readOnly.of(true)] : []),
       scrollPastEnd(),
     ];

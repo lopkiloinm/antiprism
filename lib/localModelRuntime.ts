@@ -150,8 +150,9 @@ let AutoModelForCausalLM: any = null;
 let AutoTokenizer: any = null;
 
 import { getModelById, DEFAULT_MODEL_ID, type ModelDef } from "./modelConfig";
+import { getActiveModelId as getStoredActiveModelId, setActiveModelId as storeActiveModelId } from "./settings";
 
-let activeModelDef: ModelDef = getModelById(DEFAULT_MODEL_ID);
+let activeModelDef: ModelDef = getModelById(getStoredActiveModelId());
 
 function MODEL_ID() { return activeModelDef.hfId; }
 function MODEL_DTYPE() { return activeModelDef.dtype; }
@@ -192,6 +193,7 @@ export function switchModel(modelId: string): void {
   loadPromise = null;
   downloadProgress = 0;
   activeModelDef = def;
+  storeActiveModelId(modelId);
   console.info("[model] switched to", { id: def.id, hfId: def.hfId });
 }
 
@@ -810,7 +812,6 @@ async function _initializeModel(): Promise<boolean> {
 }
 
 import type { ChatMessage } from "./agent";
-import { LFM25_12B } from "./modelConfig";
 import { getAiMaxNewTokens, getAiTemperature, getAiTopP } from "./settings";
 
 export interface StreamingCallbacks {
@@ -822,6 +823,14 @@ export interface StreamingCallbacks {
     inputTokens: number
   ) => void;
   onComplete?: (outputTokens: number, elapsedSeconds: number, inputTokens: number) => void;
+}
+
+function getEffectiveMaxNewTokens(def: ModelDef, inputTokens: number): number {
+  const userMaxTokens = getAiMaxNewTokens(def.id);
+  if (userMaxTokens > 0) {
+    return userMaxTokens;
+  }
+  return Math.max(1, def.maxContextTokens - inputTokens);
 }
 
 /**
@@ -851,9 +860,8 @@ export async function generateFromMessages(messages: ChatMessage[]): Promise<str
     inputLen = (inputIds as { size: number }).size;
   }
 
-  // Use model's configured maxNewTokens if available, otherwise fall back to settings
   const activeDef = getActiveModelDef();
-  const modelMaxTokens = activeDef?.maxNewTokens || getAiMaxNewTokens();
+  const modelMaxTokens = getEffectiveMaxNewTokens(activeDef, inputLen);
   const temperature = getAiTemperature();
   const topP = getAiTopP();
   const outputs = await model.generate({
@@ -922,9 +930,8 @@ export async function generateFromMessagesStreaming(
       : undefined,
   });
 
-  // Use model's configured maxNewTokens if available, otherwise fall back to settings
   const activeDef = getActiveModelDef();
-  const modelMaxTokens = activeDef?.maxNewTokens || getAiMaxNewTokens();
+  const modelMaxTokens = getEffectiveMaxNewTokens(activeDef, inputTokens);
   const temperature = getAiTemperature();
   const topP = getAiTopP();
   const outputs = await model.generate({

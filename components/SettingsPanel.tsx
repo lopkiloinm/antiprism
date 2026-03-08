@@ -49,6 +49,7 @@ import {
 } from "@/lib/settings";
 import { DEFAULT_PROMPT_ASK } from "@/lib/agent/ask";
 import { DEFAULT_PROMPT_CREATE } from "@/lib/agent/create";
+import { type ModelDef } from "@/lib/modelConfig";
 import { Select } from "./Select";
 import { IconToggleLeft, IconToggleRight } from "./Icons";
 
@@ -64,6 +65,9 @@ interface SettingsPanelProps {
   aiTopP: number;
   aiContextWindow: string;
   aiVisionEnabled: boolean;
+  settingsModelId: string;
+  settingsModel: ModelDef;
+  availableModels: ModelDef[];
   promptAsk: string;
   promptCreate: string;
   theme: Theme;
@@ -80,6 +84,7 @@ interface SettingsPanelProps {
   onAiTopPChange: (v: number) => void;
   onAiContextWindowChange: (v: string) => void;
   onAiVisionEnabledChange: (v: boolean) => void;
+  onSettingsModelChange: (modelId: string) => void;
   onPromptAskChange: (v: string) => void;
   onPromptCreateChange: (v: string) => void;
   onThemeChange: (v: Theme) => void;
@@ -151,6 +156,9 @@ export function SettingsPanel({
   aiTopP,
   aiContextWindow,
   aiVisionEnabled,
+  settingsModelId,
+  settingsModel,
+  availableModels,
   promptAsk,
   promptCreate,
   theme,
@@ -166,6 +174,7 @@ export function SettingsPanel({
   onAiTopPChange,
   onAiContextWindowChange,
   onAiVisionEnabledChange,
+  onSettingsModelChange,
   onPromptAskChange,
   onPromptCreateChange,
   onWebRTCSignalingConfigChange,
@@ -174,6 +183,16 @@ export function SettingsPanel({
   onResetRequested,
 }: SettingsPanelProps) {
   const [webrtcConfig, setWebrtcConfig] = useState<WebRTCSignalingConfig>(getWebRTCSignalingConfig());
+  const aiMaxTokensUiMax = Math.max(AI_MAX_NEW_TOKENS_LIMITS.max, settingsModel.maxNewTokens);
+  const aiMaxTokensUiMin = AI_MAX_NEW_TOKENS_LIMITS.min;
+  const contextOptions = settingsModel.maxContextTokens > 32768
+    ? [
+        { value: "32768", label: "32K" },
+        { value: String(settingsModel.maxContextTokens), label: `${Math.round(settingsModel.maxContextTokens / 1024)}K` },
+      ]
+    : [
+        { value: String(settingsModel.maxContextTokens), label: `${Math.round(settingsModel.maxContextTokens / 1024)}K` },
+      ];
 
   const handleResetAll = () => {
     resetAllSettingsToDefaults();
@@ -321,26 +340,39 @@ export function SettingsPanel({
       <Section title="AI">
         <div className="flex flex-col gap-1.5">
           <Label
+            id="settings-ai-model"
+            label="Model"
+            hint="Choose which model's AI settings to edit. This does not change the active chat model."
+          />
+          <Select
+            id="settings-ai-model"
+            value={settingsModelId}
+            onChange={(value) => onSettingsModelChange(value)}
+            options={availableModels.map((model) => ({ value: model.id, label: model.label }))}
+          />
+        </div>
+        <div className="text-xs text-[var(--muted)]">Editing stored AI settings for {settingsModel.label}</div>
+        <div className="flex flex-col gap-1.5">
+          <Label
             id="settings-ai-max-tokens"
             label="Max new tokens"
-            hint={`${AI_MAX_NEW_TOKENS_LIMITS.min}–${AI_MAX_NEW_TOKENS_LIMITS.max}.`}
+            hint={`Optional safeguard for ${settingsModel.label}. Default is no app cap; set a value only if you want to limit responses.`}
           />
           <div className="flex items-center gap-2">
             <input
               id="settings-ai-max-tokens"
               type="range"
-              min={AI_MAX_NEW_TOKENS_LIMITS.min}
-              max={AI_MAX_NEW_TOKENS_LIMITS.max}
+              min={aiMaxTokensUiMin}
+              max={aiMaxTokensUiMax}
               step={128}
               value={aiMaxNewTokens}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                setAiMaxNewTokens(v);
                 onAiMaxNewTokensChange(v);
               }}
               className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-[var(--muted)] w-12 tabular-nums">{aiMaxNewTokens}</span>
+            <span className="text-sm text-[var(--muted)] w-20 tabular-nums">{aiMaxNewTokens === 0 ? "No cap" : aiMaxNewTokens}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -387,30 +419,25 @@ export function SettingsPanel({
           <Label 
             id="settings-context-window" 
             label="Context Window Size" 
-            hint="Maximum context length for conversations (LFM2.5: 32K, Qwen3.5: 256K)" 
+            hint={`Context budget for ${settingsModel.label}. Model max: ${Math.round(settingsModel.maxContextTokens / 1024)}K tokens.`} 
           />
           <Select
             id="settings-context-window"
             value={String(aiContextWindow)}
             onChange={(value) => {
-              const v = parseInt(value, 10);
-              setAiContextWindow(v);
               onAiContextWindowChange(value);
             }}
-            options={[
-              { value: "32768", label: "32K (LFM2.5 Models)" },
-              { value: "262144", label: "256K (Qwen3.5 Models)" }
-            ]}
+            options={contextOptions}
           />
         </div>
         <div className="flex items-center justify-between gap-2">
           <Label 
-            id="settings-qwen-vision" 
+            id="settings-ai-vision" 
             label="Enable Vision Processing" 
-            hint="Allow image analysis with Qwen3.5 model" 
+            hint={settingsModel.vision ? `Allow image analysis with ${settingsModel.label}.` : `${settingsModel.label} does not support vision input.`} 
           />
           <Toggle
-            id="settings-qwen-vision"
+            id="settings-ai-vision"
             checked={aiVisionEnabled}
             onToggle={() => {
               const next = !aiVisionEnabled;
