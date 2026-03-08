@@ -300,6 +300,86 @@ After enabling, push to `main` or run the workflow manually from the **Actions**
 
 ---
 
+## User Flows
+
+### 1. Application Initialization & New Project Creation
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Browser
+    participant IDB as IndexedDB
+    participant WGPU as WebGPU
+
+    User->>Browser: Open Application
+    Browser->>IDB: Load user preferences & recent projects
+    IDB-->>Browser: State restored
+    Browser->>WGPU: Warm up local AI models (lazy)
+    
+    User->>Browser: Click "New Project"
+    Browser->>IDB: Initialize project database structure
+    Browser->>IDB: Seed default files (main.tex, etc.)
+    Browser-->>User: Render Editor Interface
+    
+    User->>Browser: Modify document
+    Browser->>IDB: Auto-save document changes
+```
+
+### 2. Collaborative Document Editing (Yjs + WebRTC)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor PeerA as User A
+    participant EditorA as Browser A (Yjs)
+    participant Signal as Signaling Server
+    participant EditorB as Browser B (Yjs)
+    actor PeerB as User B
+
+    PeerA->>EditorA: Click "Share"
+    EditorA->>Signal: Register room ID & listening
+    EditorA-->>PeerA: Generate Share Link
+    
+    PeerA->>PeerB: Send Share Link
+    PeerB->>EditorB: Open Link
+    EditorB->>Signal: Request connection to room ID
+    Signal-->>EditorA: WebRTC connection request
+    EditorA->>EditorB: Establish P2P Connection
+    
+    Note over EditorA, EditorB: P2P Channel Established (Signaling Server no longer needed)
+    
+    EditorA->>EditorB: Sync initial Yjs CRDT state
+    PeerA->>EditorA: Type text
+    EditorA->>EditorB: Stream CRDT delta updates
+    EditorB-->>PeerB: Render text changes instantly
+```
+
+### 3. Local AI Interaction & Document Compilation
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Editor as UI / Editor
+    participant Model as Local AI (WebGPU)
+    participant WASM as texlyre-busytex
+    
+    User->>Editor: Ask AI to format text
+    Editor->>Model: Send context + prompt (no network)
+    Model-->>Editor: Stream generated response
+    Editor-->>User: Display AI suggestion
+    
+    User->>Editor: Apply changes to document
+    User->>Editor: Trigger compilation
+    Editor->>WASM: Send document files (.tex, .jpg)
+    Note over WASM: WebAssembly executes TeX engine locally
+    WASM-->>Editor: Return compiled PDF binary
+    Editor-->>User: Render PDF Preview
+```
+
+---
+
 ## Packages
 
 See [PACKAGES.md](./PACKAGES.md) for detailed usage and code snippets for Yjs, y-webrtc, CodeMirror, and related libraries.
