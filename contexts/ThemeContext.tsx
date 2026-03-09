@@ -33,7 +33,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   useEffect(() => {
     // Apply theme class to document
     const root = document.documentElement;
-    root.classList.remove("theme-light", "theme-dark", "theme-dark-purple", "theme-sepia");
+    root.classList.remove("theme-light", "theme-dark");
     root.classList.add(`theme-${theme}`);
   }, [theme]);
 

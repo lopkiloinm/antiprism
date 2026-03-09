@@ -292,13 +292,13 @@ export const AUTO_COMPILE_DEBOUNCE_LIMITS = {
 } as const;
 
 // --- Theme ---
-export type Theme = "light" | "dark" | "dark-purple" | "sepia";
+export type Theme = "light" | "dark";
 
 const DEFAULT_THEME: Theme = "dark";
 
 export function getTheme(): Theme {
   return get("theme", DEFAULT_THEME, (v) =>
-    v === "light" || v === "dark" || v === "dark-purple" || v === "sepia" ? v : null
+    v === "light" || v === "dark" ? v : null
   );
 }
 
@@ -309,8 +309,6 @@ export function setTheme(theme: Theme): void {
 export const THEME_LABELS: Record<Theme, string> = {
   light: "Light",
   dark: "Dark",
-  "dark-purple": "Dark Purple",
-  sepia: "Sepia",
 };
 
 // --- WebRTC Signaling ---

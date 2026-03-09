@@ -240,7 +240,7 @@ export function SettingsPanel({
             label="Font size"
             hint={`${EDITOR_FONT_SIZE_LIMITS.min}–${EDITOR_FONT_SIZE_LIMITS.max} px.`}
           />
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2 mt-4">
             <input
               id="settings-font-size"
               type="range"
@@ -254,7 +254,7 @@ export function SettingsPanel({
               }}
               className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-[var(--muted)] w-8 tabular-nums">{editorFontSize}</span>
+            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{editorFontSize}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -263,7 +263,7 @@ export function SettingsPanel({
             label="Tab size"
             hint={`${EDITOR_TAB_SIZE_LIMITS.min}–${EDITOR_TAB_SIZE_LIMITS.max} spaces inserted on Tab.`}
           />
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2 mt-4">
             <input
               id="settings-tab-size"
               type="range"
@@ -277,7 +277,7 @@ export function SettingsPanel({
               }}
               className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-[var(--muted)] w-8 tabular-nums">{editorTabSize}</span>
+            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{editorTabSize}</span>
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -317,7 +317,7 @@ export function SettingsPanel({
             label="Auto-compile delay (ms)"
             hint={`${AUTO_COMPILE_DEBOUNCE_LIMITS.min}–${AUTO_COMPILE_DEBOUNCE_LIMITS.max} ms.`}
           />
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2 mt-4">
             <input
               id="settings-debounce"
               type="range"
@@ -332,7 +332,7 @@ export function SettingsPanel({
               }}
               className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-[var(--muted)] w-14 tabular-nums">{autoCompileDebounceMs}</span>
+            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{autoCompileDebounceMs}</span>
           </div>
         </div>
       </Section>
@@ -358,7 +358,7 @@ export function SettingsPanel({
             label="Max new tokens"
             hint={`Optional safeguard for ${settingsModel.label}. Default is no app cap; set a value only if you want to limit responses.`}
           />
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2 mt-4">
             <input
               id="settings-ai-max-tokens"
               type="range"
@@ -372,12 +372,12 @@ export function SettingsPanel({
               }}
               className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-[var(--muted)] w-20 tabular-nums">{aiMaxNewTokens === 0 ? "No cap" : aiMaxNewTokens}</span>
+            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{aiMaxNewTokens === 0 ? "No cap" : aiMaxNewTokens}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label id="settings-ai-temperature" label="Temperature" hint="Higher = more random." />
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2 mt-4">
             <input
               id="settings-ai-temperature"
               type="range"
@@ -392,12 +392,12 @@ export function SettingsPanel({
               }}
               className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-[var(--muted)] w-10 tabular-nums">{aiTemperature.toFixed(2)}</span>
+            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{aiTemperature.toFixed(2)}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label id="settings-ai-top-p" label="Top-p (nucleus)" hint="Sampling threshold." />
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2 mt-4">
             <input
               id="settings-ai-top-p"
               type="range"
@@ -412,7 +412,7 @@ export function SettingsPanel({
               }}
               className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
             />
-            <span className="text-sm text-[var(--muted)] w-10 tabular-nums">{aiTopP.toFixed(2)}</span>
+            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{aiTopP.toFixed(2)}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5">

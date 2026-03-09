@@ -21,6 +21,7 @@ import { NameModal } from "@/components/NameModal";
 import { ImageViewer } from "@/components/ImageViewer";
 import { EditorPanel, type EditorPanelHandle } from "@/components/EditorPanel";
 import { ChatInput } from "@/components/ChatInput";
+import { ExamplePrompts } from "@/components/ExamplePrompts";
 import { AIModelDownloadProgress } from "@/components/AIModelDownloadProgress";
 import { ChatTree, type ChatTreeProps } from "@/components/ChatTree";
 import { FileDocumentManager } from "@/lib/fileDocumentManager";
@@ -556,31 +557,19 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     (async () => {
       if (sidebarTab === "git" && gitDiffRef.current && !gitDiffViewRef.current) {
       // Use same theming as main editor
-      const isLightTheme = theme === "light" || theme === "sepia";
+      const isLightTheme = theme === "light";
       
       const highlight = HighlightStyle.define(
-        theme === "dark-purple"
+        isLightTheme
           ? [
-              { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#c4b5fd" },
-              { tag: [t.string, t.special(t.string)], color: "#f9a8d4" },
-              { tag: [t.number, t.bool, t.null], color: "#93c5fd" },
-              { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#67e8f9" },
-              { tag: [t.definition(t.variableName), t.variableName], color: "#e9d5ff" },
-              { tag: [t.typeName, t.className], color: "#a7f3d0" },
-              { tag: [t.comment], color: "#9ca3af", fontStyle: "italic" },
-              { tag: [t.heading, t.strong], color: "#e9d5ff", fontWeight: "600" },
-              { tag: [t.link, t.url], color: "#93c5fd", textDecoration: "underline" },
+              { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#7c3aed" },
+              { tag: [t.string, t.special(t.string)], color: "#b45309" },
+              { tag: [t.number, t.bool, t.null], color: "#2563eb" },
+              { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#0f766e" },
+              { tag: [t.definition(t.variableName), t.variableName], color: "#111827" },
+              { tag: [t.typeName, t.className], color: "#0f766e" },
+              { tag: [t.comment], color: "#6b7280", fontStyle: "italic" },
             ]
-          : isLightTheme
-            ? [
-                { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#7c3aed" },
-                { tag: [t.string, t.special(t.string)], color: "#b45309" },
-                { tag: [t.number, t.bool, t.null], color: "#2563eb" },
-                { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#0f766e" },
-                { tag: [t.definition(t.variableName), t.variableName], color: "#111827" },
-                { tag: [t.typeName, t.className], color: "#0f766e" },
-                { tag: [t.comment], color: "#6b7280", fontStyle: "italic" },
-              ]
             : [
                 // Dark (default) palette tuned to match app dark surface
                 { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#93c5fd" },
@@ -612,16 +601,10 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             borderRight: "1px solid var(--border)",
           },
           ".cm-activeLine": {
-            backgroundColor:
-              theme === "dark-purple"
-                ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-                : "color-mix(in srgb, var(--accent) 10%, transparent)",
+            backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
           },
           ".cm-activeLineGutter": {
-            backgroundColor:
-              theme === "dark-purple"
-                ? "color-mix(in srgb, var(--accent) 18%, transparent)"
-                : "color-mix(in srgb, var(--accent) 14%, transparent)",
+            backgroundColor: "color-mix(in srgb, var(--accent) 14%, transparent)",
           },
           ".cm-selectionBackground": {
             backgroundColor: isLightTheme
@@ -2434,6 +2417,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     { metaKey: true, key: "1", action: () => setSidebarTab("files") },
     { metaKey: true, key: "2", action: () => setSidebarTab("chats") },
     { metaKey: true, key: "3", action: () => setSidebarTab("git") },
+    { metaKey: true, key: "4", action: () => setSidebarTab("search") },
   ]);
 
   // Update summary when active tab changes
@@ -3262,6 +3246,10 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     setChatCreationModalOpen(false);
     
     console.log('💬 Created chat with ChatTreeManager:', trimmedName);
+  };
+
+  const handleSelectExamplePrompt = (prompt: string) => {
+    setChatInput(prompt);
   };
 
   const handleSendChat = async () => {
@@ -4416,7 +4404,15 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
       </aside>
 
       {/* Main sidebar */}
-      <aside style={{ width: sidebarWidth, minWidth: sidebarWidth > 0 ? 180 : 0, maxWidth: 480, transition: "width 0.15s ease-out" }} className="border-r border-[var(--border)] flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden">
+      <aside 
+        style={{ 
+          width: sidebarWidth, 
+          minWidth: sidebarWidth > 0 ? 180 : 0, 
+          maxWidth: 480, 
+          transition: "width 0.15s ease-out" 
+        }} 
+        className={`${sidebarWidth > 0 ? "border-r border-[var(--border)]" : ""} flex flex-col min-h-0 bg-[var(--background)] shrink-0 overflow-hidden`}
+      >
         <div className="px-3 py-2 border-b border-[var(--border)] shrink-0 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <ProjectDropdown
@@ -4700,7 +4696,15 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
           </div>
         </div>}
       </aside>
-      <ResizableDivider direction="horizontal" onResize={(d) => setSidebarWidth((w) => Math.max(180, Math.min(480, w + d)))} onDoubleClick={() => setSidebarWidth((w) => w > 0 ? 0 : 256)} />
+      <ResizableDivider
+        direction="horizontal"
+        currentSize={sidebarWidth}
+        collapsedThreshold={0}
+        onResize={(d) => setSidebarWidth((w) => Math.max(180, Math.min(480, w + d)))}
+        onDoubleClick={() => setSidebarWidth((w) => w > 0 ? 0 : 256)}
+        onCollapse={() => setSidebarWidth(0)}
+        onExpand={() => setSidebarWidth(256)}
+      />
       <main className="flex-1 flex min-w-0 min-h-0">
         {(() => {
           // When git tab is selected, show diff panel instead of regular editor
@@ -4858,8 +4862,39 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                           style={{ paddingBottom: `${chatInputPadding}px` }}
                         >
                           {msgs.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-[var(--muted)] px-6">
-                              <p className="text-sm">Send a message to start chatting.</p>
+                            <div className="flex flex-col items-center justify-center h-full px-6 py-8">
+                              <p className="text-lg text-[var(--foreground)] mb-4 text-center">What can I do for you?</p>
+                              <p className="text-sm text-[var(--muted)] mb-8 text-center max-w-2xl">
+                                Choose an example below to get started, or type your own question.
+                              </p>
+                              <div className="mb-8 w-full max-w-lg">
+                                <div className="bg-[var(--background)] rounded-lg border border-[var(--border)] shadow-sm overflow-hidden">
+                                  <ExamplePrompts 
+                                    onSelectPrompt={handleSelectExamplePrompt} 
+                                    chatMode={chatMode}
+                                  />
+                                </div>
+                              </div>
+                              <div className="w-full max-w-lg">
+                                <div className="bg-[var(--background)] rounded-lg border border-[var(--border)] shadow-sm overflow-hidden">
+                                  <ChatInput
+                                    chatInput={chatInput}
+                                    setChatInput={setChatInput}
+                                    chatMode={chatMode}
+                                    setChatMode={setChatMode}
+                                    isGenerating={isGenerating}
+                                    onSend={handleSendChat}
+                                    imageDataUrl={chatImageDataUrl}
+                                    onImageChange={setChatImageDataUrl}
+                                    isVisionModel={!!getModelById(selectedModelId)?.vision}
+                                    selectedModelId={selectedModelId}
+                                    onModelChange={async (id) => {
+                                      setSelectedModelId(id);
+                                      setModelReady(false);
+                                    }}
+                                  />
+                                </div>
+                              </div>
                             </div>
                           ) : (
                             <div className="px-4 py-3 space-y-3">
@@ -4870,6 +4905,13 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                                   isLast={i === msgs.length - 1}
                                   lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
                                   isStreaming={isGenerating && i === msgs.length - 1}
+                                  onUpdateMessage={(updatedMessage) => {
+                                    setBigChatMessages((prevMsgs) => 
+                                      prevMsgs.map((msg, index) => 
+                                        index === i ? updatedMessage : msg
+                                      )
+                                    );
+                                  }}
                                 />
                               ))}
                             </div>
@@ -4877,7 +4919,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                         </div>
 
                         {/* Floating chat input panel */}
-                        {(showAIPanel || activeTab?.type === "chat") && (
+                        {(showAIPanel || activeTab?.type === "chat") && msgs.length > 0 && (
                           <div className="absolute bottom-4 left-4 right-4">
                             <div className="flex flex-col bg-[var(--background)] rounded-lg border border-[var(--border)] shadow-lg overflow-hidden">
                               <div>
@@ -5026,8 +5068,13 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       </button>
                       <button
                         onClick={() => setChatExpanded((e) => !e)}
-                        className="w-7 h-7 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
-                        title={chatExpanded ? "Collapse" : "Expand"}
+                        disabled={getCurrentChatContext() === "big" ? bigChatMessages.length === 0 : smallChatMessages.length === 0}
+                        className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                          getCurrentChatContext() === "big" ? bigChatMessages.length === 0 : smallChatMessages.length === 0
+                            ? "text-[var(--muted)] opacity-50 cursor-not-allowed" 
+                            : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                        }`}
+                        title={getCurrentChatContext() === "big" ? bigChatMessages.length === 0 : smallChatMessages.length === 0 ? "Cannot expand empty chat" : (chatExpanded ? "Collapse" : "Expand")}
                       >
                         {chatExpanded ? <IconChevronDown /> : <IconChevronUp />}
                       </button>

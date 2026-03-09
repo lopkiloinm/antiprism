@@ -1,54 +1,127 @@
 import React, { useState, useEffect } from "react";
+import { Streamdown } from "streamdown";
+import { code } from "@streamdown/code";
+import { math } from "@streamdown/math";
+import { mermaid } from "@streamdown/mermaid";
+import { cjk } from "@streamdown/cjk";
 
-interface ThinkingRendererProps {
-  content: string;
-  isStreaming?: boolean;
+import { IconBrain, IconChevronDown, IconChevronRight } from "./Icons";
+
+interface ThinkingParseResult {
+  hasThinking: boolean;
+  thinking: string;
+  remainder: string;
 }
 
-export function ThinkingRenderer({ content, isStreaming = false }: ThinkingRendererProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [thinkingContent, setThinkingContent] = useState("");
+export function parseThinkingContent(content: string): ThinkingParseResult {
+  const thinkStartTag = "<think>";
+  const thinkEndTag = "</think>";
+  const thinkStartIndex = content.indexOf(thinkStartTag);
 
-  // Extract thinking content from <think> tags
+  if (thinkStartIndex === -1) {
+    return {
+      hasThinking: false,
+      thinking: "",
+      remainder: content,
+    };
+  }
+
+  const beforeThinking = content.substring(0, thinkStartIndex);
+  const thinkBodyStart = thinkStartIndex + thinkStartTag.length;
+  const thinkEndIndex = content.indexOf(thinkEndTag, thinkBodyStart);
+
+  if (thinkEndIndex === -1) {
+    return {
+      hasThinking: true,
+      thinking: content.substring(thinkBodyStart).trim(),
+      remainder: beforeThinking.trim(),
+    };
+  }
+
+  return {
+    hasThinking: true,
+    thinking: content.substring(thinkBodyStart, thinkEndIndex).trim(),
+    remainder: `${beforeThinking}${content.substring(thinkEndIndex + thinkEndTag.length)}`.trim(),
+  };
+}
+
+interface ThinkingRendererProps {
+  thinkingContent: string;
+  isStreaming?: boolean;
+  onToggleExpanded?: (expanded: boolean) => void;
+  initialExpanded?: boolean;
+  startedAt?: number;
+  durationMs?: number;
+}
+
+export function ThinkingRenderer({ thinkingContent, isStreaming = false, onToggleExpanded, initialExpanded = true, startedAt, durationMs }: ThinkingRendererProps) {
+  const [isExpanded, setIsExpanded] = useState(initialExpanded);
+  const [elapsedMs, setElapsedMs] = useState(0);
+
   useEffect(() => {
-    const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
-    if (thinkMatch) {
-      setThinkingContent(thinkMatch[1].trim());
+    if (typeof durationMs === "number" && !isStreaming) {
+      setElapsedMs(durationMs);
+      return;
     }
-  }, [content]);
 
-  // Auto-collapse when streaming is done
-  useEffect(() => {
-    if (!isStreaming && thinkingContent) {
-      const timer = setTimeout(() => {
-        setIsExpanded(false);
-      }, 2000); // Collapse after 2 seconds when done
-      return () => clearTimeout(timer);
+    if (!startedAt) {
+      setElapsedMs(0);
+      return;
     }
-  }, [isStreaming, thinkingContent]);
 
-  if (!thinkingContent) return null;
+    const updateElapsed = () => {
+      setElapsedMs(Date.now() - startedAt);
+    };
+
+    updateElapsed();
+
+    if (!isStreaming) {
+      return;
+    }
+
+    const interval = window.setInterval(updateElapsed, 200);
+    return () => window.clearInterval(interval);
+  }, [durationMs, isStreaming, startedAt]);
+
+  if (!thinkingContent) {
+    return null;
+  }
+
+  const elapsedSeconds = Math.max(1, Math.round(elapsedMs / 1000));
+  const statusLabel = `${isStreaming ? "Thinking" : "Thought"} for ${elapsedSeconds} second${elapsedSeconds === 1 ? "" : "s"}`;
+  const bodyClasses = "max-w-none prose-headings:text-[var(--foreground)] prose-p:text-[var(--foreground)] prose-li:text-[var(--foreground)] prose-strong:text-[var(--foreground)] prose-code:text-[var(--foreground)] prose-pre:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] prose-pre:text-[var(--foreground)] prose-a:text-[var(--accent)] [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 text-sm";
+
+  const handleToggle = () => {
+    const newExpanded = !isExpanded;
+    setIsExpanded(newExpanded);
+    onToggleExpanded?.(newExpanded);
+  };
 
   return (
-    <div className="mb-3 border-l-2 border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]">
+    <div className="mb-2 rounded-md border border-[var(--border)] bg-[var(--background)] overflow-hidden">
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-3 py-2 text-left text-xs font-medium text-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] transition-colors flex items-center justify-between"
+        onClick={handleToggle}
+        className="w-full px-3 py-1.5 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors flex items-center gap-2"
       >
-        <span>Thinking Process</span>
-        <svg
-          className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <span className="flex h-4 w-4 items-center justify-center text-[var(--muted)]">
+          {isExpanded ? <IconChevronDown /> : <IconChevronRight />}
+        </span>
+        <span className="flex h-4 w-4 items-center justify-center text-[var(--muted)]">
+          <IconBrain />
+        </span>
+        <span className={`truncate ${isStreaming ? "animate-pulse" : ""}`}>{statusLabel}</span>
       </button>
       
       {isExpanded && (
-        <div className="px-3 pb-3 text-xs text-[var(--muted)] font-mono whitespace-pre-wrap border-t border-[color-mix(in_srgb,var(--border)_30%,transparent)]">
-          {thinkingContent}
+        <div className="border-t border-[var(--border)] px-3 py-2">
+          <div className={bodyClasses}>
+            <Streamdown 
+              plugins={{ code, math, mermaid, cjk }}
+              animated={false}
+            >
+              {thinkingContent}
+            </Streamdown>
+          </div>
         </div>
       )}
     </div>
@@ -56,5 +129,5 @@ export function ThinkingRenderer({ content, isStreaming = false }: ThinkingRende
 }
 
 export function stripThinkingTags(content: string): string {
-  return content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  return parseThinkingContent(content).remainder;
 }

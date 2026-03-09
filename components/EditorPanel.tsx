@@ -172,31 +172,19 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
       langSupport = latex();
     }
 
-    const isLightTheme = theme === "light" || theme === "sepia";
+    const isLightTheme = theme === "light";
 
     const highlight = HighlightStyle.define(
-      theme === "dark-purple"
+      isLightTheme
         ? [
-            { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#c4b5fd" },
-            { tag: [t.string, t.special(t.string)], color: "#f9a8d4" },
-            { tag: [t.number, t.bool, t.null], color: "#93c5fd" },
-            { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#67e8f9" },
-            { tag: [t.definition(t.variableName), t.variableName], color: "#e9d5ff" },
-            { tag: [t.typeName, t.className], color: "#a7f3d0" },
-            { tag: [t.comment], color: "#9ca3af", fontStyle: "italic" },
-            { tag: [t.heading, t.strong], color: "#e9d5ff", fontWeight: "600" },
-            { tag: [t.link, t.url], color: "#93c5fd", textDecoration: "underline" },
+            { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#7c3aed" },
+            { tag: [t.string, t.special(t.string)], color: "#b45309" },
+            { tag: [t.number, t.bool, t.null], color: "#2563eb" },
+            { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#0f766e" },
+            { tag: [t.definition(t.variableName), t.variableName], color: "#111827" },
+            { tag: [t.typeName, t.className], color: "#0f766e" },
+            { tag: [t.comment], color: "#6b7280", fontStyle: "italic" },
           ]
-        : isLightTheme
-          ? [
-              { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#7c3aed" },
-              { tag: [t.string, t.special(t.string)], color: "#b45309" },
-              { tag: [t.number, t.bool, t.null], color: "#2563eb" },
-              { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#0f766e" },
-              { tag: [t.definition(t.variableName), t.variableName], color: "#111827" },
-              { tag: [t.typeName, t.className], color: "#0f766e" },
-              { tag: [t.comment], color: "#6b7280", fontStyle: "italic" },
-            ]
           : [
               // Dark (default) palette tuned to match app dark surface (no oneDark background overrides)
               { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#93c5fd" },
@@ -225,16 +213,10 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
           borderRight: "1px solid var(--border)",
         },
         ".cm-activeLine": {
-          backgroundColor:
-            theme === "dark-purple"
-              ? "color-mix(in srgb, var(--accent) 14%, transparent)"
-              : "color-mix(in srgb, var(--accent) 10%, transparent)",
+          backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
         },
         ".cm-activeLineGutter": {
-          backgroundColor:
-            theme === "dark-purple"
-              ? "color-mix(in srgb, var(--accent) 18%, transparent)"
-              : "color-mix(in srgb, var(--accent) 14%, transparent)",
+          backgroundColor: "color-mix(in srgb, var(--accent) 14%, transparent)",
         },
         ".cm-selectionBackground": {
           backgroundColor: isLightTheme

@@ -68,6 +68,7 @@ import {
   Braces,
   Palette,
   MessageSquare,
+  Brain,
   Sun,
   Moon,
   Home,
@@ -144,6 +145,7 @@ export const IconFileCog = () => <FileCog {...iconProps} />;
 export const IconBraces = () => <Braces {...iconProps} />;
 export const IconPalette = () => <Palette {...iconProps} />;
 export const IconMessageSquare = () => <MessageSquare {...iconProps} />;
+export const IconBrain = () => <Brain {...iconProps} />;
 export const IconHistory = () => <History {...iconProps} />;
 export const IconSun = () => <Sun {...iconProps} />;
 export const IconMoon = () => <Moon {...iconProps} />;

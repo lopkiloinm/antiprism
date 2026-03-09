@@ -138,11 +138,11 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mob
           }`}
         >
           {mounted ? (
-            (theme === "light" || theme === "sepia") ? <IconSun /> : <IconMoon />
+            theme === "light" ? <IconSun /> : <IconMoon />
           ) : (
             <IconSun />
           )}
-          <span className="capitalize">{mounted ? (theme === "dark-purple" ? "Dark Purple" : theme) : "light"}</span>
+          <span className="capitalize">{mounted ? theme : "light"}</span>
           <div className="ml-auto">
             {themeOpen ? <IconChevronUp /> : <IconChevronDown />}
           </div>
@@ -161,16 +161,6 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mob
             </button>
             <button
               onClick={() => {
-                setTheme("sepia");
-                setThemeOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-            >
-              <IconSun />
-              Sepia
-            </button>
-            <button
-              onClick={() => {
                 setTheme("dark");
                 setThemeOpen(false);
               }}
@@ -178,16 +168,6 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mob
             >
               <IconMoon />
               Dark
-            </button>
-            <button
-              onClick={() => {
-                setTheme("dark-purple");
-                setThemeOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-            >
-              <IconMoon />
-              Dark Purple
             </button>
           </div>
         )}

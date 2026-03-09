@@ -108,7 +108,7 @@ export function ChatInput({
   return (
     <div className="flex flex-col shrink-0 overflow-hidden">
       {isVisionModel && imageDataUrl && (
-        <div className="mx-3 mt-2 relative inline-block">
+        <div className="mx-3 mt-3 mb-2 relative inline-block">
           <img src={imageDataUrl} alt="Upload" className="max-h-24 rounded border border-[var(--border)]" />
           <button
             onClick={() => onImageChange?.(null)}
@@ -120,16 +120,18 @@ export function ChatInput({
         </div>
       )}
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-      <textarea
-        ref={textareaRef}
-        className="w-full min-h-[24px] max-h-[280px] resize-none border-0 bg-transparent px-2 pt-2 pb-1 text-sm text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-0"
-        value={chatInput}
-        onChange={(e) => setChatInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={chatMode === "ask" ? "Ask about your LaTeX… (⌘+Enter to send)" : "Describe the document to create… (⌘+Enter to send)"}
-        rows={1}
-      />
-      <div className="flex items-center justify-between gap-2 px-2 py-1 shrink-0">
+      <div className="px-3 py-2">
+        <textarea
+          ref={textareaRef}
+          className="w-full min-h-[24px] max-h-[280px] resize-none border-0 bg-transparent text-sm text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-0 leading-relaxed"
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={chatMode === "ask" ? "Ask about your LaTeX (⌘⏎)" : "Describe the document to create (⌘⏎)"}
+          rows={1}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 shrink-0">
         <div className="flex items-center gap-2">
           <div className="flex rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] overflow-hidden">
             <button
@@ -154,25 +156,32 @@ export function ChatInput({
             />
           )}
         </div>
-        <div className="flex items-center gap-1">
-          {isVisionModel && onImageChange && (
-            <button
-              className="w-8 h-8 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors shrink-0"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isGenerating}
-              title="Attach image"
-            >
-              <IconImage />
-            </button>
-          )}
-          <button
-            className="w-8 h-8 rounded flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-50 transition-colors shrink-0"
-            onClick={onSend}
-            disabled={isGenerating}
-            title="Send"
-          >
-            <IconSend />
-          </button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <div className="text-[11px] text-[var(--muted-foreground)] font-normal shrink-0">
+              {chatInput.length > 0 ? chatInput.length : ''}
+            </div>
+            <div className="flex items-center gap-1">
+              {isVisionModel && onImageChange && (
+                <button
+                  className="w-6 h-6 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isGenerating}
+                  title="Attach image"
+                >
+                  <IconImage />
+                </button>
+              )}
+              <button
+                className="w-6 h-6 rounded flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-50 transition-colors shrink-0"
+                onClick={onSend}
+                disabled={isGenerating}
+                title="Send"
+              >
+                <IconSend />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
