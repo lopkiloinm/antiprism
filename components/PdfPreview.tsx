@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { IconZoomIn, IconZoomOut, IconDownload, IconRefreshCw, IconMaximize2, IconMinimize2 } from "./Icons";
+import { IconZoomIn, IconZoomOut, IconDownload, IconRefreshCw, IconMaximize2, IconMinimize2, IconChevronLeft, IconChevronRight } from "./Icons";
 
 // Configure worker - use CDN for Next.js compatibility
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -21,9 +21,11 @@ interface PdfPreviewProps {
   latexReady?: boolean;
   lastCompileMs?: number | null;
   isFullscreen?: boolean;
+  onToggleExpanded?: () => void;
+  isExpanded?: boolean;
 }
 
-export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false, lastCompileMs, isFullscreen: propIsFullscreen = false }: PdfPreviewProps) {
+export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false, lastCompileMs, isFullscreen: propIsFullscreen = false, onToggleExpanded, isExpanded = false }: PdfPreviewProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [scale, setScale] = useState<number>(1);
   const [containerWidth, setContainerWidth] = useState<number>(400);
@@ -281,6 +283,15 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
       {/* Toolbar: Compile left | Page center | Zoom % + controls + Download + Fullscreen right */}
       <div className="h-12 flex items-center justify-between px-3 border-b border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] shrink-0">
         <div className="flex items-center gap-2">
+          {onToggleExpanded && (
+            <button
+              className="w-7 h-7 rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] text-[var(--foreground)] transition-colors flex items-center justify-center"
+              onClick={onToggleExpanded}
+              title={isExpanded ? "Restore editor and PDF split" : "Expand PDF preview"}
+            >
+              {isExpanded ? <IconChevronRight /> : <IconChevronLeft />}
+            </button>
+          )}
           <button
             className="w-7 h-7 rounded bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-50 transition-colors flex items-center justify-center"
             onClick={onCompile}

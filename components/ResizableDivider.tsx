@@ -75,8 +75,8 @@ export function ResizableDivider({
         return;
       }
       
-      // Only allow normal resizing if sidebar is not collapsed
-      if ((currentSize ?? 0) > (collapsedThreshold ?? 0)) {
+      // Only allow normal resizing if sidebar is not collapsed OR if this divider doesn't have collapse functionality
+      if ((currentSize ?? 0) > (collapsedThreshold ?? 0) || (!onCollapse && !onExpand)) {
         onResize(delta);
       }
     };

@@ -125,6 +125,26 @@ interface GitPanelProps {
   fileDocManager?: any; // FileDocumentManager instance for direct Yjs access
 }
 
+function dedupeChangesByPath(items: FileChange[]): FileChange[] {
+  const deduped = new Map<string, FileChange>();
+
+  for (const item of items) {
+    const existing = deduped.get(item.path);
+    if (!existing) {
+      deduped.set(item.path, item);
+      continue;
+    }
+
+    deduped.set(item.path, {
+      ...existing,
+      ...item,
+      staged: existing.staged || item.staged,
+    });
+  }
+
+  return Array.from(deduped.values());
+}
+
 export function GitPanelReal({
   projectId,
   currentPath,
@@ -373,8 +393,9 @@ export function GitPanelReal({
           status: "added" as const,
           staged: false,
         }));
-        setChanges(newChanges);
-        console.log('🔍 Set changes (no commits):', newChanges);
+        const dedupedChanges = dedupeChangesByPath(newChanges);
+        setChanges(dedupedChanges);
+        console.log('🔍 Set changes (no commits):', dedupedChanges);
         return; // Don't return early - repo is already set
       }
 
@@ -477,8 +498,9 @@ export function GitPanelReal({
         }
       }
 
-      console.log('🔍 Final detected changes:', detectedChanges);
-      setChanges(detectedChanges);
+      const dedupedChanges = dedupeChangesByPath(detectedChanges);
+      console.log('🔍 Final detected changes:', dedupedChanges);
+      setChanges(dedupedChanges);
     } catch (error) {
       console.error("Failed to detect file changes:", error);
     } finally {

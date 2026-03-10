@@ -4706,6 +4706,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
         onExpand={() => setSidebarWidth(256)}
       />
       <main className="flex-1 flex min-w-0 min-h-0">
+        <>
         {(() => {
           // When git tab is selected, show diff panel instead of regular editor
           if (sidebarTab === "git") {
@@ -4721,6 +4722,10 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       activePath={activeGitTabPath && gitTabs.find(t => t.path === activeGitTabPath) ? activeGitTabPath : null}
                       onSelect={(path) => setActiveGitTabPath(path)}
                       onClose={handleGitTabClose}
+                      onToggleFileTree={() => setSidebarWidth((w) => (w > 0 ? 0 : 256))}
+                      onToggleRightPanel={() => setEditorFraction((f) => (f >= 0.99 ? 0.5 : 1))}
+                      isFileTreeCollapsed={sidebarWidth === 0}
+                      isRightPanelCollapsed={editorFraction >= 0.99}
                     />
                   </div>
                 )}
@@ -4743,6 +4748,8 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
 
           // Regular editor panel for files/chats tabs ONLY
           const displayTabs = openTabs; // Never mix with git tabs
+          const isSidebarCollapsed = sidebarWidth === 0;
+          const isRightPanelCollapsed = editorFraction >= 0.99;
             
           return (
             <section style={{ flex: `${editorFraction} 1 0%` }} className="flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
@@ -4754,6 +4761,10 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                   onSelect={handleTabSelect}
                   onClose={handleTabClose}
                   onReorder={handleTabReorder}
+                  onToggleFileTree={() => setSidebarWidth((w) => (w > 0 ? 0 : 256))}
+                  onToggleRightPanel={() => setEditorFraction((f) => (f >= 0.99 ? 0.5 : 1))}
+                  isFileTreeCollapsed={isSidebarCollapsed}
+                  isRightPanelCollapsed={isRightPanelCollapsed}
                 />
               </div>
               <div className="flex-1 relative min-h-0 overflow-hidden">
@@ -5074,7 +5085,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                             ? "text-[var(--muted)] opacity-50 cursor-not-allowed" 
                             : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
                         }`}
-                        title={getCurrentChatContext() === "big" ? bigChatMessages.length === 0 : smallChatMessages.length === 0 ? "Cannot expand empty chat" : (chatExpanded ? "Collapse" : "Expand")}
+                        title={getCurrentChatContext() === "big" ? (bigChatMessages.length === 0 ? "Cannot expand empty chat" : (chatExpanded ? "Collapse" : "Expand")) : (smallChatMessages.length === 0 ? "Cannot expand empty chat" : (chatExpanded ? "Collapse" : "Expand"))}
                       >
                         {chatExpanded ? <IconChevronDown /> : <IconChevronUp />}
                       </button>
@@ -5145,16 +5156,19 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               />
             ) : (
               <PdfPreview
-                pdfUrl={pdfUrl}
-                onCompile={handleCompile}
-                isCompiling={isCompiling}
-                latexReady={latexReady}
-                lastCompileMs={lastCompileMs}
-                isFullscreen={isFullscreen}
-              />
+                  pdfUrl={pdfUrl}
+                  onCompile={handleCompile}
+                  isCompiling={isCompiling}
+                  latexReady={latexReady}
+                  lastCompileMs={lastCompileMs}
+                  isFullscreen={isFullscreen}
+                  onToggleExpanded={() => setEditorFraction((f) => (f <= 0.01 ? 0.5 : 0))}
+                  isExpanded={editorFraction <= 0.01}
+                />
             )}
           </div>
         </section>
+        </>
       </main>
       <ShareModal
         isOpen={shareModalOpen}

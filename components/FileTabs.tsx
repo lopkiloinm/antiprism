@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
+import { IconChevronLeft, IconChevronRight } from "@/components/Icons";
 
 export const SETTINGS_TAB_PATH = "__settings__";
 
@@ -24,6 +25,10 @@ interface FileTabsProps {
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
   onReorder?: (newTabs: Tab[]) => void;
+  onToggleFileTree?: () => void;
+  onToggleRightPanel?: () => void;
+  isFileTreeCollapsed?: boolean;
+  isRightPanelCollapsed?: boolean;
 }
 
 function getTabLabel(tab: Tab): string {
@@ -47,7 +52,7 @@ function getTabLabel(tab: Tab): string {
   return tab.path.split("/").filter(Boolean).pop() || tab.path;
 }
 
-export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder }: FileTabsProps) {
+export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onToggleFileTree, onToggleRightPanel, isFileTreeCollapsed = false, isRightPanelCollapsed = false }: FileTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
   const [isHovering, setIsHovering] = useState(false);
@@ -57,6 +62,10 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder }: Fil
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragStartRef = useRef({ x: 0, scrollLeft: 0 });
   const dragTabRef = useRef<{ index: number; tab: Tab } | null>(null);
+  const hasLeftToggle = !!onToggleFileTree;
+  const hasRightToggle = !!onToggleRightPanel;
+  const leftGutter = hasLeftToggle ? 48 : 0;
+  const rightGutter = hasRightToggle ? 48 : 0;
 
   const updateScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -85,6 +94,8 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder }: Fil
   const maxScroll = scrollState.scrollWidth - scrollState.clientWidth;
   const thumbRatio = maxScroll > 0 ? scrollState.clientWidth / scrollState.scrollWidth : 1;
   const thumbWidth = Math.max(24, scrollState.clientWidth * thumbRatio);
+  const showLeftFade = scrollState.scrollLeft > 0;
+  const showRightFade = scrollState.scrollLeft < maxScroll - 1;
   const thumbLeft =
     maxScroll > 0
       ? (scrollState.scrollLeft / maxScroll) * (scrollState.clientWidth - thumbWidth)
@@ -195,9 +206,57 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder }: Fil
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => !isDragging && setIsHovering(false)}
     >
+      {/* Left gradient overlay - fades from 100% to 0% opacity over tabs to the right of left button */}
+      {onToggleFileTree && showLeftFade && (
+        <div 
+          className="absolute top-0 bottom-0 left-12 w-24 pointer-events-none"
+          style={{
+            background: 'linear-gradient(to right, color-mix(in srgb, var(--border) 18%, var(--background)) 0%, transparent 100%)',
+            zIndex: 5
+          }}
+        />
+      )}
+      
+      {/* Right gradient overlay - fades from 100% to 0% opacity over tabs to the left of right button */}
+      {onToggleRightPanel && showRightFade && (
+        <div 
+          className="absolute top-0 bottom-0 right-12 w-24 pointer-events-none"
+          style={{
+            background: 'linear-gradient(to left, color-mix(in srgb, var(--border) 18%, var(--background)) 0%, transparent 100%)',
+            zIndex: 5
+          }}
+        />
+      )}
+
+      {/* Left collapse button - fixed position */}
+      {onToggleFileTree && (
+        <button
+          onClick={onToggleFileTree}
+          className="absolute left-0 top-0 bottom-0 w-8 h-8 m-2 flex items-center justify-center rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors bg-[var(--background)] z-10"
+          title={isFileTreeCollapsed ? "Show file tree" : "Collapse file tree"}
+        >
+          {isFileTreeCollapsed ? <IconChevronRight /> : <IconChevronLeft />}
+        </button>
+      )}
+      
+      {/* Right collapse button - fixed position */}
+      {onToggleRightPanel && (
+        <button
+          onClick={onToggleRightPanel}
+          className="absolute right-0 top-0 bottom-0 w-8 h-8 m-2 flex items-center justify-center rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors bg-[var(--background)] z-10"
+          title={isRightPanelCollapsed ? "Show right panel" : "Collapse right panel"}
+        >
+          {isRightPanelCollapsed ? <IconChevronLeft /> : <IconChevronRight />}
+        </button>
+      )}
+      
       <div
         ref={scrollRef}
-        className="file-tabs-scroll h-12 flex flex-nowrap items-end overflow-x-auto overflow-y-hidden"
+        className={`file-tabs-scroll h-12 flex flex-nowrap items-end overflow-x-auto overflow-y-hidden ${
+          hasLeftToggle ? 'ml-12' : ''
+        } ${
+          hasRightToggle ? 'mr-12' : ''
+        }`}
       >
       {tabs.map((tab, index) => {
         const isActive = tab.path === activePath;
@@ -222,6 +281,8 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder }: Fil
               isReordering && draggedTab === tab.path ? "opacity-50" : ""
             } ${
               isDragOver ? "border-l-2 border-l-[var(--accent)]" : ""
+            } ${
+              hasLeftToggle && index === 0 ? "border-l border-[var(--border)]" : ""
             }`}
             draggable
             onDragStart={(e) => handleTabDragStart(e, tab, index)}
@@ -282,7 +343,10 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder }: Fil
       )}
       </div>
       {overflow && (isHovering || isDragging) && (
-        <div className="absolute bottom-0 left-0 right-0 h-1.5 px-1 flex items-center pointer-events-none">
+        <div
+          className="absolute bottom-0 h-1.5 px-1 flex items-center pointer-events-none"
+          style={{ left: leftGutter, right: rightGutter }}
+        >
           <div className="flex-1 h-1 rounded-full bg-transparent relative">
             <div
               className="absolute top-0 h-1 rounded-full bg-[color-mix(in_srgb,var(--border)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_75%,transparent)] cursor-grab active:cursor-grabbing pointer-events-auto"

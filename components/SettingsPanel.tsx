@@ -505,22 +505,24 @@ export function SettingsPanel({
       </Section>
 
       <Section title="WebRTC Collaboration">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-4">
           <Label
             id="settings-webrtc-enabled"
             label="Enable real-time collaboration"
             hint="Allow other users to edit documents with you via WebRTC."
           />
-          <Toggle
-            id="settings-webrtc-enabled"
-            checked={webrtcConfig.enabled}
-            onToggle={() => {
-              const newConfig = { ...webrtcConfig, enabled: !webrtcConfig.enabled };
-              setWebrtcConfig(newConfig);
-              setWebRTCSignalingConfig(newConfig);
-              onWebRTCSignalingConfigChange(newConfig);
-            }}
-          />
+          <div className="flex items-center">
+            <Toggle
+              id="settings-webrtc-enabled"
+              checked={webrtcConfig.enabled}
+              onToggle={() => {
+                const newConfig = { ...webrtcConfig, enabled: !webrtcConfig.enabled };
+                setWebrtcConfig(newConfig);
+                setWebRTCSignalingConfig(newConfig);
+                onWebRTCSignalingConfigChange(newConfig);
+              }}
+            />
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5">
