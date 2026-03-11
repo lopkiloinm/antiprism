@@ -303,7 +303,7 @@ export default function AnimatedHero() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
             transition={{ duration: 0.8 }}
-            className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center"
+            className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center overflow-hidden"
           >
             <div className="landing-hero-aura absolute inset-[-18%] bg-[radial-gradient(circle_at_50%_50%,rgba(163,205,255,0.4),transparent_60%)]" />
             <motion.h2 
@@ -331,7 +331,7 @@ export default function AnimatedHero() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
             transition={{ duration: 0.8 }}
-            className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center"
+            className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center overflow-hidden"
           >
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
@@ -358,7 +358,7 @@ export default function AnimatedHero() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
             transition={{ duration: 0.8 }}
-            className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center"
+            className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center overflow-hidden"
           >
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
