@@ -44,6 +44,7 @@ export default function AnimatedHero() {
   const [isThinkingComplete, setIsThinkingComplete] = useState(false);
   const [loremText, setLoremText] = useState("");
   const [webrtcStep, setWebrtcStep] = useState(0);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   
   const step = STEPS[currentStepIndex];
 
@@ -187,7 +188,7 @@ export default function AnimatedHero() {
         }, 30);
         return () => clearInterval(downloadIntervalQwen);
       case "UPLOAD_IMAGE":
-        advance(1500);
+        advance(400);
         break;
       case "PROMPTING_IMAGE": {
         let isCancelled = false;
@@ -244,14 +245,38 @@ export default function AnimatedHero() {
             setWebrtcStep(7);
             clearInterval(webrtcInterval);
             
-            // Start typing lorem ipsum
-            const loremStr = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-            let lIdx = 0;
+            // Start typing lorem ipsum in parallel
+            const loremStr1 = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+            const loremStr2 = "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.";
+            
+            let lIdx1 = 0;
+            let lIdx2 = 0;
+            let isDone1 = false;
+            let isDone2 = false;
+            
             const loremInterval = setInterval(() => {
-              if (lIdx < loremStr.length) {
-                setLoremText(loremStr.substring(0, lIdx + 1));
-                lIdx++;
+              let text1 = "";
+              let text2 = "";
+              
+              if (lIdx1 < loremStr1.length) {
+                text1 = loremStr1.substring(0, lIdx1 + 1);
+                lIdx1++;
               } else {
+                text1 = loremStr1;
+                isDone1 = true;
+              }
+              
+              if (lIdx2 < loremStr2.length) {
+                text2 = loremStr2.substring(0, lIdx2 + 1);
+                lIdx2++;
+              } else {
+                text2 = loremStr2;
+                isDone2 = true;
+              }
+              
+              setLoremText(`${text1}\n\n${text2}`);
+              
+              if (isDone1 && isDone2) {
                 clearInterval(loremInterval);
                 advance(5000);
               }
@@ -265,7 +290,7 @@ export default function AnimatedHero() {
   }, [step, currentStepIndex]);
 
   const showCodePanel = ["WORKSPACE_ZOOM", "MODEL_SELECT_NANBEIGE", "MODEL_DOWNLOAD", "PROMPTING_TEXT", "THINKING_STREAM", "CODE_GEN_STREAM", "SHOW_DIFF", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
-  const showPdfPanel = ["WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
+  const showPdfPanel = ["SHOW_DIFF", "VISION_TRANSITION", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
   const isQwen = ["WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
 
   return (
@@ -497,20 +522,12 @@ export default function AnimatedHero() {
                   
                   {/* AI Input Box */}
                   <div className={`relative rounded-xl border bg-white p-2 flex items-center gap-2 mt-auto sticky bottom-0 transition-all duration-300 ${
-                    (step === "PROMPTING_TEXT" || step === "PROMPTING_IMAGE") 
+                    (step === "PROMPTING_TEXT" || step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE") 
                       ? "border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]" 
                       : "border-zinc-200 shadow-sm"
                   }`}>
                     {(step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE") && (
                       <div className="relative h-16 w-24 rounded-lg bg-white flex flex-col items-center justify-center border border-zinc-200 overflow-hidden shadow-sm shrink-0 mb-0.5 ml-0.5">
-                        {step === "UPLOAD_IMAGE" && (
-                          <motion.div 
-                            initial={{ height: "100%" }}
-                            animate={{ height: "0%" }}
-                            transition={{ duration: 1.5, ease: "easeInOut" }}
-                            className="absolute bottom-0 left-0 right-0 bg-blue-500/20 backdrop-blur-[2px] z-10"
-                          />
-                        )}
                         <span className="font-serif text-sm text-black">I ∝ 1/λ⁴</span>
                       </div>
                     )}
@@ -524,7 +541,7 @@ export default function AnimatedHero() {
                     <div className="flex-1 min-h-[32px] bg-transparent text-[14px] text-zinc-600 flex items-center px-1">
                       {step === "PROMPTING_TEXT" ? (promptText || <span className="text-zinc-400">Ask anything</span>) : 
                        step === "PROMPTING_IMAGE" ? (visionPromptText || <span className="text-zinc-400">Ask anything</span>) : 
-                       (step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "AUTO_COMPILE" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") ? "" : 
+                       (step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") ? "" : 
                        <span className="text-zinc-400">Ask anything</span>}
                     </div>
                     
@@ -537,43 +554,65 @@ export default function AnimatedHero() {
 
               {/* Center Panel - Editor */}
               <div className="flex-1 flex flex-col bg-white border-r border-zinc-200 relative overflow-hidden">
-                <div className="absolute inset-0 p-6 overflow-y-auto">
+                <div className="absolute inset-0 p-4 sm:p-6 overflow-y-auto">
                   {codeText ? (
-                    <div className="font-mono text-[13px] sm:text-[14px] leading-relaxed whitespace-pre-wrap relative inline-flex flex-wrap break-words w-full">
+                    <div className="font-mono text-[13px] sm:text-[14px] leading-relaxed relative flex flex-col w-full">
                       {codeText.split('\n').map((line, i) => {
-                        const isCmd = line.startsWith('\\');
-                        const isFormula = line.includes('$') || line.includes('\\begin{equation}') || line.includes('\\end{equation}') || line.includes('I \\propto \\frac{1}{\\lambda^4}');
+                        const isCmd = line.startsWith('\\') || line.trim().startsWith('\\');
+                        const isBlockFormula = line.includes('\\begin{equation}') || line.includes('\\end{equation}') || line.includes('I \\propto \\frac{1}{\\lambda^4}');
                         
-                        let lineClass = "px-1.5 py-0.5 rounded text-zinc-800 w-full";
+                        // Extract leading whitespace for indentation
+                        const matchIndent = line.match(/^(\s*)/);
+                        const indent = matchIndent ? matchIndent[1] : '';
+                        const trimmedLine = line.substring(indent.length);
                         
-                        // Extracting standard highlighting scheme
+                        // Extracting standard highlighting scheme with better contrast
                         const renderLine = () => {
                            if (isCmd) {
                              // LaTeX commands like \documentclass, \usepackage, \begin, etc.
-                             const match = line.match(/^(\\\w+)(?:{(.*?)})?/);
+                             const match = trimmedLine.match(/^(\\\w+)(?:{(.*?)})?/);
                              if (match) {
                                const [, cmd, arg] = match;
                                return (
                                  <span>
-                                   <span className="text-[#a626a4] font-medium">{cmd}</span>
-                                   {arg && <span className="text-[#50a14f]">{`{${arg}}`}</span>}
+                                   <span className="text-[#a626a4] font-semibold">{cmd}</span>
+                                   {arg && <span className="text-[#50a14f] font-medium">{`{${arg}}`}</span>}
+                                   <span className="text-[#383a42]">{trimmedLine.substring(match[0].length)}</span>
                                  </span>
                                );
                              }
-                             return <span className="text-[#a626a4] font-medium">{line}</span>;
-                           } else if (isFormula) {
-                             // Inline and block formulas
-                             return <span className="text-[#986801]">{line}</span>;
-                           } else if (line.trim().length > 0) {
-                             // Regular text
-                             return <span className="text-[#383a42]">{line}</span>;
+                             return <span className="text-[#a626a4] font-semibold">{trimmedLine}</span>;
+                           } else if (isBlockFormula) {
+                             // Block formulas - use distinct color for math
+                             return <span className="text-[#986801] font-medium">{trimmedLine}</span>;
+                           } else if (trimmedLine.includes('$')) {
+                             // Text with inline formulas
+                             const parts = trimmedLine.split(/(\$.*?\$)/g);
+                             return (
+                               <span className="text-[#24292e]">
+                                 {parts.map((part, pIdx) => (
+                                   part.startsWith('$') && part.endsWith('$') 
+                                     ? <span key={pIdx} className="text-[#986801] font-medium">{part}</span>
+                                     : <span key={pIdx}>{part}</span>
+                                 ))}
+                               </span>
+                             );
+                           } else if (trimmedLine.trim().length > 0) {
+                             // Regular text - strong black for contrast
+                             return <span className="text-[#24292e]">{trimmedLine}</span>;
                            }
-                           return <span>{line}</span>;
+                           return <span>{trimmedLine}</span>;
                         };
                         
                         return (
-                          <div key={i} className={lineClass}>
-                            {renderLine()}
+                          <div key={i} className="flex w-full min-h-[22px]">
+                            <div className="w-8 sm:w-10 shrink-0 text-right pr-3 select-none text-[#a0a1a7] text-[12px] opacity-70 sticky left-0 bg-white z-10 py-[1px]">
+                              {i + 1}
+                            </div>
+                            <div className="flex-1 pl-1 py-[1px] break-all sm:break-words whitespace-pre-wrap">
+                              {indent}
+                              {renderLine()}
+                            </div>
                           </div>
                         );
                       })}
@@ -592,14 +631,6 @@ export default function AnimatedHero() {
                     animate={{ width: "45%", opacity: 1 }}
                     className="border-l border-zinc-200 bg-zinc-100 flex flex-col z-10 shadow-[-10px_0_20px_-10px_rgba(0,0,0,0.05)]"
                   >
-                    <div className="h-12 border-b border-zinc-200 bg-white flex items-center justify-between px-4">
-                      <span className="text-xs font-medium text-zinc-600 flex items-center gap-2">
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600">
-                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                        </span>
-                        Compiled successfully
-                      </span>
-                    </div>
                     <div className="flex-1 p-6 flex justify-center overflow-y-auto bg-zinc-100/80">
                       <motion.div 
                         initial={{ y: 20, opacity: 0 }}
@@ -735,11 +766,20 @@ export default function AnimatedHero() {
                     )}
                   </AnimatePresence>
                 </div>
-                <div className="flex-1 p-6 font-mono text-[14px] bg-white overflow-y-auto">
+                <div className="flex-1 p-4 sm:p-6 font-mono text-[13px] sm:text-[14px] leading-relaxed relative bg-white overflow-y-auto">
                   {webrtcStep >= 7 && (
-                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-zinc-800 break-words whitespace-pre-wrap leading-relaxed">
-                       {loremText}
-                     </motion.div>
+                     <div className="relative flex flex-col w-full">
+                       {loremText.split('\n').map((line, i) => (
+                         <div key={i} className="flex w-full min-h-[22px]">
+                           <div className="w-8 sm:w-10 shrink-0 text-right pr-3 select-none text-[#a0a1a7] text-[12px] opacity-70 sticky left-0 bg-white z-10 py-[1px]">
+                             {i + 1}
+                           </div>
+                           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 pl-1 py-[1px] break-all sm:break-words whitespace-pre-wrap text-[#24292e]">
+                             {line || " "}
+                           </motion.div>
+                         </div>
+                       ))}
+                     </div>
                    )}
                 </div>
               </div>
@@ -806,11 +846,20 @@ export default function AnimatedHero() {
                     )}
                   </AnimatePresence>
                 </div>
-                <div className="flex-1 p-6 font-mono text-[14px] relative bg-white">
+                <div className="flex-1 p-4 sm:p-6 font-mono text-[13px] sm:text-[14px] leading-relaxed relative bg-white overflow-y-auto">
                   {webrtcStep >= 7 && (
-                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-zinc-800 relative inline-flex flex-wrap break-words whitespace-pre-wrap leading-relaxed">
-                       {loremText}
-                     </motion.div>
+                     <div className="relative flex flex-col w-full">
+                       {loremText.split('\n').map((line, i) => (
+                         <div key={i} className="flex w-full min-h-[22px]">
+                           <div className="w-8 sm:w-10 shrink-0 text-right pr-3 select-none text-[#a0a1a7] text-[12px] opacity-70 sticky left-0 bg-white z-10 py-[1px]">
+                             {i + 1}
+                           </div>
+                           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 pl-1 py-[1px] break-all sm:break-words whitespace-pre-wrap text-[#24292e]">
+                             {line || " "}
+                           </motion.div>
+                         </div>
+                       ))}
+                     </div>
                   )}
                 </div>
               </div>

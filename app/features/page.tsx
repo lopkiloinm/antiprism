@@ -338,8 +338,7 @@ function FeatureScene({ variant }: { variant: SceneVariant }) {
                   <span className="w-6 sm:w-8 shrink-0 text-zinc-400 select-none">43</span>
                   <span className="text-zinc-700 break-words">
                     The models show strong performance on
-                    <span className="bg-emerald-100/80 text-emerald-900 rounded-sm px-1 py-0.5 mx-1 font-medium border border-emerald-200/50 shadow-sm inline-flex items-center gap-1">
-                      <span className="w-1 h-2.5 sm:h-3 bg-emerald-500 animate-pulse rounded-full" />
+                    <span className="bg-emerald-100/80 text-emerald-900 rounded-sm px-1 py-0.5 mx-1 font-medium border border-emerald-200/50 shadow-sm">
                       the validation set
                     </span>
                     across all metrics.
@@ -347,7 +346,7 @@ function FeatureScene({ variant }: { variant: SceneVariant }) {
                 </div>
                 <div className="flex mt-2 mb-6">
                   <span className="w-6 sm:w-8 shrink-0 text-zinc-400 select-none">44</span>
-                  <span className="text-zinc-700 truncate">Particularly in zero-shot...</span>
+                  <span className="text-zinc-700 truncate">Particularly in zero-shot</span>
                 </div>
               </div>
 
@@ -554,13 +553,13 @@ export default function FeaturesPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="hidden text-sm font-medium text-zinc-600 hover:text-zinc-900 sm:block"
+              className="hidden items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 transition-colors sm:inline-flex"
             >
               Go to dashboard
             </Link>
             <Link
               href="/new"
-              className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-medium text-white shadow-[0_12px_30px_rgba(0,0,0,0.14)]"
+              className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-medium text-white shadow-[0_12px_30px_rgba(0,0,0,0.14)] hover:bg-zinc-800 transition-colors"
             >
               Start a new project
               <IconArrowRight />
@@ -693,7 +692,7 @@ export default function FeaturesPage() {
                 <div className="mt-10 flex flex-wrap justify-center gap-4">
                   <Link
                     href="/new"
-                    className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 text-base font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.14)] hover:scale-105 transition-transform"
+                    className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 text-base font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.14)] hover:bg-zinc-800 transition-colors"
                   >
                     Start a new project
                     <IconArrowRight />
