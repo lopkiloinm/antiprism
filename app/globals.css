@@ -9,6 +9,15 @@
   --muted: #71717a;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.08), 0 1px 1px 0 rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 10px -2px rgba(15, 23, 42, 0.1), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 12px 24px -8px rgba(15, 23, 42, 0.14), 0 4px 8px -4px rgba(15, 23, 42, 0.06);
+  --shadow-xl: 0 20px 32px -12px rgba(15, 23, 42, 0.18), 0 8px 16px -8px rgba(15, 23, 42, 0.08);
+  --surface-shadow-sm: var(--shadow-sm);
+  --surface-shadow-md: var(--shadow-md);
+  --surface-shadow-lg: var(--shadow-lg);
+  --surface-shadow-xl: var(--shadow-xl);
+  --surface-shadow-hover: 0 8px 16px rgba(15, 23, 42, 0.1);
   /* Unified spacing */
   --panel-padding: 0.5rem;   /* 8px - p-2 */
   --input-padding-x: 0.75rem; /* 12px - px-3 */
@@ -34,6 +43,15 @@
   --muted: #6b7280;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.08), 0 1px 1px 0 rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 10px -2px rgba(15, 23, 42, 0.1), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --shadow-lg: 0 12px 24px -8px rgba(15, 23, 42, 0.14), 0 4px 8px -4px rgba(15, 23, 42, 0.06);
+  --shadow-xl: 0 20px 32px -12px rgba(15, 23, 42, 0.18), 0 8px 16px -8px rgba(15, 23, 42, 0.08);
+  --surface-shadow-sm: var(--shadow-sm);
+  --surface-shadow-md: var(--shadow-md);
+  --surface-shadow-lg: var(--shadow-lg);
+  --surface-shadow-xl: var(--shadow-xl);
+  --surface-shadow-hover: 0 8px 16px rgba(15, 23, 42, 0.1);
 }
 
 /* Dark Theme (default) */
@@ -44,6 +62,15 @@
   --muted: #71717a;
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+  --shadow-sm: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.22);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 6px 14px -6px rgba(0, 0, 0, 0.34), 0 2px 6px -3px rgba(0, 0, 0, 0.24);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 14px 28px -12px rgba(0, 0, 0, 0.38), 0 6px 12px -6px rgba(0, 0, 0, 0.28);
+  --shadow-xl: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 22px 40px -18px rgba(0, 0, 0, 0.42), 0 10px 18px -10px rgba(0, 0, 0, 0.3);
+  --surface-shadow-sm: var(--shadow-sm);
+  --surface-shadow-md: var(--shadow-md);
+  --surface-shadow-lg: var(--shadow-lg);
+  --surface-shadow-xl: var(--shadow-xl);
+  --surface-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 22px -10px rgba(0, 0, 0, 0.34), 0 4px 8px -4px rgba(0, 0, 0, 0.24);
 }
 
 * {
@@ -100,6 +127,23 @@ select,
 
 *::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+.shadow-sm {
+  box-shadow: var(--surface-shadow-sm);
+}
+
+.shadow,
+.shadow-md {
+  box-shadow: var(--surface-shadow-md);
+}
+
+.shadow-lg {
+  box-shadow: var(--surface-shadow-lg);
+}
+
+.shadow-xl {
+  box-shadow: var(--surface-shadow-xl);
 }
 
 /* CodeMirror overrides - use absolute positioning so editor fills flex container and scrolls */

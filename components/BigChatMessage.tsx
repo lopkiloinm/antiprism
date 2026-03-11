@@ -54,28 +54,57 @@ export function BigChatMessage({
     message.content === "Thinking..." ||
     !!assistantDisplayContent;
 
+  const emitMessageUpdate = (overrides: Partial<ChatMessage>) => {
+    onUpdateMessage?.({
+      ...message,
+      thinkingContent: effectiveThinkingContent || undefined,
+      thinkingStartedAt,
+      thinkingDurationMs,
+      ...overrides,
+    });
+  };
+
   useEffect(() => {
     if (message.role !== "assistant") {
       return;
     }
 
     if (parsedThinking.thinking) {
-      setPersistedThinkingContent(parsedThinking.thinking);
+      if (persistedThinkingContent !== parsedThinking.thinking) {
+        setPersistedThinkingContent(parsedThinking.thinking);
+        emitMessageUpdate({ thinkingContent: parsedThinking.thinking });
+      }
 
       if (!thinkingStartedAt) {
-        setThinkingStartedAt(Date.now());
+        const startedAt = Date.now();
+        setThinkingStartedAt(startedAt);
+        emitMessageUpdate({
+          thinkingContent: parsedThinking.thinking,
+          thinkingStartedAt: startedAt,
+          thinkingDurationMs: undefined,
+        });
       }
 
       if (thinkingDurationMs !== undefined) {
         setThinkingDurationMs(undefined);
+        emitMessageUpdate({
+          thinkingContent: parsedThinking.thinking,
+          thinkingDurationMs: undefined,
+        });
       }
 
       return;
     }
 
     if (!isStreaming && persistedThinkingContent && thinkingStartedAt && thinkingDurationMs == null) {
-      setThinkingDurationMs(Date.now() - thinkingStartedAt);
-      onUpdateMessage?.({ ...message, thinkingExpanded: false });
+      const durationMs = Date.now() - thinkingStartedAt;
+      setThinkingDurationMs(durationMs);
+      emitMessageUpdate({
+        thinkingContent: persistedThinkingContent,
+        thinkingStartedAt,
+        thinkingDurationMs: durationMs,
+        thinkingExpanded: false,
+      });
     }
   }, [isStreaming, message, onUpdateMessage, parsedThinking.thinking, persistedThinkingContent, thinkingDurationMs, thinkingStartedAt]);
 
@@ -88,7 +117,7 @@ export function BigChatMessage({
           initialExpanded={message.thinkingExpanded !== false}
           startedAt={thinkingStartedAt}
           durationMs={thinkingDurationMs}
-          onToggleExpanded={(expanded) => onUpdateMessage?.({ ...message, thinkingExpanded: expanded })}
+          onToggleExpanded={(expanded) => emitMessageUpdate({ thinkingExpanded: expanded })}
         />
       )}
       {message.role === "user" ? (

@@ -14,6 +14,10 @@ export interface ChatMessage {
   createdPath?: string;
   markdown?: string;
   image?: string;
+  thinkingExpanded?: boolean;
+  thinkingContent?: string;
+  thinkingStartedAt?: number;
+  thinkingDurationMs?: number;
 }
 
 const CHAT_LIST_KEY = "antiprism_chats";

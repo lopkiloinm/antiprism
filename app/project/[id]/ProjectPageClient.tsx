@@ -1003,7 +1003,7 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
         if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
       });
     }
-  }, [bigChatMessages, chatExpanded]);
+  }, [bigChatMessages.length, chatExpanded, activeTabPath]);
 
   // Load big chat messages when switching to a chat tab
   useEffect(() => {
@@ -4917,11 +4917,17 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                                   lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
                                   isStreaming={isGenerating && i === msgs.length - 1}
                                   onUpdateMessage={(updatedMessage) => {
-                                    setBigChatMessages((prevMsgs) => 
-                                      prevMsgs.map((msg, index) => 
+                                    setBigChatMessages((prevMsgs) => {
+                                      const nextMsgs = prevMsgs.map((msg, index) => 
                                         index === i ? updatedMessage : msg
-                                      )
-                                    );
+                                      );
+                                      const activeTab = openTabs.find((t) => t.path === activeTabPath);
+                                      if (activeTab?.type === "chat") {
+                                        const chatId = activeTab.path.replace("/ai-chat/", "");
+                                        saveProjectChatMessages(id, chatId, nextMsgs, "big");
+                                      }
+                                      return nextMsgs;
+                                    });
                                   }}
                                 />
                               ))}

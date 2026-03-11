@@ -1,7 +1,21 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { IconChevronLeft, IconChevronRight } from "@/components/Icons";
+import {
+  IconBraces,
+  IconChevronLeft,
+  IconChevronRight,
+  IconFile,
+  IconFileArchive,
+  IconFileCode,
+  IconFileCog,
+  IconFileJson,
+  IconFileText,
+  IconImage,
+  IconMessageSquare,
+  IconPalette,
+  IconSettings,
+} from "@/components/Icons";
 
 export const SETTINGS_TAB_PATH = "__settings__";
 
@@ -52,6 +66,29 @@ function getTabLabel(tab: Tab): string {
   return tab.path.split("/").filter(Boolean).pop() || tab.path;
 }
 
+function getTabIcon(tab: Tab) {
+  if (tab.type === "settings" || tab.path === SETTINGS_TAB_PATH) return <IconSettings />;
+  if (tab.type === "chat") return <IconMessageSquare />;
+  if (tab.type === "image") return <IconImage />;
+
+  const name = getTabLabel(tab).toLowerCase();
+  const ext = name.split(".").pop() ?? "";
+
+  if (ext === "tex" || ext === "ltx" || ext === "latex" || ext === "typ" || ext === "md" || ext === "txt" || ext === "rst") {
+    return <IconFileText />;
+  }
+  if (ext === "bib") return <IconBraces />;
+  if (ext === "cls" || ext === "sty" || ext === "dtx" || ext === "ins") return <IconFileCog />;
+  if (ext === "json" || ext === "jsonc") return <IconFileJson />;
+  if (ext === "js" || ext === "ts" || ext === "jsx" || ext === "tsx" || ext === "py" || ext === "lua") {
+    return <IconFileCode />;
+  }
+  if (ext === "css" || ext === "scss" || ext === "less") return <IconPalette />;
+  if (ext === "zip" || ext === "tar" || ext === "gz" || ext === "7z") return <IconFileArchive />;
+
+  return <IconFile />;
+}
+
 export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onToggleFileTree, onToggleRightPanel, isFileTreeCollapsed = false, isRightPanelCollapsed = false }: FileTabsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollState, setScrollState] = useState({ scrollLeft: 0, scrollWidth: 0, clientWidth: 0 });
@@ -94,8 +131,6 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onTog
   const maxScroll = scrollState.scrollWidth - scrollState.clientWidth;
   const thumbRatio = maxScroll > 0 ? scrollState.clientWidth / scrollState.scrollWidth : 1;
   const thumbWidth = Math.max(24, scrollState.clientWidth * thumbRatio);
-  const showLeftFade = scrollState.scrollLeft > 0;
-  const showRightFade = scrollState.scrollLeft < maxScroll - 1;
   const thumbLeft =
     maxScroll > 0
       ? (scrollState.scrollLeft / maxScroll) * (scrollState.clientWidth - thumbWidth)
@@ -206,28 +241,6 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onTog
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => !isDragging && setIsHovering(false)}
     >
-      {/* Left gradient overlay - fades from 100% to 0% opacity over tabs to the right of left button */}
-      {onToggleFileTree && showLeftFade && (
-        <div 
-          className="absolute top-0 bottom-0 left-12 w-24 pointer-events-none"
-          style={{
-            background: 'linear-gradient(to right, color-mix(in srgb, var(--border) 18%, var(--background)) 0%, transparent 100%)',
-            zIndex: 5
-          }}
-        />
-      )}
-      
-      {/* Right gradient overlay - fades from 100% to 0% opacity over tabs to the left of right button */}
-      {onToggleRightPanel && showRightFade && (
-        <div 
-          className="absolute top-0 bottom-0 right-12 w-24 pointer-events-none"
-          style={{
-            background: 'linear-gradient(to left, color-mix(in srgb, var(--border) 18%, var(--background)) 0%, transparent 100%)',
-            zIndex: 5
-          }}
-        />
-      )}
-
       {/* Left collapse button - fixed position */}
       {onToggleFileTree && (
         <button
@@ -261,19 +274,14 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onTog
       {tabs.map((tab, index) => {
         const isActive = tab.path === activePath;
         const name = getTabLabel(tab);
+        const icon = getTabIcon(tab);
         const isDragOver = isReordering && dragOverIndex === index;
         const dropPosition = isDragOver ? getDropIndicatorPosition(index) : null;
-        
-        // Calculate the actual background color for the gradient
-        // For inactive tabs: 18% border + 82% transparent, so gradient should be 18% border + 82% background
-        const tabBackgroundColor = isActive 
-          ? "color-mix(in srgb, var(--background) 100%, transparent)" 
-          : "color-mix(in srgb, var(--border) 18%, var(--background))"; // Match the exact 18% ratio
         
         return (
           <div
             key={tab.path}
-            className={`group relative flex items-center px-3 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 min-w-0 max-w-[240px] h-full overflow-hidden ${
+            className={`group relative flex items-center pl-3 pr-9 py-2 border-r border-[var(--border)] cursor-pointer shrink-0 min-w-0 max-w-[240px] h-full overflow-hidden ${
               isActive
                 ? "bg-[var(--background)] -mb-px text-[var(--foreground)] border-t-2 border-t-[var(--accent)]"
                 : "bg-[color-mix(in_srgb,var(--border)_18%,transparent)] text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
@@ -291,7 +299,12 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onTog
             onDrop={(e) => handleTabDrop(e, index)}
             onClick={() => onSelect(tab.path)}
           >
-            <span className="text-sm truncate">{name}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className={`shrink-0 ${isActive ? "text-current" : "text-[var(--muted)] group-hover:text-current"}`}>
+                {icon}
+              </span>
+              <span className="text-sm truncate">{name}</span>
+            </span>
             {/* Drop indicator */}
             {isDragOver && dropPosition !== null && (
               <div
@@ -303,12 +316,6 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onTog
                 }}
               />
             )}
-            <div
-              className="absolute right-0 top-0 bottom-0 w-16 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-              style={{
-                background: `linear-gradient(to right, transparent 0%, ${tabBackgroundColor} 45%)`,
-              }}
-            />
             <button
               onClick={(e) => {
                 e.stopPropagation();
