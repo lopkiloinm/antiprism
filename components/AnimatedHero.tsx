@@ -20,7 +20,6 @@ const STEPS = [
   "THINKING_STREAM",
   "CODE_GEN_STREAM",
   "SHOW_DIFF",
-  "AUTO_COMPILE",
   "VISION_TRANSITION",
   "WORKSPACE_VISION",
   "MODEL_SELECT_QWEN",
@@ -52,6 +51,7 @@ export default function AnimatedHero() {
     let timer: NodeJS.Timeout;
     
     const advance = (delay: number) => {
+      if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (currentStepIndex < STEPS.length - 1) {
           setCurrentStepIndex(i => i + 1);
@@ -80,70 +80,88 @@ export default function AnimatedHero() {
       case "WORKSPACE_ZOOM":
         advance(1500);
         break;
-      case "PROMPTING_TEXT":
+      case "PROMPTING_TEXT": {
+        let isCancelled = false;
+        let charIndex = 0;
         const textToType = "Why is the sky blue?";
-        let textI = 0;
-        const typeInterval = setInterval(() => {
-          if (textI < textToType.length) {
-            setPromptText(textToType.substring(0, textI + 1));
-            textI++;
-          } else {
-            clearInterval(typeInterval);
-            advance(800);
-          }
-        }, 50);
-        return () => clearInterval(typeInterval);
+        setPromptText("");
+        
+        timer = setTimeout(() => {
+          if (isCancelled) return;
+          const typeInterval = setInterval(() => {
+            if (isCancelled) {
+              clearInterval(typeInterval);
+              return;
+            }
+            if (charIndex < textToType.length) {
+              setPromptText(textToType.substring(0, charIndex + 1));
+              charIndex++;
+            } else {
+              clearInterval(typeInterval);
+              advance(1500); // Pause after typing before jumping to bubble
+            }
+          }, 60);
+        }, 1000); // Pause before typing starts
+        
+        return () => { isCancelled = true; clearTimeout(timer); };
+      }
       case "MODEL_SELECT_NANBEIGE":
         advance(1000);
         break;
       case "MODEL_DOWNLOAD":
+        let p1 = 0;
         const downloadInterval = setInterval(() => {
-          setDownloadProgress(p => {
-            if (p >= 100) {
-              clearInterval(downloadInterval);
-              advance(500);
-              return 100;
-            }
-            return p + 5;
-          });
+          p1 += 5;
+          if (p1 >= 100) {
+            setDownloadProgress(100);
+            clearInterval(downloadInterval);
+            advance(500);
+          } else {
+            setDownloadProgress(p1);
+          }
         }, 30);
         return () => clearInterval(downloadInterval);
-      case "THINKING_STREAM":
-        const thinkStream = "The user is asking about the color of the sky. This is a classic physics question explained by Rayleigh scattering. I should format this as a comprehensive LaTeX document. It needs an introduction, a section on Rayleigh scattering with a formula, and a conclusion.\n\nLet's write out the document structure now.";
-        let thinkI = 0;
+      case "THINKING_STREAM": {
+        let isCancelled = false;
         const now = Date.now();
         setThinkingStartedAt(now);
         setIsThinkingComplete(false);
-        const thinkInterval = setInterval(() => {
-          if (thinkI < thinkStream.length) {
-            setThinkingText(thinkStream.substring(0, thinkI + 1));
-            thinkI++;
-          } else {
-            clearInterval(thinkInterval);
-            setIsThinkingComplete(true);
-            setThinkingDurationMs(Date.now() - now);
-            advance(4000); // Wait 4s before generating document
+        setThinkingText("");
+
+        const run = async () => {
+          const text = "The user is asking about the color of the sky. This is a classic physics question explained by Rayleigh scattering. I should format this as a comprehensive LaTeX document. It needs an introduction, a section on Rayleigh scattering with a formula, and a conclusion.\n\nLet's write out the document structure now.";
+          for (let i = 1; i <= text.length; i++) {
+            if (isCancelled) return;
+            setThinkingText(text.substring(0, i));
+            await new Promise(r => setTimeout(r, 15));
           }
-        }, 15);
-        return () => clearInterval(thinkInterval);
-      case "CODE_GEN_STREAM":
-        const codeStream = "\\documentclass{article}\n\\usepackage{amsmath}\n\n\\title{Why is the Sky Blue?}\n\\author{AI Assistant}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\nThe sky appears blue to the human eye primarily due to a phenomenon known as \\textbf{Rayleigh scattering}.\n\n\\subsection{The Physics of Light}\nWhen sunlight reaches Earth's atmosphere, gases and particles scatter the light. Shorter wavelengths scatter more easily.\n\nThe scattering intensity $I$ is given by:\n\n\\begin{equation}\nI \\propto \\frac{1}{\\lambda^4}\n\\end{equation}\n\nSince blue light has a shorter wavelength $\\lambda$ than red light, it scatters more intensely across the sky.\n\n\\end{document}";
-        let codeI = 0;
-        const codeInterval = setInterval(() => {
-          if (codeI < codeStream.length) {
-            setCodeText(codeStream.substring(0, codeI + 1));
-            codeI++;
-          } else {
-            clearInterval(codeInterval);
-            advance(800);
+          if (isCancelled) return;
+          setIsThinkingComplete(true);
+          setThinkingDurationMs(Date.now() - now);
+          advance(400);
+        };
+        run();
+        return () => { isCancelled = true; clearTimeout(timer); };
+      }
+      case "CODE_GEN_STREAM": {
+        let isCancelled = false;
+        setCodeText("");
+        
+        const run = async () => {
+          const text = "\\documentclass{article}\n\\usepackage{amsmath}\n\n\\title{Why is the Sky Blue?}\n\\author{AI Assistant}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\nThe sky appears blue to the human eye primarily due to a phenomenon known as \\textbf{Rayleigh scattering}.\n\n\\subsection{The Physics of Light}\nWhen sunlight reaches Earth's atmosphere, gases and particles scatter the light. Shorter wavelengths scatter more easily.\n\nThe scattering intensity $I$ is given by:\n\n\\begin{equation}\nI \\propto \\frac{1}{\\lambda^4}\n\\end{equation}\n\nSince blue light has a shorter wavelength $\\lambda$ than red light, it scatters more intensely across the sky.\n\n\\end{document}";
+          for (let i = 1; i <= text.length; i++) {
+            if (isCancelled) return;
+            setCodeText(text.substring(0, i));
+            await new Promise(r => setTimeout(r, 10));
           }
-        }, 10); // Match standard typing speed closer to Lorem Ipsum
-        return () => clearInterval(codeInterval);
+          if (isCancelled) return;
+          advance(800);
+        };
+        run();
+        return () => { isCancelled = true; clearTimeout(timer); };
+      }
       case "SHOW_DIFF":
         advance(2000);
-        break;
-      case "AUTO_COMPILE":
-        advance(3000);
         break;
       case "VISION_TRANSITION":
         advance(2500);
@@ -156,46 +174,63 @@ export default function AnimatedHero() {
         break;
       case "MODEL_DOWNLOAD_QWEN":
         setDownloadProgress(0);
+        let p2 = 0;
         const downloadIntervalQwen = setInterval(() => {
-          setDownloadProgress(p => {
-            if (p >= 100) {
-              clearInterval(downloadIntervalQwen);
-              advance(500);
-              return 100;
-            }
-            return p + 5;
-          });
+          p2 += 5;
+          if (p2 >= 100) {
+            setDownloadProgress(100);
+            clearInterval(downloadIntervalQwen);
+            advance(500);
+          } else {
+            setDownloadProgress(p2);
+          }
         }, 30);
         return () => clearInterval(downloadIntervalQwen);
       case "UPLOAD_IMAGE":
         advance(1500);
         break;
-      case "PROMPTING_IMAGE":
-        const visionText = "Explain this diagram.";
-        let vTextI = 0;
-        const vTypeInterval = setInterval(() => {
-          if (vTextI < visionText.length) {
-            setVisionPromptText(visionText.substring(0, vTextI + 1));
-            vTextI++;
-          } else {
-            clearInterval(vTypeInterval);
-            advance(800);
+      case "PROMPTING_IMAGE": {
+        let isCancelled = false;
+        let charIndex = 0;
+        const imgText = "Explain this diagram.";
+        setVisionPromptText("");
+        
+        timer = setTimeout(() => {
+          if (isCancelled) return;
+          const imgInterval = setInterval(() => {
+            if (isCancelled) {
+              clearInterval(imgInterval);
+              return;
+            }
+            if (charIndex < imgText.length) {
+              setVisionPromptText(imgText.substring(0, charIndex + 1));
+              charIndex++;
+            } else {
+              clearInterval(imgInterval);
+              advance(1500); // Pause after typing
+            }
+          }, 60);
+        }, 1000); // Pause before typing
+        
+        return () => { isCancelled = true; clearTimeout(timer); };
+      }
+      case "MULTIMODAL_STREAM": {
+        let isCancelled = false;
+        setMultimodalText("");
+        
+        const run = async () => {
+          const text = "This diagram illustrates **Rayleigh scattering**, showing how shorter (blue) wavelengths of sunlight scatter more efficiently when hitting particles in the atmosphere compared to longer (red) wavelengths.";
+          for (let i = 1; i <= text.length; i++) {
+            if (isCancelled) return;
+            setMultimodalText(text.substring(0, i));
+            await new Promise(r => setTimeout(r, 20));
           }
-        }, 50);
-        return () => clearInterval(vTypeInterval);
-      case "MULTIMODAL_STREAM":
-        const mmStream = "This diagram illustrates **Rayleigh scattering**, showing how shorter (blue) wavelengths of sunlight scatter more efficiently when hitting particles in the atmosphere compared to longer (red) wavelengths.";
-        let mmI = 0;
-        const mmInterval = setInterval(() => {
-          if (mmI < mmStream.length) {
-            setMultimodalText(mmStream.substring(0, mmI + 1));
-            mmI++;
-          } else {
-            clearInterval(mmInterval);
-            advance(4000);
-          }
-        }, 20);
-        return () => clearInterval(mmInterval);
+          if (isCancelled) return;
+          advance(4000);
+        };
+        run();
+        return () => { isCancelled = true; clearTimeout(timer); };
+      }
       case "WEBRTC_TRANSITION":
         advance(2500);
         break;
@@ -229,12 +264,12 @@ export default function AnimatedHero() {
     return () => clearTimeout(timer);
   }, [step, currentStepIndex]);
 
-  const showCodePanel = ["WORKSPACE_ZOOM", "MODEL_SELECT_NANBEIGE", "MODEL_DOWNLOAD", "PROMPTING_TEXT", "THINKING_STREAM", "CODE_GEN_STREAM", "SHOW_DIFF", "AUTO_COMPILE", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
-  const showPdfPanel = ["AUTO_COMPILE", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
+  const showCodePanel = ["WORKSPACE_ZOOM", "MODEL_SELECT_NANBEIGE", "MODEL_DOWNLOAD", "PROMPTING_TEXT", "THINKING_STREAM", "CODE_GEN_STREAM", "SHOW_DIFF", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
+  const showPdfPanel = ["WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
   const isQwen = ["WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
 
   return (
-    <div className="relative w-full overflow-hidden h-[600px] sm:h-[750px] bg-transparent perspective-[1000px] font-sans">
+    <div className="relative w-full min-h-[600px] sm:min-h-[750px] bg-transparent perspective-[1000px] font-sans">
       <AnimatePresence mode="wait">
         {step === "INTRO" && (
           <motion.div
@@ -254,10 +289,10 @@ export default function AnimatedHero() {
               Introducing <span className="text-blue-600">Antiprism</span>
             </motion.h2>
             <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="mt-4 text-zinc-600 text-xl font-medium"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="mt-6 text-zinc-500 text-lg max-w-2xl font-light"
             >
               Streaming local intelligence
             </motion.p>
@@ -280,7 +315,14 @@ export default function AnimatedHero() {
             >
               Vision Models <span className="text-blue-600">in-browser</span>
             </motion.h2>
-            <p className="mt-4 text-zinc-600 text-xl font-medium">Inspect figures directly within your workspace</p>
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="mt-6 text-zinc-500 text-lg max-w-2xl font-light"
+            >
+              Inspect figures directly within your workspace
+            </motion.p>
           </motion.div>
         )}
 
@@ -300,7 +342,14 @@ export default function AnimatedHero() {
             >
               Real-time file tree <span className="text-blue-600">sync</span>
             </motion.h2>
-            <p className="mt-4 text-zinc-600 text-xl font-medium">Peer-to-peer over WebRTC, no servers required</p>
+            <motion.p 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="mt-6 text-zinc-500 text-lg max-w-2xl font-light"
+            >
+              Peer-to-peer over WebRTC, no servers required
+            </motion.p>
           </motion.div>
         )}
 
@@ -311,7 +360,7 @@ export default function AnimatedHero() {
             animate={{ opacity: 1, scale: 1, rotateX: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.8, type: "spring", bounce: 0.3 }}
-            className="absolute inset-0 sm:inset-y-4 flex flex-col rounded-[16px] sm:rounded-[24px] border border-zinc-200 bg-white shadow-2xl overflow-hidden"
+            className="absolute inset-x-0 inset-y-4 sm:inset-y-8 flex flex-col rounded-[16px] sm:rounded-[24px] border border-zinc-200 bg-white shadow-2xl overflow-hidden"
           >
             {/* Top Bar - Mac Traffic Lights */}
             <div className="flex h-12 items-center justify-between border-b border-zinc-200 bg-zinc-50/80 px-4">
@@ -390,7 +439,7 @@ export default function AnimatedHero() {
                 }}>
                   <div className="flex-1 flex flex-col gap-4 pb-4">
                     {/* Prompt rendering */}
-                    {(step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "AUTO_COMPILE" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") && (
+                    {(step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") && (
                       <motion.div 
                         initial={{ opacity: 0, x: 10 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -401,7 +450,7 @@ export default function AnimatedHero() {
                     )}
                     
                     {/* Thinking stream rendering */}
-                    {(step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "AUTO_COMPILE" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") && thinkingText && (
+                    {(step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") && thinkingText && (
                       <motion.div 
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -427,7 +476,6 @@ export default function AnimatedHero() {
                       >
                          <div className="relative h-28 w-48 rounded-xl bg-white flex flex-col items-center justify-center border border-white/20 overflow-hidden shadow-sm">
                            <span className="font-serif text-2xl text-black">I ∝ 1/λ⁴</span>
-                           <span className="text-[10px] text-zinc-500 mt-2 font-mono">Rayleigh_Formula.png</span>
                          </div>
                          <div className="px-1 text-[14px]">Explain this diagram.</div>
                       </motion.div>
@@ -448,7 +496,11 @@ export default function AnimatedHero() {
                   </div>
                   
                   {/* AI Input Box */}
-                  <div className="relative rounded-xl border border-zinc-200 bg-white p-2 flex items-center gap-2 shadow-sm mt-auto sticky bottom-0">
+                  <div className={`relative rounded-xl border bg-white p-2 flex items-center gap-2 mt-auto sticky bottom-0 transition-all duration-300 ${
+                    (step === "PROMPTING_TEXT" || step === "PROMPTING_IMAGE") 
+                      ? "border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]" 
+                      : "border-zinc-200 shadow-sm"
+                  }`}>
                     {(step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE") && (
                       <div className="relative h-16 w-24 rounded-lg bg-white flex flex-col items-center justify-center border border-zinc-200 overflow-hidden shadow-sm shrink-0 mb-0.5 ml-0.5">
                         {step === "UPLOAD_IMAGE" && (
@@ -470,7 +522,10 @@ export default function AnimatedHero() {
                     )}
                     
                     <div className="flex-1 min-h-[32px] bg-transparent text-[14px] text-zinc-600 flex items-center px-1">
-                      {step === "PROMPTING_TEXT" ? promptText + "|" : step === "PROMPTING_IMAGE" ? visionPromptText + "|" : <span className="text-zinc-400">Ask anything</span>}
+                      {step === "PROMPTING_TEXT" ? (promptText || <span className="text-zinc-400">Ask anything</span>) : 
+                       step === "PROMPTING_IMAGE" ? (visionPromptText || <span className="text-zinc-400">Ask anything</span>) : 
+                       (step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "AUTO_COMPILE" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") ? "" : 
+                       <span className="text-zinc-400">Ask anything</span>}
                     </div>
                     
                     <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-400 shrink-0 self-center">
@@ -487,19 +542,44 @@ export default function AnimatedHero() {
                     <div className="font-mono text-[13px] sm:text-[14px] leading-relaxed whitespace-pre-wrap relative inline-flex flex-wrap break-words w-full">
                       {codeText.split('\n').map((line, i) => {
                         const isCmd = line.startsWith('\\');
-                        const isFormula = line.includes('$') || line.includes('\\begin{equation}') || line.includes('\\end{equation}');
+                        const isFormula = line.includes('$') || line.includes('\\begin{equation}') || line.includes('\\end{equation}') || line.includes('I \\propto \\frac{1}{\\lambda^4}');
                         
                         let lineClass = "px-1.5 py-0.5 rounded text-zinc-800 w-full";
                         
+                        // Extracting standard highlighting scheme
+                        const renderLine = () => {
+                           if (isCmd) {
+                             // LaTeX commands like \documentclass, \usepackage, \begin, etc.
+                             const match = line.match(/^(\\\w+)(?:{(.*?)})?/);
+                             if (match) {
+                               const [, cmd, arg] = match;
+                               return (
+                                 <span>
+                                   <span className="text-[#a626a4] font-medium">{cmd}</span>
+                                   {arg && <span className="text-[#50a14f]">{`{${arg}}`}</span>}
+                                 </span>
+                               );
+                             }
+                             return <span className="text-[#a626a4] font-medium">{line}</span>;
+                           } else if (isFormula) {
+                             // Inline and block formulas
+                             return <span className="text-[#986801]">{line}</span>;
+                           } else if (line.trim().length > 0) {
+                             // Regular text
+                             return <span className="text-[#383a42]">{line}</span>;
+                           }
+                           return <span>{line}</span>;
+                        };
+                        
                         return (
                           <div key={i} className={lineClass}>
-                            {isCmd ? <span className="text-blue-600 font-medium">{line}</span> : isFormula ? <span className="text-amber-600">{line}</span> : line}
+                            {renderLine()}
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                    <div className="text-zinc-400 italic font-mono text-[14px]">% Start writing or ask AI to generate content...</div>
+                    <div className="text-zinc-400 italic font-mono text-[14px]"></div>
                   )}
                 </div>
               </div>
@@ -531,22 +611,22 @@ export default function AnimatedHero() {
                         <div className="text-sm sm:text-base font-serif text-center mb-8 text-zinc-600">AI Assistant</div>
                         
                         <h2 className="text-lg sm:text-xl font-serif font-bold self-start w-full mb-3 text-black">1 Introduction</h2>
-                        <p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify mb-6 text-zinc-800">
+                        <motion.p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify mb-6 text-zinc-800">
                           The sky appears blue to the human eye primarily due to a phenomenon known as <strong>Rayleigh scattering</strong>.
-                        </p>
-
-                        <h2 className="text-lg sm:text-xl font-serif font-bold self-start w-full mb-3 text-black">1.1 The Physics of Light</h2>
-                        <p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify mb-4 text-zinc-800">
-                          When sunlight reaches Earth's atmosphere, gases and particles scatter the light. Shorter wavelengths scatter more easily. The scattering intensity <InlineMath math="I" /> is given by:
-                        </p>
+                        </motion.p>
                         
-                        <div className="w-full flex justify-center my-6 text-lg sm:text-xl">
-                           <BlockMath math="I \propto \frac{1}{\lambda^4}" />
+                        <h3 className="text-base sm:text-lg font-serif font-bold self-start w-full mb-2 text-black">1.1 The Physics of Light</h3>
+                        <motion.p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify mb-4 text-zinc-800">
+                          When sunlight reaches Earth's atmosphere, gases and particles scatter the light in all directions. Sunlight looks white but is made up of all colors of the visible spectrum. Shorter wavelengths (blue and violet) scatter more easily than longer wavelengths (red and yellow).
+                        </motion.p>
+                        
+                        <div className="w-full my-6 flex justify-center py-4 border-y border-zinc-100">
+                          <BlockMath math="I \propto \frac{1}{\lambda^4}" />
                         </div>
-
-                        <p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify text-zinc-800">
-                          Since blue light has a shorter wavelength <InlineMath math="\lambda" /> than red light, it scatters more intensely across the sky.
-                        </p>
+                        
+                        <motion.p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify text-zinc-800">
+                          Since blue light has a shorter wavelength <InlineMath math="\lambda" /> than red light, it scatters more intensely across the sky, which is why we perceive the sky as blue during the day.
+                        </motion.p>
                       </motion.div>
                     </div>
                   </motion.div>
@@ -562,7 +642,7 @@ export default function AnimatedHero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center p-4 sm:p-8 gap-4 sm:gap-8"
+            className="absolute inset-x-0 inset-y-4 sm:inset-y-8 flex items-center justify-center px-4 sm:px-8 gap-4 sm:gap-8"
           >
             {/* Browser 1 */}
             <div className="flex-1 h-full rounded-[16px] sm:rounded-[24px] border border-zinc-200 bg-white shadow-2xl flex flex-col overflow-hidden relative">
@@ -640,12 +720,15 @@ export default function AnimatedHero() {
                           exit={{ opacity: 0, scale: 0.95 }}
                           className="bg-white border border-zinc-200 shadow-xl rounded-xl p-4 w-64"
                         >
-                          <div className="text-sm font-semibold mb-3 text-zinc-800">{webrtcStep === 1 ? 'New Folder' : 'New File'}</div>
-                          <div className="border border-blue-500 rounded-md px-3 py-2 text-sm outline-none w-full bg-blue-50/30 text-zinc-900 font-mono">
-                            {webrtcStep === 1 ? 'lorem' : 'ipsum.tex'}
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-zinc-700">New {webrtcStep === 1 ? 'Folder' : 'File'}</span>
                           </div>
-                          <div className="mt-3 flex justify-end">
-                             <button className="bg-black text-white px-3 py-1.5 rounded-md text-xs font-medium">Create</button>
+                          <div className="bg-white border border-zinc-200 rounded px-2 py-1 text-sm text-zinc-800 font-mono shadow-inner mb-3">
+                            {webrtcStep === 1 ? (
+                              <span className="flex items-center gap-1.5">lorem</span>
+                            ) : (
+                              <span className="flex items-center gap-1.5">ipsum.tex</span>
+                            )}
                           </div>
                         </motion.div>
                       </motion.div>
@@ -653,7 +736,7 @@ export default function AnimatedHero() {
                   </AnimatePresence>
                 </div>
                 <div className="flex-1 p-6 font-mono text-[14px] bg-white overflow-y-auto">
-                   {webrtcStep >= 7 && (
+                  {webrtcStep >= 7 && (
                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-zinc-800 break-words whitespace-pre-wrap leading-relaxed">
                        {loremText}
                      </motion.div>

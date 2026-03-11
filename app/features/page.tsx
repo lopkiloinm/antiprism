@@ -14,6 +14,8 @@ import {
   IconSparkles,
   IconUsers,
   IconZap,
+  IconGitBranch,
+  IconPlus,
 } from "@/components/Icons";
 
 type IconType = typeof IconUsers;
@@ -61,39 +63,39 @@ const FEATURE_ROWS: Array<{
   reverse?: boolean;
 }> = [
   {
-    eyebrow: "Collaboration",
-    title: "Work with unlimited collaborators",
+    eyebrow: "Step 1: Draft",
+    title: "Draft together in real time",
     description:
-      "Share a project link, bring teammates onto the right signaling setup, and keep comments, file trees, and editing state live in one room.",
+      "Share a secure project link and collaborate instantly. Teammates connect via peer-to-peer WebRTC, syncing documents, file trees, and presence without relying on a central backend.",
     points: [
-      "Peer-to-peer sync over Yjs and WebRTC",
-      "Custom signaling URLs for room setup",
-      "Project-wide state, not just cursor mirroring",
+      "Zero-configuration peer-to-peer sync via Yjs",
+      "Live multi-cursor editing and presence",
+      "No account or central cloud backend required",
     ],
     variant: "collab",
   },
   {
-    eyebrow: "AI",
-    title: "Frontier AI that runs in your browser",
+    eyebrow: "Step 2: AI Assistance",
+    title: "Project-aware AI in your browser",
     description:
-      "Project-aware AI models run entirely locally. Featuring SOTA browser-ready models from Liquid AI (LFM2.5 1.2B Thinking/Instruct, 1.6B Vision), Alibaba (Qwen3.5 0.8B Multimodal), and Boss Zhipin (Nanbeige4.1 3B Thinking).",
+      "Run state-of-the-art models entirely locally. Liquid's LFM2.5-1.2B Thinking and Boss Zhipin's Nanbeige4.1-3B power deep reasoning, while Alibaba's Qwen3.5-0.8B and Liquid's LFM2.5-1.6B inspects images natively without cloud APIs.",
     points: [
-      "Thinking chains and instruct models for deep reasoning",
-      "Vision-native models for inspecting scientific figures",
-      "Complete privacy with zero cloud API dependencies",
+      "Browser-native ONNX model execution",
+      "Full privacy: code and data never leave your device",
+      "Context-aware suggestions based on your document",
     ],
     variant: "ai",
     reverse: true,
   },
   {
-    eyebrow: "Workflow",
-    title: "Save time with built-in proofreading and formatting",
+    eyebrow: "Step 3: Compile & Version",
+    title: "Compile locally, version properly",
     description:
-      "Compile locally, search literature, manage references, keep Git history, and move full projects without leaving the workspace.",
+      "Generate beautiful PDFs instantly with the built-in local WASM engine. When you are ready, track your changes cleanly using the fully integrated, familiar Git version control panel.",
     points: [
-      "Local compile and Git built in",
-      "Open LaTeX, Typst, ZIP, and folder workflows",
-      "Offline-ready after initial asset and model caching",
+      "Instant offline PDF compilation (LaTeX and Typst)",
+      "Built-in Git for robust version control",
+      "Clear line-by-line diffs for every tracked file",
     ],
     variant: "proof",
   },
@@ -166,7 +168,7 @@ function HeroStage() {
             </div>
           </div>
 
-          <div className="flex flex-col md:grid md:h-[420px] md:grid-cols-[0.9fr,1.7fr,1fr]">
+          <div className="flex flex-col md:grid md:min-h-[420px] md:grid-cols-[0.9fr,1.7fr,1fr]">
             <div className="hidden border-r border-zinc-200 bg-zinc-50/50 p-4 md:block">
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Project</div>
               <div className="mt-4 space-y-2 text-sm text-zinc-600">
@@ -270,28 +272,98 @@ function HeroStage() {
   );
 }
 
+function MockupWindow({
+  children,
+  className = "",
+  headerCenter,
+  headerRight,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  headerCenter?: React.ReactNode;
+  headerRight?: React.ReactNode;
+}) {
+  return (
+    <div className={`relative z-10 w-full max-w-[420px] sm:max-w-[460px] rounded-[20px] border border-white/60 bg-white/80 shadow-[0_24px_80px_rgba(20,40,70,0.08)] backdrop-blur-xl overflow-hidden flex flex-col ${className}`}>
+      {/* Window Header */}
+      <div className="flex min-h-[42px] w-full items-center justify-between border-b border-white/40 bg-white/40 px-3 sm:px-4 py-2 gap-2">
+        <div className="flex gap-1.5 shrink-0 items-center">
+          <div className="h-2.5 w-2.5 rounded-full bg-[#ff5f56] shadow-sm border border-black/10" />
+          <div className="h-2.5 w-2.5 rounded-full bg-[#ffbd2e] shadow-sm border border-black/10" />
+          <div className="h-2.5 w-2.5 rounded-full bg-[#27c93f] shadow-sm border border-black/10" />
+        </div>
+        {headerCenter && (
+          <div className="flex justify-center items-center shrink min-w-0">
+            {headerCenter}
+          </div>
+        )}
+        <div className="flex items-center justify-end shrink-0 min-w-[40px]">
+          {headerRight}
+        </div>
+      </div>
+      {/* Window Body */}
+      <div className="flex flex-col flex-1 relative">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function FeatureScene({ variant }: { variant: SceneVariant }) {
   if (variant === "collab") {
     return (
-      <div className="relative h-[320px] overflow-hidden rounded-[34px] border border-[#d7e5f8] bg-[linear-gradient(135deg,#e0f2fe,#dbeafe_45%,#e0f2fe)] p-8 shadow-[0_28px_100px_rgba(108,155,213,0.12)]">
+      <div className="relative min-h-[360px] sm:min-h-[400px] py-8 sm:py-10 px-4 sm:px-8 overflow-hidden rounded-[34px] border border-[#d7e5f8] bg-[linear-gradient(135deg,#e0f2fe,#dbeafe_45%,#e0f2fe)] shadow-[0_28px_100px_rgba(108,155,213,0.12)] flex items-center justify-center">
         <div className="landing-hero-aura absolute inset-[-15%] opacity-70 bg-[radial-gradient(circle_at_20%_25%,rgba(255,255,255,0.6),transparent_40%),radial-gradient(circle_at_80%_80%,rgba(255,255,255,0.4),transparent_40%)]" />
-        <div className="absolute left-6 top-6 rounded-full border border-black/5 bg-white/90 px-3 py-1 text-xs font-medium text-zinc-700 shadow-sm backdrop-blur">
-          2 peers connected
-        </div>
-        <div className="absolute right-6 top-6 rounded-full border border-black/5 bg-white/90 px-3 py-1 text-xs font-medium text-zinc-700 shadow-sm backdrop-blur">
-          Peer-to-Peer Sync
-        </div>
-        <div className="landing-float-a absolute left-1/2 top-1/2 w-[340px] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-[30px] border border-zinc-200 bg-white/95 p-5 text-zinc-900 shadow-[0_24px_70px_rgba(11,16,28,0.12)] backdrop-blur">
-          <div className="flex items-center gap-3 text-sm font-medium text-zinc-500">
-            <span className="h-9 w-9 rounded-full bg-[linear-gradient(135deg,#e0e7ff,#a5b4fc)]" />
-            <span>Comments and presence</span>
-          </div>
-          <p className="mt-4 text-2xl font-medium leading-snug text-zinc-900">
-            This reads really well overall. I left one small suggestion where the example could land faster.
-          </p>
-          <div className="mt-5 rounded-2xl border border-zinc-100 bg-zinc-50/80 px-4 py-3 text-sm text-zinc-600">
-            Share links can securely carry signaling parameters for P2P setup.
-          </div>
+        
+        <div className="relative w-full max-w-[440px]">
+          <MockupWindow 
+            headerCenter={
+              <span className="text-[11px] font-semibold text-zinc-500 truncate px-2">introduction.tex</span>
+            }
+            headerRight={
+              <div className="flex -space-x-1.5">
+                <div className="h-5 w-5 rounded-full border-[1.5px] border-white bg-indigo-100 flex items-center justify-center text-[8px] font-bold text-indigo-600 shadow-sm z-20 relative">AL</div>
+                <div className="h-5 w-5 rounded-full border-[1.5px] border-white bg-emerald-100 flex items-center justify-center text-[8px] font-bold text-emerald-600 shadow-sm z-10 relative">ML</div>
+                <div className="h-5 w-5 rounded-full border-[1.5px] border-white bg-rose-100 flex items-center justify-center text-[8px] font-bold text-rose-600 shadow-sm z-0 relative">JL</div>
+              </div>
+            }
+          >
+            <div className="flex flex-col p-4 sm:p-6 font-mono text-[11px] sm:text-[12px] leading-relaxed text-zinc-500 bg-white/50 h-full min-h-[220px]">
+              <div className="flex-1">
+                <div className="flex">
+                  <span className="w-6 sm:w-8 shrink-0 text-zinc-400 select-none">42</span>
+                  <span className="text-[#a626a4] font-medium break-all">\\section<span className="text-[#50a14f]">{"{Results}"}</span></span>
+                </div>
+                <div className="flex mt-2">
+                  <span className="w-6 sm:w-8 shrink-0 text-zinc-400 select-none">43</span>
+                  <span className="text-zinc-700 break-words">
+                    The models show strong performance on
+                    <span className="bg-emerald-100/80 text-emerald-900 rounded-sm px-1 py-0.5 mx-1 font-medium border border-emerald-200/50 shadow-sm inline-flex items-center gap-1">
+                      <span className="w-1 h-2.5 sm:h-3 bg-emerald-500 animate-pulse rounded-full" />
+                      the validation set
+                    </span>
+                    across all metrics.
+                  </span>
+                </div>
+                <div className="flex mt-2 mb-6">
+                  <span className="w-6 sm:w-8 shrink-0 text-zinc-400 select-none">44</span>
+                  <span className="text-zinc-700 truncate">Particularly in zero-shot...</span>
+                </div>
+              </div>
+
+              {/* WebRTC inline badge inside Mockup */}
+              <div className="mt-4 self-end rounded-xl border border-white/80 bg-white/95 p-2 sm:p-2.5 shadow-sm flex items-center gap-2">
+                <div className="relative flex h-2.5 w-2.5 items-center justify-center shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-zinc-900 uppercase tracking-wide leading-none mb-0.5">WebRTC Sync</span>
+                  <span className="text-[8px] sm:text-[9px] text-zinc-500 font-medium leading-none">3 peers connected</span>
+                </div>
+              </div>
+            </div>
+          </MockupWindow>
         </div>
       </div>
     );
@@ -299,49 +371,124 @@ function FeatureScene({ variant }: { variant: SceneVariant }) {
 
   if (variant === "ai") {
     return (
-      <div className="relative h-[320px] overflow-hidden rounded-[34px] border border-[#d7e5f8] bg-[linear-gradient(135deg,#e0f2fe,#dbeafe_45%,#e0f2fe)] p-4 sm:p-8 shadow-[0_28px_100px_rgba(108,155,213,0.12)]">
+      <div className="relative min-h-[360px] sm:min-h-[400px] py-8 sm:py-10 px-4 sm:px-8 overflow-hidden rounded-[34px] border border-[#d7e5f8] bg-[linear-gradient(135deg,#e0f2fe,#dbeafe_45%,#e0f2fe)] shadow-[0_28px_100px_rgba(108,155,213,0.12)] flex items-center justify-center">
         <div className="landing-hero-aura absolute inset-[-15%] opacity-80 bg-[radial-gradient(circle_at_22%_30%,rgba(255,255,255,0.6),transparent_40%),radial-gradient(circle_at_78%_75%,rgba(255,222,244,0.4),transparent_40%)]" />
-        <div className="landing-pill-row absolute left-1/2 top-[15%] flex w-[calc(100%-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-2 sm:top-[28%] sm:gap-3">
-          <div className="whitespace-nowrap rounded-full border border-zinc-200 bg-white/95 px-5 py-3 text-base sm:text-lg font-medium text-zinc-700 shadow-[0_18px_50px_rgba(12,16,28,0.08)] backdrop-blur">
-            Summarize
-          </div>
-          <div className="whitespace-nowrap rounded-full border border-zinc-200 bg-white/95 px-5 py-3 text-base sm:text-lg font-medium text-zinc-700 shadow-[0_18px_50px_rgba(12,16,28,0.08)] backdrop-blur">
-            Proof read
-          </div>
-          <div className="whitespace-nowrap rounded-full border border-zinc-200 bg-white/95 px-5 py-3 text-base sm:text-lg font-medium text-zinc-700 shadow-[0_18px_50px_rgba(12,16,28,0.08)] backdrop-blur">
-            Find literature
-          </div>
-        </div>
-        <div className="landing-float-b absolute bottom-6 left-1/2 w-[320px] max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-[28px] border border-zinc-200 bg-white/95 p-4 text-zinc-900 shadow-[0_24px_70px_rgba(10,14,24,0.12)] backdrop-blur sm:bottom-8">
-          <div className="flex items-center justify-between text-xs font-medium text-zinc-500">
-            <span>Vision-ready assistant</span>
-            <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2 py-1">ONNX Model</span>
-          </div>
-          <p className="mt-3 text-lg font-medium leading-relaxed text-zinc-800">
-            Summarize the introduction, then compare Figure 2 with the Results section and suggest one tighter
-            caption.
-          </p>
+        
+        <div className="relative w-full max-w-[440px]">
+          <MockupWindow
+            headerCenter={
+              <span className="text-[11px] font-semibold text-zinc-500 flex items-center gap-1.5 truncate px-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                <span className="truncate">Browser AI Assistant</span>
+              </span>
+            }
+          >
+            <div className="flex flex-col p-4 sm:p-5 bg-white/50 min-h-[240px] h-full">
+              <div className="flex justify-end w-full pl-6 sm:pl-10 mb-4">
+                <div className="rounded-2xl rounded-tr-[4px] bg-blue-500 px-3 py-2 text-[11px] sm:text-[12px] leading-relaxed text-white shadow-md font-medium break-words">
+                  Summarize methodology.
+                </div>
+              </div>
+              <div className="rounded-2xl rounded-tl-[4px] border border-white/80 bg-white/95 p-3 sm:p-4 shadow-sm flex flex-col gap-2.5 mr-4 sm:mr-8 mb-6">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="text-blue-600 flex items-center justify-center bg-blue-50 p-1.5 rounded-full shrink-0"><span className="scale-100"><IconBrain /></span></span>
+                    <span className="text-[11px] sm:text-[12px] font-bold text-zinc-800 truncate">ONNX LFM-1.2B</span>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-zinc-500">Local</span>
+                </div>
+                <div className="text-[11px] sm:text-[12px] leading-relaxed text-zinc-600 pl-1 break-words">
+                  Double-blind approach used. State the <code className="bg-zinc-100 text-zinc-800 px-1 py-0.5 rounded font-mono text-[10px]">control group</code> conditions.
+                </div>
+                <div className="flex flex-wrap gap-1.5 pl-1 mt-0.5">
+                  <button className="rounded-full border border-zinc-200/80 bg-white px-2.5 py-1 text-[10px] font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 transition-colors">Draft addition</button>
+                  <button className="rounded-full border border-zinc-200/80 bg-white px-2.5 py-1 text-[10px] font-semibold text-zinc-700 shadow-sm hover:bg-zinc-50 transition-colors">Literature</button>
+                </div>
+              </div>
+              
+              {/* Inline Chat input box */}
+              <div className="mt-auto rounded-2xl border border-white/80 bg-white/95 p-1.5 shadow-sm flex items-center gap-2">
+                <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0 hover:bg-blue-100 transition-colors cursor-pointer">
+                  <span className="text-blue-500 scale-75 sm:scale-90 flex items-center justify-center"><IconPlus /></span>
+                </div>
+                <div className="flex-1 text-[11px] sm:text-[12px] text-zinc-400 truncate px-1">Ask anything...</div>
+                <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-zinc-900 text-white flex items-center justify-center shadow-sm hover:bg-zinc-800 transition-colors cursor-pointer shrink-0">
+                  <span className="scale-75 flex items-center justify-center"><IconArrowRight /></span>
+                </div>
+              </div>
+            </div>
+          </MockupWindow>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative h-[320px] overflow-hidden rounded-[34px] border border-[#d7e5f8] bg-[linear-gradient(135deg,#e0f2fe,#dbeafe_45%,#e0f2fe)] p-8 shadow-[0_28px_100px_rgba(108,155,213,0.12)]">
+    <div className="relative min-h-[360px] sm:min-h-[400px] py-8 sm:py-10 px-4 sm:px-8 overflow-hidden rounded-[34px] border border-[#d7e5f8] bg-[linear-gradient(135deg,#e0f2fe,#dbeafe_45%,#e0f2fe)] shadow-[0_28px_100px_rgba(108,155,213,0.12)] flex items-center justify-center">
       <div className="landing-hero-aura absolute inset-[-15%] opacity-80 bg-[radial-gradient(circle_at_18%_24%,rgba(255,255,255,0.6),transparent_40%),radial-gradient(circle_at_78%_78%,rgba(255,220,235,0.4),transparent_40%)]" />
-      <div className="landing-float-c absolute left-1/2 top-1/2 w-[420px] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-[30px] border border-zinc-200 bg-white/95 p-6 text-zinc-900 shadow-[0_24px_70px_rgba(10,14,24,0.12)] backdrop-blur">
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Literature results</div>
-        <div className="mt-4 space-y-4">
-          <div className="rounded-2xl border border-zinc-100 bg-zinc-50/50 p-3">
-            <p className="font-medium text-zinc-900">Perturbations of a Rotating Black Hole. I. Fundamental Equations</p>
-            <p className="mt-1 text-sm text-zinc-500">ApJ 185 (Oct., 1973) 635-648</p>
+      
+      <div className="relative w-full max-w-[440px]">
+        <MockupWindow
+          headerCenter={
+            <div className="flex items-center gap-1 bg-black/5 p-0.5 rounded-full">
+              <span className="bg-white text-zinc-900 shadow-sm rounded-full px-3 py-0.5 text-[10px] font-bold">Files</span>
+              <span className="text-zinc-500 hover:text-zinc-700 rounded-full px-3 py-0.5 text-[10px] font-bold cursor-pointer transition-colors">Git</span>
+            </div>
+          }
+        >
+          <div className="flex flex-col p-4 sm:p-5 bg-white/50 gap-4 min-h-[240px] h-full">
+            {/* Compiler Success Banner */}
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-2.5 sm:p-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-500 text-white shadow-sm shrink-0">
+                  <span className="flex items-center justify-center scale-75 sm:scale-90"><IconCheckSquare /></span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] sm:text-[12px] font-bold text-zinc-900 leading-tight truncate">Compile complete</div>
+                  <div className="text-[9px] sm:text-[10px] font-medium text-emerald-600 mt-0.5 truncate">Local WASM engine</div>
+                </div>
+              </div>
+              <button className="shrink-0 rounded-full bg-white border border-emerald-200 text-emerald-700 px-3 py-1.5 text-[10px] font-bold shadow-sm hover:bg-emerald-50 transition-colors w-full sm:w-auto mt-1 sm:mt-0">
+                View PDF
+              </button>
+            </div>
+
+            {/* Git / Changes section */}
+            <div className="mt-auto rounded-2xl border border-white/80 bg-white/90 shadow-sm overflow-hidden flex flex-col">
+              <div className="bg-white/60 border-b border-zinc-100/50 px-3 sm:px-4 py-2 flex items-center justify-between">
+                <div className="text-[10px] sm:text-[11px] font-bold text-zinc-800 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="text-zinc-500 flex items-center justify-center scale-90"><IconGitBranch /></span>
+                  Changes
+                </div>
+                <div className="text-[9px] font-bold text-zinc-500 bg-white px-2 py-0.5 rounded-full border border-zinc-200/60 flex items-center gap-1.5 shadow-sm">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  main
+                </div>
+              </div>
+              <div className="p-2 flex flex-col gap-1.5 bg-white/40">
+                <div className="flex items-center justify-between px-2.5 sm:px-3 py-2 rounded-xl bg-white shadow-sm border border-zinc-100/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-blue-500 flex items-center justify-center shrink-0 scale-90"><IconFileText /></span>
+                    <span className="text-[11px] text-zinc-800 font-semibold truncate">introduction.tex</span>
+                  </div>
+                  <div className="flex gap-1 font-mono text-[9px] font-bold shrink-0">
+                    <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">+12</span>
+                    <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">-3</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between px-2.5 sm:px-3 py-2 rounded-xl hover:bg-white/60 transition-colors cursor-default">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-zinc-400 flex items-center justify-center shrink-0 scale-90"><IconFileText /></span>
+                    <span className="text-[11px] text-zinc-600 font-medium truncate">references.bib</span>
+                  </div>
+                  <div className="flex gap-1 font-mono text-[9px] font-bold shrink-0">
+                    <span className="text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">+2</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="rounded-2xl border border-zinc-100 bg-zinc-50/50 p-3">
-            <p className="font-medium text-zinc-900">Hidden conformal symmetry of the Kerr black hole</p>
-            <p className="mt-1 text-sm text-zinc-500">Phys. Rev. D 82, 024008</p>
-          </div>
-          <div className="px-3 text-sm font-medium text-zinc-600">Separation of Variables and Superintegrability</div>
-        </div>
+        </MockupWindow>
       </div>
     </div>
   );
@@ -407,15 +554,15 @@ export default function FeaturesPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="hidden rounded-full border border-black/10 bg-white/75 px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm backdrop-blur sm:inline-flex"
+              className="hidden text-sm font-medium text-zinc-600 hover:text-zinc-900 sm:block"
             >
-              Open dashboard
+              Go to dashboard
             </Link>
             <Link
               href="/new"
               className="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-medium text-white shadow-[0_12px_30px_rgba(0,0,0,0.14)]"
             >
-              Open the workspace
+              Start a new project
               <IconArrowRight />
             </Link>
           </div>
@@ -423,7 +570,7 @@ export default function FeaturesPage() {
       </header>
 
       <main>
-        <section className="relative overflow-hidden pb-20 pt-12 sm:pt-16 w-full">
+        <section className="relative overflow-x-hidden pb-20 pt-12 sm:pt-16 w-full">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(210,231,255,0.9),transparent_38%),radial-gradient(circle_at_85%_10%,rgba(191,220,255,0.65),transparent_24%),radial-gradient(circle_at_18%_35%,rgba(255,225,242,0.35),transparent_24%)]" />
           <div className="relative mx-auto max-w-5xl px-6 text-center">
             <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/72 px-4 py-2 text-sm text-zinc-600 shadow-[0_10px_30px_rgba(70,110,170,0.08)] backdrop-blur">
@@ -525,73 +672,38 @@ export default function FeaturesPage() {
           </div>
         </section>
 
-        <section className="pb-28 pt-8">
-          <div className="mx-auto max-w-6xl px-6">
-            <div className="relative overflow-hidden rounded-[40px] border border-zinc-200 bg-[linear-gradient(135deg,#f0f9ff,#e0f2fe_44%,#f0f9ff)] px-6 py-12 shadow-[0_35px_120px_rgba(103,142,196,0.12)] sm:px-12 sm:py-16">
+        <section className="pb-32 pt-16">
+          <div className="mx-auto max-w-5xl px-6">
+            <div className="relative overflow-hidden rounded-[40px] border border-zinc-200/50 bg-[linear-gradient(135deg,#f0f9ff,#e0f2fe_44%,#f0f9ff)] px-6 py-20 shadow-[0_35px_120px_rgba(103,142,196,0.12)] sm:px-16 sm:py-24 text-center flex flex-col items-center">
               <div className="landing-hero-aura absolute inset-[-15%] opacity-70 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.7),transparent_30%),radial-gradient(circle_at_82%_74%,rgba(255,255,255,0.5),transparent_30%)]" />
-              <div className="relative">
-                <div className="flex flex-wrap gap-2">
+              <div className="relative z-10 flex flex-col items-center">
+                <div className="flex flex-wrap justify-center gap-2 mb-8">
                   <SurfaceChip label="Local-first" />
                   <SurfaceChip label="Real-time sync" />
                   <SurfaceChip label="Browser-native AI" />
                   <SurfaceChip label="Git integration" />
                 </div>
 
-                <div className="mt-8 grid gap-10 lg:grid-cols-[1.1fr,0.9fr] lg:items-end">
-                  <div>
-                    <h2 className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">Try Antiprism today</h2>
-                    <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-700">
-                      Open the workspace, invite collaborators, run browser-native models, and keep the project in
-                      formats you control.
-                    </p>
-                    <div className="mt-8 flex flex-wrap gap-3">
-                      <Link
-                        href="/new"
-                        className="inline-flex items-center gap-2 rounded-full bg-black px-6 py-3 text-base font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.14)]"
-                      >
-                        Open the workspace
-                        <IconArrowRight />
-                      </Link>
-                      <Link
-                        href="/"
-                        className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/75 px-6 py-3 text-base font-medium text-zinc-700 shadow-sm backdrop-blur"
-                      >
-                        Open dashboard
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[30px] border border-zinc-200 bg-white/95 p-6 text-zinc-900 shadow-[0_24px_70px_rgba(10,14,24,0.12)] backdrop-blur">
-                    <div className="flex items-center gap-3 text-sm font-medium text-zinc-500">
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-50 border border-zinc-100">
-                        <IconSparkles />
-                      </span>
-                      Supported today
-                    </div>
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      {SUPPORTED_FEATURES.map((chip) => (
-                        <span key={chip} className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm font-medium text-zinc-700">
-                          {chip}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="mt-6 grid gap-3 text-sm text-zinc-700 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-4">
-                        <div className="flex items-center gap-2 font-medium text-zinc-900">
-                          <IconServer />
-                          Peer-to-peer Sync
-                        </div>
-                        <p className="mt-2 text-zinc-600">Share URLs securely carry signaling parameters for collaboration setup.</p>
-                      </div>
-                      <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-4">
-                        <div className="flex items-center gap-2 font-medium text-zinc-900">
-                          <IconZap />
-                          Local compile
-                        </div>
-                        <p className="mt-2 text-zinc-600">BusyTeX and texlyre keep core writing loops local and fast.</p>
-                      </div>
-                    </div>
-                  </div>
+                <h2 className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl max-w-3xl">
+                  Ready to upgrade your scientific writing?
+                </h2>
+                <p className="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-700">
+                  Join researchers drafting, compiling, and reasoning in a single local-first environment. No cloud lock-in, no central servers.
+                </p>
+                <div className="mt-10 flex flex-wrap justify-center gap-4">
+                  <Link
+                    href="/new"
+                    className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 text-base font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.14)] hover:scale-105 transition-transform"
+                  >
+                    Start a new project
+                    <IconArrowRight />
+                  </Link>
+                  <Link
+                    href="/"
+                    className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/80 px-8 py-4 text-base font-medium text-zinc-700 shadow-sm backdrop-blur-xl hover:bg-white transition-colors"
+                  >
+                    Go to dashboard
+                  </Link>
                 </div>
               </div>
             </div>
