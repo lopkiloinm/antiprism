@@ -534,7 +534,7 @@ function FeatureRow({
 
 export default function FeaturesPage() {
   return (
-    <div className="h-dvh w-screen overflow-y-auto overflow-x-hidden bg-[#eef2f7] text-zinc-950">
+    <div id="features-scroll-container" className="h-dvh w-screen overflow-y-auto overflow-x-hidden bg-[#eef2f7] text-zinc-950">
       <header className="sticky top-0 z-50 border-b border-black/5 bg-[#eef2f7]/78 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link href="/features" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-950">
@@ -569,7 +569,7 @@ export default function FeaturesPage() {
       </header>
 
       <main>
-        <section className="relative overflow-x-hidden pb-20 pt-12 sm:pt-16 w-full">
+        <section className="relative pb-20 pt-12 sm:pt-16 w-full">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(210,231,255,0.9),transparent_38%),radial-gradient(circle_at_85%_10%,rgba(191,220,255,0.65),transparent_24%),radial-gradient(circle_at_18%_35%,rgba(255,225,242,0.35),transparent_24%)]" />
           <div className="relative mx-auto max-w-5xl px-6 text-center">
             <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/72 px-4 py-2 text-sm text-zinc-600 shadow-[0_10px_30px_rgba(70,110,170,0.08)] backdrop-blur">

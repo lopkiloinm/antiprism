@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useMotionValueEvent } from "framer-motion";
 import { IconSparkles, IconZap } from "./Icons";
 import { Streamdown } from "streamdown";
 import { streamdownPlugins, getShikiTheme } from "@/lib/streamdownConfig";
@@ -10,7 +10,6 @@ import { ThinkingRenderer } from "./ThinkingRenderer";
 import 'katex/dist/katex.min.css';
 import { InlineMath, BlockMath } from 'react-katex';
 
-// Complex sequence representing the full simulation
 const STEPS = [
   "INTRO",
   "WORKSPACE_ZOOM",
@@ -31,271 +30,121 @@ const STEPS = [
   "REALTIME_SYNC",
 ] as const;
 
+type StepName = typeof STEPS[number];
+
+const RANGES: Record<StepName, [number, number]> = {
+  INTRO: [0, 0.08],
+  WORKSPACE_ZOOM: [0.08, 0.12],
+  MODEL_SELECT_NANBEIGE: [0.12, 0.14],
+  MODEL_DOWNLOAD: [0.14, 0.20],
+  PROMPTING_TEXT: [0.20, 0.25],
+  THINKING_STREAM: [0.25, 0.35],
+  CODE_GEN_STREAM: [0.35, 0.45],
+  SHOW_DIFF: [0.45, 0.48],
+  VISION_TRANSITION: [0.48, 0.55],
+  WORKSPACE_VISION: [0.55, 0.58],
+  MODEL_SELECT_QWEN: [0.58, 0.60],
+  MODEL_DOWNLOAD_QWEN: [0.60, 0.65],
+  UPLOAD_IMAGE: [0.65, 0.68],
+  PROMPTING_IMAGE: [0.68, 0.72],
+  MULTIMODAL_STREAM: [0.72, 0.82],
+  WEBRTC_TRANSITION: [0.82, 0.88],
+  REALTIME_SYNC: [0.88, 1.0],
+};
+
 export default function AnimatedHero() {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [promptText, setPromptText] = useState("");
-  const [visionPromptText, setVisionPromptText] = useState("");
-  const [thinkingText, setThinkingText] = useState("");
-  const [thinkingStartedAt, setThinkingStartedAt] = useState<number | undefined>(undefined);
-  const [thinkingDurationMs, setThinkingDurationMs] = useState<number | undefined>(undefined);
-  const [codeText, setCodeText] = useState("");
-  const [multimodalText, setMultimodalText] = useState("");
-  const [isThinkingComplete, setIsThinkingComplete] = useState(false);
-  const [loremText, setLoremText] = useState("");
-  const [webrtcStep, setWebrtcStep] = useState(0);
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [p, setP] = useState(0);
+
+  const scrollRef = useRef<HTMLElement | null>(null);
+  if (typeof document !== 'undefined' && !scrollRef.current) {
+    scrollRef.current = document.getElementById("features-scroll-container");
+  }
+
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    container: scrollRef.current ? scrollRef : undefined,
+    offset: ["start start", "end end"]
+  });
+
+  useMotionValueEvent(scrollYProgress, "change", (latest) => {
+    setP(latest);
+  });
+
+  let currentStepIndex = 0;
+  for (let i = 0; i < STEPS.length; i++) {
+    const [start, end] = RANGES[STEPS[i]];
+    if (p >= start && p <= end) {
+      currentStepIndex = i;
+      break;
+    }
+  }
+  if (p >= 1) currentStepIndex = STEPS.length - 1;
+
   const step = STEPS[currentStepIndex];
 
+  const getP = (stepName: StepName) => {
+    const [start, end] = RANGES[stepName];
+    if (p < start) return 0;
+    if (p > end) return 1;
+    return (p - start) / (end - start);
+  };
+
+  const textToType = "Why is the sky blue?";
+  const promptChars = Math.floor(getP("PROMPTING_TEXT") * textToType.length);
+  const promptText = textToType.substring(0, promptChars);
+
+  const downloadP1 = getP("MODEL_DOWNLOAD");
+  const downloadP2 = getP("MODEL_DOWNLOAD_QWEN");
+  const downloadProgress = Math.floor((step === "MODEL_DOWNLOAD_QWEN" || getP("MODEL_DOWNLOAD_QWEN") > 0 ? downloadP2 : downloadP1) * 100);
+
+  const thinkingFull = "The user is asking about the color of the sky. This is a classic physics question explained by Rayleigh scattering. I should format this as a comprehensive LaTeX document. It needs an introduction, a section on Rayleigh scattering with a formula, and a conclusion.\n\nLet's write out the document structure now.";
+  const thinkingChars = Math.floor(getP("THINKING_STREAM") * thinkingFull.length);
+  const thinkingText = thinkingFull.substring(0, thinkingChars);
+  const isThinkingComplete = getP("THINKING_STREAM") === 1;
+
+  const codeFull = "\\documentclass{article}\n\\usepackage{amsmath}\n\n\\title{Why is the Sky Blue?}\n\\author{AI Assistant}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\nThe sky appears blue to the human eye primarily due to a phenomenon known as \\textbf{Rayleigh scattering}.\n\n\\subsection{The Physics of Light}\nWhen sunlight reaches Earth's atmosphere, gases and particles scatter the light. Shorter wavelengths scatter more easily.\n\nThe scattering intensity $I$ is given by:\n\n\\begin{equation}\nI \\propto \\frac{1}{\\lambda^4}\n\\end{equation}\n\nSince blue light has a shorter wavelength $\\lambda$ than red light, it scatters more intensely across the sky.\n\n\\end{document}";
+  const codeChars = Math.floor(getP("CODE_GEN_STREAM") * codeFull.length);
+  const codeText = codeFull.substring(0, codeChars);
+
+  const imgText = "Explain this diagram.";
+  const visionPromptChars = Math.floor(getP("PROMPTING_IMAGE") * imgText.length);
+  const visionPromptText = imgText.substring(0, visionPromptChars);
+
+  const multimodalFull = "This diagram illustrates **Rayleigh scattering**, showing how shorter (blue) wavelengths of sunlight scatter more efficiently when hitting particles in the atmosphere compared to longer (red) wavelengths.";
+  const multimodalChars = Math.floor(getP("MULTIMODAL_STREAM") * multimodalFull.length);
+  const multimodalText = multimodalFull.substring(0, multimodalChars);
+
+  const webrtcP = getP("REALTIME_SYNC");
+  const webrtcStep = Math.min(7, Math.floor(webrtcP * 14)); // Scale up to 7 steps over first 50% of the section
+
+  const loremStr1 = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+  const loremStr2 = "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.";
+  
+  const loremP = webrtcP > 0.3 ? (webrtcP - 0.3) / 0.7 : 0;
+  const lorem1Chars = Math.floor(Math.min(1, loremP * 1.5) * loremStr1.length);
+  const lorem2Chars = Math.floor(Math.min(1, loremP * 1.5) * loremStr2.length);
+  
+  // Only show loremText if we've actually started typing it
+  const loremText = loremP > 0 ? `${loremStr1.substring(0, lorem1Chars)}${lorem2Chars > 0 ? `\n\n${loremStr2.substring(0, lorem2Chars)}` : ''}` : '';
+
+  const [thinkingStartedAt, setThinkingStartedAt] = useState<number | undefined>(undefined);
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    
-    const advance = (delay: number) => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (currentStepIndex < STEPS.length - 1) {
-          setCurrentStepIndex(i => i + 1);
-        } else {
-          // Reset
-          setCurrentStepIndex(0);
-          setDownloadProgress(0);
-          setPromptText("");
-          setVisionPromptText("");
-          setThinkingText("");
-          setThinkingStartedAt(undefined);
-          setThinkingDurationMs(undefined);
-          setIsThinkingComplete(false);
-          setCodeText("");
-          setMultimodalText("");
-          setLoremText("");
-          setWebrtcStep(0);
-        }
-      }, delay);
-    };
-
-    switch (step) {
-      case "INTRO":
-        advance(2500);
-        break;
-      case "WORKSPACE_ZOOM":
-        advance(1500);
-        break;
-      case "PROMPTING_TEXT": {
-        let isCancelled = false;
-        let charIndex = 0;
-        const textToType = "Why is the sky blue?";
-        setPromptText("");
-        
-        timer = setTimeout(() => {
-          if (isCancelled) return;
-          const typeInterval = setInterval(() => {
-            if (isCancelled) {
-              clearInterval(typeInterval);
-              return;
-            }
-            if (charIndex < textToType.length) {
-              setPromptText(textToType.substring(0, charIndex + 1));
-              charIndex++;
-            } else {
-              clearInterval(typeInterval);
-              advance(1500); // Pause after typing before jumping to bubble
-            }
-          }, 60);
-        }, 1000); // Pause before typing starts
-        
-        return () => { isCancelled = true; clearTimeout(timer); };
-      }
-      case "MODEL_SELECT_NANBEIGE":
-        advance(1000);
-        break;
-      case "MODEL_DOWNLOAD":
-        let p1 = 0;
-        const downloadInterval = setInterval(() => {
-          p1 += 5;
-          if (p1 >= 100) {
-            setDownloadProgress(100);
-            clearInterval(downloadInterval);
-            advance(500);
-          } else {
-            setDownloadProgress(p1);
-          }
-        }, 30);
-        return () => clearInterval(downloadInterval);
-      case "THINKING_STREAM": {
-        let isCancelled = false;
-        const now = Date.now();
-        setThinkingStartedAt(now);
-        setIsThinkingComplete(false);
-        setThinkingText("");
-
-        const run = async () => {
-          const text = "The user is asking about the color of the sky. This is a classic physics question explained by Rayleigh scattering. I should format this as a comprehensive LaTeX document. It needs an introduction, a section on Rayleigh scattering with a formula, and a conclusion.\n\nLet's write out the document structure now.";
-          for (let i = 1; i <= text.length; i++) {
-            if (isCancelled) return;
-            setThinkingText(text.substring(0, i));
-            await new Promise(r => setTimeout(r, 15));
-          }
-          if (isCancelled) return;
-          setIsThinkingComplete(true);
-          setThinkingDurationMs(Date.now() - now);
-          advance(400);
-        };
-        run();
-        return () => { isCancelled = true; clearTimeout(timer); };
-      }
-      case "CODE_GEN_STREAM": {
-        let isCancelled = false;
-        setCodeText("");
-        
-        const run = async () => {
-          const text = "\\documentclass{article}\n\\usepackage{amsmath}\n\n\\title{Why is the Sky Blue?}\n\\author{AI Assistant}\n\n\\begin{document}\n\\maketitle\n\n\\section{Introduction}\nThe sky appears blue to the human eye primarily due to a phenomenon known as \\textbf{Rayleigh scattering}.\n\n\\subsection{The Physics of Light}\nWhen sunlight reaches Earth's atmosphere, gases and particles scatter the light. Shorter wavelengths scatter more easily.\n\nThe scattering intensity $I$ is given by:\n\n\\begin{equation}\nI \\propto \\frac{1}{\\lambda^4}\n\\end{equation}\n\nSince blue light has a shorter wavelength $\\lambda$ than red light, it scatters more intensely across the sky.\n\n\\end{document}";
-          for (let i = 1; i <= text.length; i++) {
-            if (isCancelled) return;
-            setCodeText(text.substring(0, i));
-            await new Promise(r => setTimeout(r, 10));
-          }
-          if (isCancelled) return;
-          advance(800);
-        };
-        run();
-        return () => { isCancelled = true; clearTimeout(timer); };
-      }
-      case "SHOW_DIFF":
-        advance(2000);
-        break;
-      case "VISION_TRANSITION":
-        advance(2500);
-        break;
-      case "WORKSPACE_VISION":
-        advance(1000);
-        break;
-      case "MODEL_SELECT_QWEN":
-        advance(1000);
-        break;
-      case "MODEL_DOWNLOAD_QWEN":
-        setDownloadProgress(0);
-        let p2 = 0;
-        const downloadIntervalQwen = setInterval(() => {
-          p2 += 5;
-          if (p2 >= 100) {
-            setDownloadProgress(100);
-            clearInterval(downloadIntervalQwen);
-            advance(500);
-          } else {
-            setDownloadProgress(p2);
-          }
-        }, 30);
-        return () => clearInterval(downloadIntervalQwen);
-      case "UPLOAD_IMAGE":
-        advance(400);
-        break;
-      case "PROMPTING_IMAGE": {
-        let isCancelled = false;
-        let charIndex = 0;
-        const imgText = "Explain this diagram.";
-        setVisionPromptText("");
-        
-        timer = setTimeout(() => {
-          if (isCancelled) return;
-          const imgInterval = setInterval(() => {
-            if (isCancelled) {
-              clearInterval(imgInterval);
-              return;
-            }
-            if (charIndex < imgText.length) {
-              setVisionPromptText(imgText.substring(0, charIndex + 1));
-              charIndex++;
-            } else {
-              clearInterval(imgInterval);
-              advance(1500); // Pause after typing
-            }
-          }, 60);
-        }, 1000); // Pause before typing
-        
-        return () => { isCancelled = true; clearTimeout(timer); };
-      }
-      case "MULTIMODAL_STREAM": {
-        let isCancelled = false;
-        setMultimodalText("");
-        
-        const run = async () => {
-          const text = "This diagram illustrates **Rayleigh scattering**, showing how shorter (blue) wavelengths of sunlight scatter more efficiently when hitting particles in the atmosphere compared to longer (red) wavelengths.";
-          for (let i = 1; i <= text.length; i++) {
-            if (isCancelled) return;
-            setMultimodalText(text.substring(0, i));
-            await new Promise(r => setTimeout(r, 20));
-          }
-          if (isCancelled) return;
-          advance(4000);
-        };
-        run();
-        return () => { isCancelled = true; clearTimeout(timer); };
-      }
-      case "WEBRTC_TRANSITION":
-        advance(2500);
-        break;
-      case "REALTIME_SYNC":
-        let rtStep = 0;
-        const webrtcInterval = setInterval(() => {
-          rtStep++;
-          if (rtStep <= 6) {
-            setWebrtcStep(rtStep);
-          } else if (rtStep === 7) {
-            setWebrtcStep(7);
-            clearInterval(webrtcInterval);
-            
-            // Start typing lorem ipsum in parallel
-            const loremStr1 = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
-            const loremStr2 = "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.";
-            
-            let lIdx1 = 0;
-            let lIdx2 = 0;
-            let isDone1 = false;
-            let isDone2 = false;
-            
-            const loremInterval = setInterval(() => {
-              let text1 = "";
-              let text2 = "";
-              
-              if (lIdx1 < loremStr1.length) {
-                text1 = loremStr1.substring(0, lIdx1 + 1);
-                lIdx1++;
-              } else {
-                text1 = loremStr1;
-                isDone1 = true;
-              }
-              
-              if (lIdx2 < loremStr2.length) {
-                text2 = loremStr2.substring(0, lIdx2 + 1);
-                lIdx2++;
-              } else {
-                text2 = loremStr2;
-                isDone2 = true;
-              }
-              
-              setLoremText(`${text1}\n\n${text2}`);
-              
-              if (isDone1 && isDone2) {
-                clearInterval(loremInterval);
-                advance(5000);
-              }
-            }, 30); // Standard typing speed
-          }
-        }, 1500);
-        return () => clearInterval(webrtcInterval);
+    if (step === "THINKING_STREAM" && getP("THINKING_STREAM") > 0 && !thinkingStartedAt) {
+      setThinkingStartedAt(Date.now());
+    } else if (getP("THINKING_STREAM") === 0) {
+      setThinkingStartedAt(undefined);
     }
-
-    return () => clearTimeout(timer);
-  }, [step, currentStepIndex]);
+  }, [step, p, thinkingStartedAt]);
 
   const showCodePanel = ["WORKSPACE_ZOOM", "MODEL_SELECT_NANBEIGE", "MODEL_DOWNLOAD", "PROMPTING_TEXT", "THINKING_STREAM", "CODE_GEN_STREAM", "SHOW_DIFF", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
   const showPdfPanel = ["SHOW_DIFF", "VISION_TRANSITION", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
   const isQwen = ["WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
 
   return (
-    <div className="relative w-full min-h-[600px] sm:min-h-[750px] bg-transparent perspective-[1000px] font-sans">
-      <AnimatePresence mode="wait">
+    <div ref={containerRef} className="relative w-full h-[600vh] bg-transparent font-sans">
+      <div className="sticky top-0 w-full h-screen min-h-[600px] sm:min-h-[750px] flex items-center justify-center overflow-hidden perspective-[1000px]">
+        <AnimatePresence mode="wait">
         {step === "INTRO" && (
           <motion.div
             key="intro"
@@ -487,7 +336,7 @@ export default function AnimatedHero() {
                            isStreaming={step === "THINKING_STREAM" && !isThinkingComplete}
                            initialExpanded={true}
                            startedAt={thinkingStartedAt}
-                           durationMs={thinkingDurationMs}
+                           durationMs={isThinkingComplete || step !== "THINKING_STREAM" ? 3400 : undefined}
                         />
                       </motion.div>
                     )}
@@ -867,6 +716,7 @@ export default function AnimatedHero() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }
