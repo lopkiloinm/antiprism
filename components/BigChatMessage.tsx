@@ -138,7 +138,7 @@ export function BigChatMessage({
           ref={isLast && message.role === "assistant" ? lastMessageRef : undefined}
           className="text-sm overflow-x-auto whitespace-pre-wrap break-words font-mono max-w-[85%]"
         >
-          {message.content}
+          {assistantDisplayContent}
         </pre>
       ) : message.role === "assistant" ? (
         <div className={`${streamdownClasses} ${theme === 'light' ? 'theme-light' : ''}`}>
