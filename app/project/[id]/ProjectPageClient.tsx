@@ -2892,7 +2892,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           aiLogger.error("Failed to load VL model", { aiEventId, modelId: selectedModelId, error: String(error) });
           const errorMessage = { role: "assistant" as const, content: "Error: Failed to load VL model. WebGPU required." };
           const setMsgs = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
-          setMsgs((msgs) => [...msgs, { role: "user", content: userMessage, ...(capturedImage && { image: capturedImage }) }, errorMessage]);
+          setMsgs((msgs: any[]) => [...msgs, { role: "user", content: userMessage, ...(capturedImage && { image: capturedImage }) }, errorMessage]);
           setChatInput(""); setChatImageDataUrl(null);
           return;
         }
