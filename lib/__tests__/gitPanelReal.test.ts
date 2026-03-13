@@ -1,29 +1,10 @@
-import { gitStore } from '../gitStore';
+import { describe, it, test, expect, beforeEach, vi } from "vitest";
+import { gitStore, GitStore } from '../gitStore';
 
-// Mock IndexedDB for testing
-const mockDB = {
-  objectStoreNames: {
-    contains: jest.fn()
-  },
-  transaction: jest.fn(),
-  createObjectStore: jest.fn()
-};
-
-const mockRequest = {
-  result: mockDB,
-  onerror: null,
-  onsuccess: null,
-  onupgradeneeded: null
-};
-
-// Mock indexedDB
-global.indexedDB = {
-  open: jest.fn(() => mockRequest)
-} as any;
-
+import "fake-indexeddb/auto";
 describe('GitPanelReal Integration Tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // Reset gitStore instance
     (gitStore as any).db = null;
   });
@@ -291,8 +272,14 @@ describe('GitPanelReal Integration Tests', () => {
       const diffs = await gitStore.getDiff(projectId, filePath);
       
       expect(diffs).toHaveLength(2); // Should show both add and modify
-      expect(diffs[0].status).toBe('modified');
-      expect(diffs[0].newContent).toBe('Modified');
+      const modifiedDiff = diffs.find(d => d.status === 'modified');
+      const addedDiff = diffs.find(d => d.status === 'added');
+      
+      expect(modifiedDiff).toBeDefined();
+      expect(modifiedDiff?.newContent).toBe('Modified');
+      
+      expect(addedDiff).toBeDefined();
+      expect(addedDiff?.newContent).toBe('Initial');
     });
   });
 });
@@ -301,8 +288,8 @@ describe('GitPanelReal Integration Tests', () => {
 describe('GitStore Static Methods', () => {
   test('calculateFileHash should be consistent', () => {
     const content = 'Test content for hashing';
-    const hash1 = gitStore.calculateFileHash(content);
-    const hash2 = gitStore.calculateFileHash(content);
+    const hash1 = GitStore.calculateFileHash(content);
+    const hash2 = GitStore.calculateFileHash(content);
     
     expect(hash1).toBe(hash2);
     expect(typeof hash1).toBe('string');
@@ -312,8 +299,8 @@ describe('GitStore Static Methods', () => {
     const content1 = 'Content 1';
     const content2 = 'Content 2';
     
-    const hash1 = gitStore.calculateFileHash(content1);
-    const hash2 = gitStore.calculateFileHash(content2);
+    const hash1 = GitStore.calculateFileHash(content1);
+    const hash2 = GitStore.calculateFileHash(content2);
     
     expect(hash1).not.toBe(hash2);
   });

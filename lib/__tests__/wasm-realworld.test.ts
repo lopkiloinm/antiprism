@@ -642,6 +642,7 @@ This is a TeX block.
     });
 
     it('should handle compilation timeout scenarios', async () => {
+      vi.useFakeTimers();
       // Test timeout handling
       const timeoutScenarios = [
         { duration: 5000, type: 'short' },
@@ -649,14 +650,17 @@ This is a TeX block.
         { duration: 120000, type: 'long' },
       ];
 
-      timeoutScenarios.forEach(scenario => {
+      for (const scenario of timeoutScenarios) {
         const timeoutPromise = new Promise((_, reject) => {
           setTimeout(() => reject(new Error(`Operation timed out after ${scenario.duration}ms`)), scenario.duration);
         });
 
+        vi.advanceTimersByTime(scenario.duration);
+
         // Test that timeout errors are properly formatted
-        expect(timeoutPromise).rejects.toThrow(`Operation timed out after ${scenario.duration}ms`);
-      });
+        await expect(timeoutPromise).rejects.toThrow(`Operation timed out after ${scenario.duration}ms`);
+      }
+      vi.useRealTimers();
     });
   });
 });

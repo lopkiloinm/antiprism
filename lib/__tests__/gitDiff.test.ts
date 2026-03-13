@@ -1,3 +1,4 @@
+import { describe, test, expect } from "vitest";
 import { diffLines } from "diff";
 
 // Test the diff package output structure

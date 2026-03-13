@@ -33,7 +33,8 @@ async function getRunner(): Promise<BusyTexRunner> {
         busytexBasePath: `${baseNorm}/core/busytex`,
         verbose: true,  // ✅ Enable verbose logging
       });
-      await r.initialize(true);
+      const useWorker = typeof window === "undefined" || window.location.pathname !== "/test-pdf";
+      await r.initialize(useWorker);
       runner = r;
       latexLogger.info("LaTeX compiler initialized successfully");
       return r;
