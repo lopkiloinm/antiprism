@@ -1,113 +1,67 @@
-'use client'
+"use client";
 
-import React from 'react'
-import { IRawDiff, DiffLine, DiffLineType, DiffHunk } from '../lib/models/diff'
+import { GitMergeView } from "./GitMergeView";
+import { DiffLineType, type IRawDiff } from "../lib/models/diff";
 
 interface DiffViewProps {
-  diff: IRawDiff
+  diff: IRawDiff;
 }
 
-export const DiffView: React.FC<DiffViewProps> = ({ diff }) => {
+function stripPrefix(text: string) {
+  return text.length > 0 ? text.slice(1) : text;
+}
+
+function extractFilePath(header: string) {
+  const plusMatch = header.match(/^\+\+\+ b\/(.+)$/m);
+  if (plusMatch?.[1]) {
+    return plusMatch[1];
+  }
+
+  const diffMatch = header.match(/^diff --git a\/(.+?) b\//m);
+  return diffMatch?.[1] ?? "diff.txt";
+}
+
+function buildMergeDocuments(diff: IRawDiff) {
+  const originalLines: string[] = [];
+  const currentLines: string[] = [];
+
+  for (const hunk of diff.hunks) {
+    for (const line of hunk.lines) {
+      if (line.type === DiffLineType.Context) {
+        const value = stripPrefix(line.text);
+        originalLines.push(value);
+        currentLines.push(value);
+      } else if (line.type === DiffLineType.Delete) {
+        originalLines.push(stripPrefix(line.text));
+      } else if (line.type === DiffLineType.Add) {
+        currentLines.push(stripPrefix(line.text));
+      }
+    }
+  }
+
+  return {
+    originalContent: originalLines.join("\n"),
+    currentContent: currentLines.join("\n"),
+  };
+}
+
+export const DiffView = ({ diff }: DiffViewProps) => {
   if (diff.isBinary) {
     return (
-      <div className="diff-binary">
-        <p>Binary file diff not displayed</p>
+      <div className="flex h-full items-center justify-center text-sm text-[var(--muted)]">
+        Binary file diff not displayed
       </div>
-    )
+    );
   }
 
-  if (diff.hunks.length === 0) {
-    return (
-      <div className="diff-empty">
-        <p>No changes to display</p>
-      </div>
-    )
-  }
+  const { originalContent, currentContent } = buildMergeDocuments(diff);
 
   return (
-    <div className="diff-view">
-      <div className="diff-header">
-        <pre className="diff-header-text">{diff.header}</pre>
-      </div>
-      <div className="diff-content">
-        {diff.hunks.map((hunk, hunkIndex) => (
-          <DiffHunkView key={hunkIndex} hunk={hunk} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-interface DiffHunkViewProps {
-  hunk: DiffHunk
-}
-
-const DiffHunkView: React.FC<DiffHunkViewProps> = ({ hunk }) => {
-  return (
-    <div className="diff-hunk">
-      <div className="diff-hunk-content">
-        {hunk.lines.map((line, lineIndex) => (
-          <DiffLineView key={lineIndex} line={line} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-interface DiffLineViewProps {
-  line: DiffLine
-}
-
-const DiffLineView: React.FC<DiffLineViewProps> = ({ line }) => {
-  const getLineClassName = (type: DiffLineType): string => {
-    switch (type) {
-      case DiffLineType.Hunk:
-        return 'diff-line-hunk'
-      case DiffLineType.Add:
-        return 'diff-line-add'
-      case DiffLineType.Delete:
-        return 'diff-line-delete'
-      case DiffLineType.Context:
-        return 'diff-line-context'
-      default:
-        return 'diff-line-unknown'
-    }
-  }
-
-  const formatLineNumber = (num: number | null): string => {
-    return num !== null ? num.toString() : ''
-  }
-
-  const getLineContent = (line: DiffLine): string => {
-    if (line.type === DiffLineType.Hunk) {
-      return line.text
-    }
-    
-    // Remove the diff prefix for display
-    if (line.text.length > 0) {
-      return line.text.substring(1)
-    }
-    return line.text
-  }
-
-  return (
-    <div className={`diff-line ${getLineClassName(line.type)}`}>
-      <div className="diff-line-numbers">
-        <span className="diff-line-old-number">
-          {formatLineNumber(line.oldLineNumber)}
-        </span>
-        <span className="diff-line-new-number">
-          {formatLineNumber(line.newLineNumber)}
-        </span>
-      </div>
-      <div className="diff-line-content">
-        <pre className="diff-line-text">
-          {getLineContent(line)}
-          {line.noTrailingNewLine && (
-            <span className="diff-no-newline"> No newline at end of file</span>
-          )}
-        </pre>
-      </div>
-    </div>
-  )
-}
+    <GitMergeView
+      filePath={extractFilePath(diff.header)}
+      currentContent={currentContent}
+      originalContent={originalContent}
+      className="h-full"
+    />
+  );
+};

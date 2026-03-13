@@ -117,7 +117,7 @@ interface GitPanelProps {
   filePaths: string[];
   currentPath?: string;
   projectName?: string;
-  onFileSelect?: (filePath: string, options?: { currentContent?: string; originalContent?: string; showDiff?: boolean }) => void;
+  onFileSelect?: (filePath: string, options?: { currentContent?: string; originalContent?: string }) => void;
   onCloseFile?: (filePath: string) => void;
   projectId?: string;
   bufferManager?: any; // Buffer manager instance for file content access
@@ -431,37 +431,24 @@ export function GitPanelReal({
           // Read current file content - always trust Yjs when available (IDBFS can be stale)
           let currentContent = "";
           try {
-            // For text files, always try to get content from Yjs first (most up-to-date)
-            if (filePath.endsWith('.tex') || filePath.endsWith('.typ') || filePath.endsWith('.md') || filePath.endsWith('.txt')) {
-              if (fileDocManager) {
-                const doc = fileDocManager.getDocument(filePath, true); // silent=true
-                if (doc && doc.text && doc.text.toString().length > 0) {
-                  // Always use Yjs content when available - it's the most up-to-date
-                  currentContent = doc.text.toString();
-                  console.log(`🔍 File ${filePath}: got content from Yjs, length ${currentContent.length}`);
-                } else {
-                  // Fallback to IDBFS only if Yjs document is truly empty/unavailable
-                  const { mount } = await import("@wwog/idbfs");
-                  const fs = await mount();
-                  const contentBuffer = await fs.readFile(filePath);
-                  currentContent = new TextDecoder().decode(contentBuffer);
-                  console.log(`🔍 File ${filePath}: got content from IDBFS (Yjs unavailable), length ${currentContent.length}`);
-                }
+            if (fileDocManager) {
+              const doc = fileDocManager.getDocument(filePath, true); // silent=true
+              if (doc && doc.text && doc.text.toString().length > 0) {
+                currentContent = doc.text.toString();
+                console.log(`🔍 File ${filePath}: got content from Yjs, length ${currentContent.length}`);
               } else {
-                // No fileDocManager available, use IDBFS
                 const { mount } = await import("@wwog/idbfs");
                 const fs = await mount();
                 const contentBuffer = await fs.readFile(filePath);
                 currentContent = new TextDecoder().decode(contentBuffer);
-                console.log(`🔍 File ${filePath}: got content from IDBFS (no manager), length ${currentContent.length}`);
+                console.log(`🔍 File ${filePath}: got content from IDBFS (Yjs unavailable), length ${currentContent.length}`);
               }
             } else {
-              // For binary files, read from IDBFS
               const { mount } = await import("@wwog/idbfs");
               const fs = await mount();
               const contentBuffer = await fs.readFile(filePath);
               currentContent = new TextDecoder().decode(contentBuffer);
-              console.log(`🔍 File ${filePath}: binary file from IDBFS, length ${currentContent.length}`);
+              console.log(`🔍 File ${filePath}: got content from IDBFS (no manager), length ${currentContent.length}`);
             }
           } catch (error) {
             console.log(`Could not get content for ${filePath}:`, error);
@@ -586,36 +573,24 @@ export function GitPanelReal({
       // Get current content from Yjs first (most up-to-date source)
       let currentContent = "";
       try {
-        // For text files, try to get content from Yjs document manager first
-        if (fullPath.endsWith('.tex') || fullPath.endsWith('.typ') || fullPath.endsWith('.md') || fullPath.endsWith('.txt')) {
-          if (fileDocManager) {
-            const doc = fileDocManager.getDocument(fullPath, true); // silent=true
-            if (doc && doc.text && doc.text.toString().length > 0) {
-              currentContent = doc.text.toString();
-              console.log(`🔍 handleFileClick - got content from Yjs for ${fullPath}, length ${currentContent.length}`);
-            } else {
-              // Fallback to IDBFS if Yjs is empty
-              const { mount } = await import("@wwog/idbfs");
-              const fs = await mount();
-              const contentBuffer = await fs.readFile(fullPath);
-              currentContent = new TextDecoder().decode(contentBuffer);
-              console.log(`🔍 handleFileClick - got content from IDBFS (Yjs empty) for ${fullPath}, length ${currentContent.length}`);
-            }
+        if (fileDocManager) {
+          const doc = fileDocManager.getDocument(fullPath, true); // silent=true
+          if (doc && doc.text && doc.text.toString().length > 0) {
+            currentContent = doc.text.toString();
+            console.log(`🔍 handleFileClick - got content from Yjs for ${fullPath}, length ${currentContent.length}`);
           } else {
-            // Fallback to IDBFS if manager not available
             const { mount } = await import("@wwog/idbfs");
             const fs = await mount();
             const contentBuffer = await fs.readFile(fullPath);
             currentContent = new TextDecoder().decode(contentBuffer);
-            console.log(`🔍 handleFileClick - got content from IDBFS (no manager) for ${fullPath}, length ${currentContent.length}`);
+            console.log(`🔍 handleFileClick - got content from IDBFS (Yjs empty) for ${fullPath}, length ${currentContent.length}`);
           }
         } else {
-          // For binary files, read from IDBFS
           const { mount } = await import("@wwog/idbfs");
           const fs = await mount();
           const contentBuffer = await fs.readFile(fullPath);
           currentContent = new TextDecoder().decode(contentBuffer);
-          console.log(`🔍 handleFileClick - binary file from IDBFS for ${fullPath}, length ${currentContent.length}`);
+          console.log(`🔍 handleFileClick - got content from IDBFS (no manager) for ${fullPath}, length ${currentContent.length}`);
         }
       } catch (error) {
         console.log(`Could not get content for ${fullPath}:`, error);
@@ -623,7 +598,6 @@ export function GitPanelReal({
 
       // Get original content from last commit
       let originalContent = "";
-      let showDiff = true;
       
       try {
         const repo = await gitStore.getRepository(stableRepoName!);
@@ -652,30 +626,26 @@ export function GitPanelReal({
           } else {
             // File doesn't exist in last commit - it's a new file
             console.log('🔍 Debug - File not found in commit, treating as new file');
-            showDiff = false;
           }
         } else {
           // No commits yet - don't show diff
           console.log('🔍 Debug - No commits found');
-          showDiff = false;
         }
       } catch (error) {
         console.log(`Could not get original content for ${fileName}:`, error);
-        showDiff = false;
       }
 
       console.log('🔍 Debug - Final diff data:', {
         fileName,
         fullPath,
-        showDiff,
         currentContentLength: currentContent.length,
         originalContentLength: originalContent.length
       });
 
       // Open file with diff data - no suffix for cleaner UI
-      onFileSelect(fullPath, { currentContent, originalContent, showDiff });
+      onFileSelect(fullPath, { currentContent, originalContent });
     }
-  }, [onFileSelect, filePaths, projectId, bufferManager]);
+  }, [bufferManager, fileDocManager, onFileSelect, projectId, stableRepoName]);
 
   const stagedCount = changes.filter((c) => c.staged).length;
 

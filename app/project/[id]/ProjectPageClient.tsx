@@ -29,31 +29,17 @@ import { BigChatMessage } from "@/components/BigChatMessage";
 import { SmallChatMessage } from "@/components/SmallChatMessage";
 import { ChatTelemetry } from "@/components/ChatTelemetry";
 import { ProjectDropdown } from "@/components/ProjectDropdown";
-import { IconSearch, IconChevronDown, IconChevronUp, IconChevronLeft, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload, IconWifi, IconWifiOff, IconLock, IconUsers, IconFolder, IconGitBranch, IconHome, IconToggleLeft, IconToggleRight, IconWrench, IconTemplates } from "@/components/Icons";
+import { IconSearch, IconChevronDown, IconChevronUp, IconChevronLeft, IconShare2, IconSend, IconTrash2, IconSettings, IconBookOpen, IconChevronRight, IconPlus, IconMessageSquare, IconFilePlus, IconFolderPlus, IconUpload, IconWifi, IconWifiOff, IconLock, IconUsers, IconFolder, IconGitBranch, IconHome, IconToggleLeft, IconToggleRight, IconWrench, IconTemplates, IconLayoutGrid, IconAlignLeft } from "@/components/Icons";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { WebRTCStatus } from "@/components/WebRTCStatus";
 import { ToolsPanel } from "@/components/ToolsPanel";
 import { ShareModal } from "@/components/ShareModal";
-import { diffLines } from "diff";
 import { ResizableDivider } from "@/components/ResizableDivider";
 import { GitPanelReal, getAllProjectFiles } from "@/components/GitPanelReal";
-import { GitDiffView } from "@/components/GitDiffView";
-import { SideBySideDiffView } from "@/components/SideBySideDiffView";
+import { GitMergeView } from "@/components/GitMergeView";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { getFileIcon } from "@/components/FileTree";
 import { parseOutline, type OutlineEntry } from "@/lib/documentOutline";
-import { EditorView, basicSetup } from "codemirror";
-import { EditorState } from "@codemirror/state";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { tags as t } from "@lezer/highlight";
-import { Decoration, DecorationSet } from "@codemirror/view";
-import { ViewPlugin, ViewUpdate } from "@codemirror/view";
-import { latex } from "codemirror-lang-latex";
-import { typst } from "codemirror-lang-typst";
-
-const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => ({ default: m.PdfPreview })), {
-  ssr: false,
-});
 import ReactMarkdown from "react-markdown";
 import { generateChatResponse, switchModel, getActiveModelId, initializeModel, isModelLoading } from "@/lib/localModel";
 import { generateVLResponse, initializeVLModel, isVLModelLoaded, isVLModelLoading, type VLMessage, type VLStreamCallbacks } from "@/lib/vlModelRuntime";
@@ -97,6 +83,10 @@ import {
 import { EditorBufferManager } from "@/lib/editorBufferManager";
 import { useTheme } from "@/contexts/ThemeContext";
 
+const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => ({ default: m.PdfPreview })), {
+  ssr: false,
+});
+
 const DEFAULT_FILE = "/main.tex";
 const DEFAULT_DIAGRAM = "/diagram.jpg";
 const IMAGE_EXT = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i;
@@ -111,36 +101,6 @@ function isImagePath(path: string): boolean {
 function isBinaryPath(path: string): boolean {
   return BINARY_EXT.test(path);
 }
-
-// Helper function to get stable git repository name (same as GitPanel)
-const getStableGitRepoName = (projectName: string, filePaths: string[], projectId: string) => {
-  // Priority 1: Use project ID (uniquely identifies the project)
-  if (projectId) {
-    return `git-${projectId}`;
-  }
-  
-  // Priority 2: Use file system path (stable fallback)
-  if (filePaths.length > 0) {
-    const firstPath = filePaths[0];
-    const pathMatch = firstPath.match(/\/projects\/([^\/]+)/);
-    if (pathMatch) {
-      const projectUuid = pathMatch[1];
-      return `git-${projectUuid}`;
-    }
-  }
-  
-  // Priority 3: Fallback to project name
-  if (projectName) {
-    const sanitizedName = projectName
-      .toLowerCase()
-      .replace(/[^a-z0-9-_]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '');
-    return `git-${sanitizedName}`;
-  }
-  
-  return `git-unknown`;
-};
 
 export default function ProjectPageClient({ idOverride }: { idOverride?: string }) {
   const router = useRouter();
@@ -193,7 +153,17 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
   >([]);
   const [smallChatMessages, setSmallChatMessages] = useState<
-    { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
+    { 
+      role: "user" | "assistant"; 
+      content: string; 
+      responseType?: "ask" | "agent"; 
+      createdPath?: string; 
+      markdown?: string;
+      thinkingExpanded?: boolean;
+      thinkingContent?: string;
+      thinkingStartedAt?: number;
+      thinkingDurationMs?: number;
+    }[]
   >([]);
   const [chatCreationModalOpen, setChatCreationModalOpen] = useState(false);
   const [chatTreeManager, setChatTreeManager] = useState<ChatTreeManager | null>(null);
@@ -217,6 +187,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [initError, setInitError] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [sidebarTab, setSidebarTab] = useState<"home" | "files" | "chats" | "git" | "search">("files");
+  const [gitDiffViewMode, setGitDiffViewMode] = useState<"split" | "unified">("split");
   const [searchQuery, setSearchQuery] = useState("");
   const [showHiddenYjsDocs, setShowHiddenYjsDocsState] = useState(getShowHiddenYjsDocs());
   
@@ -545,383 +516,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const isCompilingRef = useRef(false);
   const compileRunIdRef = useRef(0);
   const compilationCancelRef = useRef<(() => void) | null>(null);
-  const gitDiffRef = useRef<HTMLDivElement>(null);
-  const gitDiffViewRef = useRef<EditorView | null>(null);
   const yjsLastMutationLogRef = useRef(0);
   const yjsLastLengthRef = useRef(0);
   const COLLABORATIVE_TEXT_SETTLE_MS = 1500;
   const COLLABORATIVE_TREE_SETTLE_MS = 5000;
-
-  // Initialize git diff viewer when git tab is selected
-  useEffect(() => {
-    (async () => {
-      if (sidebarTab === "git" && gitDiffRef.current && !gitDiffViewRef.current) {
-      // Use same theming as main editor
-      const isLightTheme = theme === "light";
-      
-      const highlight = HighlightStyle.define(
-        isLightTheme
-          ? [
-              { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#7c3aed" },
-              { tag: [t.string, t.special(t.string)], color: "#b45309" },
-              { tag: [t.number, t.bool, t.null], color: "#2563eb" },
-              { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#0f766e" },
-              { tag: [t.definition(t.variableName), t.variableName], color: "#111827" },
-              { tag: [t.typeName, t.className], color: "#0f766e" },
-              { tag: [t.comment], color: "#6b7280", fontStyle: "italic" },
-            ]
-            : [
-                // Dark (default) palette tuned to match app dark surface
-                { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "#93c5fd" },
-                { tag: [t.string, t.special(t.string)], color: "#fca5a5" },
-                { tag: [t.number, t.bool, t.null], color: "#a7f3d0" },
-                { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#67e8f9" },
-                { tag: [t.definition(t.variableName), t.variableName], color: "#e5e7eb" },
-                { tag: [t.typeName, t.className], color: "#fcd34d" },
-                { tag: [t.comment], color: "#9ca3af", fontStyle: "italic" },
-                { tag: [t.heading, t.strong], color: "#e5e7eb", fontWeight: "600" },
-                { tag: [t.link, t.url], color: "#93c5fd", textDecoration: "underline" },
-              ]
-      );
-
-      const cmBaseTheme = EditorView.theme(
-        {
-          "&": {
-            backgroundColor: "var(--background)",
-            color: "var(--foreground)",
-          },
-          ".cm-content": {
-            caretColor: "var(--foreground)",
-            padding: "16px",
-            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
-          },
-          ".cm-gutters": {
-            backgroundColor: "var(--cm-gutter-bg, color-mix(in srgb, var(--background) 92%, black))",
-            color: "var(--muted)",
-            borderRight: "1px solid var(--border)",
-          },
-          ".cm-activeLine": {
-            backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
-          },
-          ".cm-activeLineGutter": {
-            backgroundColor: "color-mix(in srgb, var(--accent) 14%, transparent)",
-          },
-          ".cm-selectionBackground": {
-            backgroundColor: isLightTheme
-              ? "color-mix(in srgb, var(--accent) 25%, transparent)"
-              : "color-mix(in srgb, var(--accent) 35%, transparent)",
-          },
-          "&.cm-focused .cm-selectionBackground": {
-            backgroundColor: isLightTheme
-              ? "color-mix(in srgb, var(--accent) 30%, transparent)"
-              : "color-mix(in srgb, var(--accent) 45%, transparent)",
-          },
-          "&.cm-editor .cm-scroller": { 
-            fontSize: `${Math.max(10, Math.min(24, editorFontSize))}px` 
-          },
-          ".cm-line": {
-            lineHeight: '1.5'
-          },
-          // Custom diff highlighting
-          ".cm-line:has-text('+\\S')": {
-            backgroundColor: "rgba(68, 255, 68, 0.1)",
-            color: "#44ff44",
-          },
-          ".cm-line:has-text('-\\S')": {
-            backgroundColor: "rgba(255, 68, 68, 0.1)",
-            color: "#ff4444",
-          },
-          ".cm-line:has-text('@@')": {
-            backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
-            color: "var(--muted)",
-            fontStyle: "italic",
-          },
-        },
-        { dark: !isLightTheme }
-      );
-
-      // Generate real diff content using the diff package
-      const generateDiffContent = async () => {
-        const textTabs = gitOpenTabs.filter(t => t.type === "text");
-        if (textTabs.length === 0) {
-          return `// Git Diff View
-// No files with changes detected
-// Open some files to see changes`;
-        }
-
-        // Find the active git tab
-        const activeTab = textTabs.find(t => t.path === activeGitTabPath);
-        if (!activeTab) {
-          return `// Git Diff View
-// Select a file to see changes`;
-        }
-        
-        // Get actual file content from Yjs (most up-to-date source)
-        let currentContent = "";
-        try {
-          // For text files, try to get content from Yjs document manager first
-          if (activeGitTabPath.endsWith('.tex') || activeGitTabPath.endsWith('.typ') || activeGitTabPath.endsWith('.md') || activeGitTabPath.endsWith('.txt')) {
-            if (fileDocManagerRef.current) {
-              const doc = fileDocManagerRef.current.getDocument(activeGitTabPath, true); // silent=true
-              if (doc && doc.text && doc.text.toString().length > 0) {
-                currentContent = doc.text.toString();
-                console.log(`🔍 DIFF DEBUG - got content from Yjs for ${activeGitTabPath}, length ${currentContent.length}`);
-              } else {
-                // Fallback to IDBFS if Yjs is empty
-                const { mount } = await import("@wwog/idbfs");
-                const fs = await mount();
-                const contentBuffer = await fs.readFile(activeGitTabPath);
-                currentContent = new TextDecoder().decode(contentBuffer);
-                console.log(`🔍 DIFF DEBUG - got content from IDBFS (Yjs empty) for ${activeGitTabPath}, length ${currentContent.length}`);
-              }
-            } else {
-              // Fallback to IDBFS if manager not available
-              const { mount } = await import("@wwog/idbfs");
-              const fs = await mount();
-              const contentBuffer = await fs.readFile(activeGitTabPath);
-              currentContent = new TextDecoder().decode(contentBuffer);
-              console.log(`🔍 DIFF DEBUG - got content from IDBFS (no manager) for ${activeGitTabPath}, length ${currentContent.length}`);
-            }
-          } else {
-            // For binary files, read from IDBFS
-            const { mount } = await import("@wwog/idbfs");
-            const fs = await mount();
-            const contentBuffer = await fs.readFile(activeGitTabPath);
-            currentContent = new TextDecoder().decode(contentBuffer);
-            console.log(`🔍 DIFF DEBUG - binary file from IDBFS for ${activeGitTabPath}, length ${currentContent.length}`);
-          }
-        } catch (error) {
-          console.log(`🔍 DIFF DEBUG - Could not read ${activeGitTabPath} from IDBFS`, error);
-          return `// Git View\n// Could not read file content`;
-        }
-
-        if (!currentContent || currentContent.trim() === '') {
-          return `// Git View\n// No content found`;
-        }
-
-        // Get original content from the last commit
-        let oldContent = '';
-        let previousCommit = null;
-        try {
-          // Try to get the original content from git store
-          const { gitStore } = await import('@/lib/gitStore');
-          const stableRepoName = getStableGitRepoName(projectName, openTabs.filter(t => t.type === "text").map(t => t.path), id);
-          const repo = await gitStore.getRepository(stableRepoName);
-          console.log('🔍 DIFF DEBUG - Repository data:', {
-            hasRepo: !!repo,
-            commitsCount: repo?.commits?.length || 0,
-            stableRepoName,
-            activeGitTabPath
-          });
-          
-          if (repo && repo.commits.length > 0) {
-            previousCommit = repo.commits[0];
-            // Use the active tab path directly (no suffix to remove)
-            const fileInCommit = previousCommit.files.find((f: any) => f.path === activeGitTabPath);
-            
-            console.log('🔍 DIFF DEBUG - Previous commit details:', {
-              commitId: previousCommit.id,
-              message: previousCommit.message,
-              timestamp: previousCommit.timestamp,
-              author: previousCommit.author,
-              filesCount: previousCommit.files?.length || 0,
-              files: previousCommit.files?.map(f => ({ 
-                path: f.path, 
-                hasContent: !!f.content, 
-                contentLength: f.content?.length || 0,
-                contentPreview: f.content?.substring(0, 100) + (f.content?.length > 100 ? '...' : '')
-              }))
-            });
-            
-            console.log('🔍 DIFF DEBUG - File lookup:', {
-              fileName: activeGitTabPath,
-              fileInCommit: !!fileInCommit,
-              fileInCommitPath: fileInCommit?.path,
-              allCommitFiles: previousCommit.files.map(f => f.path),
-              pathMatch: previousCommit.files.some((f: any) => f.path === activeGitTabPath)
-            });
-            
-            if (fileInCommit) {
-              oldContent = fileInCommit.content;
-              console.log('🔍 DIFF DEBUG - Previous file content:', {
-                contentLength: oldContent.length,
-                contentPreview: oldContent.substring(0, 200) + (oldContent.length > 200 ? '...' : ''),
-                lineCount: oldContent.split('\n').length
-              });
-            } else {
-              console.log('🔍 DIFF DEBUG - File not found in previous commit (new file)');
-              // For new files, don't generate a diff - show a message instead
-              return `// Git Diff View
-// This is a new file with no previous version to compare against
-// Current content preview:
-${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
-
-// Make a commit to establish a baseline for future diffs`;
-            }
-          } else {
-            console.log('🔍 DIFF DEBUG - No commits found in repository');
-            // For repositories with no commits, don't generate a diff
-            return `// Git Diff View
-// No commits found in this repository yet
-// Make an initial commit to enable diff tracking
-
-// Current content preview:
-${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
-
-// To enable diffs:
-// 1. Initialize git repository (if not done)
-// 2. Make an initial commit with current files
-// 3. Future changes will show proper diffs`;
-          }
-        } catch (error) {
-          console.log('🔍 DIFF DEBUG - Could not get original content for diff:', error);
-        }
-        
-        console.log('🔍 DIFF DEBUG - Current file content:', {
-          contentLength: currentContent.length,
-          contentPreview: currentContent.substring(0, 200) + (currentContent.length > 200 ? '...' : ''),
-          lineCount: currentContent.split('\n').length,
-          isEmpty: currentContent.trim() === '',
-          firstLine: currentContent.split('\n')[0],
-          isTypst: currentContent.includes('#set') || currentContent.includes('#align'),
-          isLatex: currentContent.includes('\\documentclass') || currentContent.includes('\\begin{document}')
-        });
-        
-        const diffResult = diffLines(oldContent, currentContent);
-        
-        console.log('🔍 DIFF DEBUG - Diff result:', {
-          diffPartsCount: diffResult.length,
-          diffParts: diffResult.map((part, index) => ({
-            index,
-            type: part.added ? 'added' : part.removed ? 'removed' : 'unchanged',
-            valueLength: part.value.length,
-            valuePreview: part.value.substring(0, 100) + (part.value.length > 100 ? '...' : ''),
-            lineCount: part.value.split('\n').length
-          }))
-        });
-        
-        // Format diff lines with proper git diff format (no file name header)
-        const formattedDiffLines: string[] = [];
-        let addedCount = 0, removedCount = 0, unchangedCount = 0;
-        
-        // diffLines returns an array of diff parts with added/removed properties
-        diffResult.forEach((part: any) => {
-          if (part.added) {
-            // This is an addition - add + prefix to each line
-            const lines = part.value.split('\n');
-            lines.forEach((line: string) => {
-              if (line.trim()) { // Skip empty lines
-                formattedDiffLines.push(`+${line}`);
-                addedCount++;
-              }
-            });
-          } else if (part.removed) {
-            // This is a deletion - add - prefix to each line
-            const lines = part.value.split('\n');
-            lines.forEach((line: string) => {
-              if (line.trim()) { // Skip empty lines
-                formattedDiffLines.push(`-${line}`);
-                removedCount++;
-              }
-            });
-          } else {
-            // Unchanged lines - add space prefix
-            const lines = part.value.split('\n');
-            lines.forEach((line: string) => {
-              if (line.trim()) { // Skip empty lines
-                formattedDiffLines.push(` ${line}`);
-                unchangedCount++;
-              }
-            });
-          }
-        });
-        
-        console.log('🔍 DIFF DEBUG - Final diff summary:', {
-          totalLines: formattedDiffLines.length,
-          addedLines: addedCount,
-          removedLines: removedCount,
-          unchangedLines: unchangedCount,
-          hasChanges: addedCount > 0 || removedCount > 0
-        });
-
-        return formattedDiffLines.join('\n');
-      };
-
-      // Create a ViewPlugin for diff highlighting
-      const diffHighlightPlugin = ViewPlugin.fromClass(
-        class {
-          decorations: DecorationSet;
-
-          constructor(view: EditorView) {
-            this.decorations = this.buildDecorations(view);
-          }
-
-          update(update: ViewUpdate) {
-            if (update.docChanged || update.viewportChanged) {
-              this.decorations = this.buildDecorations(update.view);
-            }
-          }
-
-          buildDecorations(view: EditorView): DecorationSet {
-            const decorations: any[] = [];
-            const doc = view.state.doc;
-            
-            // Iterate through each line in the document
-            for (let i = 1; i <= doc.lines; i++) {
-              const line = doc.line(i);
-              const lineText = doc.sliceString(line.from, line.to);
-              
-              if (lineText.startsWith('+')) {
-                // Green background for additions - highlight entire line, keep text readable
-                decorations.push(
-                  Decoration.line({
-                    attributes: { style: 'background-color: rgba(68, 255, 68, 0.2);' }
-                  }).range(line.from)
-                );
-              } else if (lineText.startsWith('-')) {
-                // Red background for deletions - highlight entire line, keep text readable
-                decorations.push(
-                  Decoration.line({
-                    attributes: { style: 'background-color: rgba(255, 68, 68, 0.2);' }
-                  }).range(line.from)
-                );
-              }
-            }
-            
-            return Decoration.set(decorations);
-          }
-        },
-        {
-          decorations: (v) => v.decorations
-        }
-      );
-
-      const startState = EditorState.create({
-        doc: await generateDiffContent(),
-        extensions: [
-          basicSetup,
-          cmBaseTheme,
-          syntaxHighlighting(highlight),
-          diffHighlightPlugin,
-          EditorState.readOnly.of(true)
-        ],
-      });
-      
-      gitDiffViewRef.current = new EditorView({
-        state: startState,
-        parent: gitDiffRef.current,
-      });
-      }
-    })();
-    
-    return () => {
-      if (gitDiffViewRef.current) {
-        gitDiffViewRef.current.destroy();
-        gitDiffViewRef.current = null;
-      }
-    };
-  }, [sidebarTab, theme, editorFontSize, gitOpenTabs, activeGitTabPath]);
-
+  
   const handleGitTabClose = useCallback((path: string) => {
     setGitOpenTabs((prev) => {
       const idx = prev.findIndex((t) => t.path === path);
@@ -1025,6 +624,15 @@ ${currentContent.substring(0, 500)}${currentContent.length > 500 ? '...' : ''}
       setSmallChatMessages(persistedMsgs);
     }
   }, [activeTabPath, openTabs]);
+
+  // Handle message updates for small chat
+  const handleSmallMessageUpdate = useCallback((updatedMessage: any) => {
+    setSmallChatMessages((msgs) => 
+      msgs.map((msg) => 
+        msg.content === updatedMessage.content ? { ...msg, ...updatedMessage } : msg
+      )
+    );
+  }, []);
 
   useEffect(() => {
     if (isGenerating && chatScrollRef.current) {
@@ -3522,13 +3130,23 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       setMessages((msgs: any) => {
         const next = [...msgs];
         const lastIdx = next.length - 1;
+        
+        // Preserve accumulated content instead of overwriting
+        const currentContent = lastIdx >= 0 && next[lastIdx].role === "assistant" 
+          ? next[lastIdx].content 
+          : "";
+        
+        // Only use reply.content if it's longer/better than accumulated content
+        const finalContent = reply.content.length > currentContent.length ? reply.content : currentContent;
+        
         const assistantMsg = {
           role: "assistant" as const,
-          content: reply.content,
+          content: finalContent,
           responseType: reply.type,
           ...(createdPath && { createdPath }),
           ...(reply.type === "agent" && reply.markdown && { markdown: reply.markdown }),
         };
+        
         if (lastIdx >= 0 && next[lastIdx].role === "assistant") {
           next[lastIdx] = assistantMsg;
         } else {
@@ -4462,6 +4080,30 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                 </>
               )}
               
+              {/* Git diff view toggle */}
+              {sidebarTab === "git" && (
+                <div className="inline-flex overflow-hidden rounded border border-[var(--border)]">
+                  <button
+                    type="button"
+                    onClick={() => setGitDiffViewMode("split")}
+                    className={`w-8 h-8 flex items-center justify-center ${gitDiffViewMode === "split" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"} transition-colors`}
+                    title="Split diff view"
+                    aria-pressed={gitDiffViewMode === "split"}
+                  >
+                    <IconLayoutGrid />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGitDiffViewMode("unified")}
+                    className={`border-l border-[var(--border)] w-8 h-8 flex items-center justify-center ${gitDiffViewMode === "unified" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)]"} transition-colors`}
+                    title="Unified diff view"
+                    aria-pressed={gitDiffViewMode === "unified"}
+                  >
+                    <IconAlignLeft />
+                  </button>
+                </div>
+              )}
+              
               {/* Chat action */}
               {sidebarTab === "chats" && (
                 <button
@@ -4591,28 +4233,26 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                 // Check if file is already open in git tab context
                 const existingTab = gitOpenTabs.find(t => t.path === filePath);
                 
-                if (options?.showDiff && options.currentContent !== undefined && options.originalContent !== undefined) {
-                  // Open as diff view - use the original file path without suffix
-                  const existingDiffTab = gitOpenTabs.find(t => t.path === filePath && t.diffData);
-                  
-                  if (existingDiffTab) {
-                    // Switch to existing diff tab
-                    setActiveGitTabPath(filePath);
-                  } else {
-                    // Create new diff tab with special type
-                    setGitOpenTabs(prev => [...prev, { 
-                      path: filePath, 
-                      type: "text",
+                if (options?.currentContent !== undefined && options.originalContent !== undefined) {
+                  setGitOpenTabs(prev => {
+                    const nextTab = {
+                      path: filePath,
+                      type: "text" as const,
                       diffData: {
                         filePath,
                         currentContent: options.currentContent ?? "",
-                        originalContent: options.originalContent ?? ""
-                      }
-                    }]);
-                    setActiveGitTabPath(filePath);
-                  }
+                        originalContent: options.originalContent ?? "",
+                      },
+                    };
+
+                    if (prev.some(t => t.path === filePath)) {
+                      return prev.map(t => (t.path === filePath ? { ...t, ...nextTab } : t));
+                    }
+
+                    return [...prev, nextTab];
+                  });
+                  setActiveGitTabPath(filePath);
                 } else {
-                  // Regular file opening in git tab context
                   if (existingTab) {
                     setActiveGitTabPath(filePath);
                   } else {
@@ -4711,6 +4351,12 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
           // When git tab is selected, show diff panel instead of regular editor
           if (sidebarTab === "git") {
             const gitTabs = gitOpenTabs.filter(t => t.type === "text");
+            const activeGitTab = (activeGitTabPath && gitTabs.find(t => t.path === activeGitTabPath)) || gitTabs[0] || null;
+            const activeGitDiffData = activeGitTab?.diffData ?? {
+              filePath: activeGitTab?.path ?? "",
+              currentContent: "",
+              originalContent: "",
+            };
             
             return (
               <section className="flex-1 flex flex-col border-l border-r border-[var(--border)] min-w-0 min-h-0 overflow-hidden">
@@ -4719,7 +4365,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                   <div className="bg-[var(--muted)/30]">
                     <FileTabs
                       tabs={gitTabs}
-                      activePath={activeGitTabPath && gitTabs.find(t => t.path === activeGitTabPath) ? activeGitTabPath : null}
+                      activePath={activeGitTab?.path || null}
                       onSelect={(path) => setActiveGitTabPath(path)}
                       onClose={handleGitTabClose}
                       onToggleFileTree={() => setSidebarWidth((w) => (w > 0 ? 0 : 256))}
@@ -4739,7 +4385,16 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       </div>
                     </div>
                   ) : (
-                    <div ref={gitDiffRef} className="h-full" />
+                    <GitMergeView
+                      filePath={activeGitDiffData.filePath || activeGitTab?.path || ""}
+                      currentContent={activeGitDiffData.currentContent}
+                      originalContent={activeGitDiffData.originalContent}
+                      viewMode={gitDiffViewMode}
+                      className="h-full"
+                      theme={theme}
+                      fontSize={editorFontSize}
+                      lineWrapping={editorLineWrapping}
+                    />
                   )}
                 </div>
               </section>
@@ -4967,31 +4622,25 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       </>
                     );
                   }
-                  if (activeTab?.type === "text" && currentYDocRef.current) {
+                  if (activeTab?.type === "text" && (currentYDocRef.current || activeTabPath?.endsWith(':diff'))) {
                     // Check if this is a diff tab
                     const isDiffTab = activeTabPath?.endsWith(':diff');
                     const diffData = isDiffTab && activeTab?.diffData ? activeTab.diffData : null;
-                    
-                    // Only check YText for text files
-                    if (!getCurrentYText()) {
-                      return (
-                        <div className="absolute inset-0 flex items-center justify-center text-[var(--muted)] bg-[var(--background)]">
-                          Loading editor…
-                        </div>
-                      );
-                    }
-                    
-                    const aiOverlayHeight = chatExpanded ? "45%" : "155px";
+
                     return (
                       <div
                         className="absolute inset-0 overflow-hidden"
                       >
                         {isDiffTab && diffData ? (
-                          <SideBySideDiffView
+                          <GitMergeView
                             filePath={diffData.filePath}
                             currentContent={diffData.currentContent}
                             originalContent={diffData.originalContent}
+                            viewMode={gitDiffViewMode}
                             className="h-full"
+                            theme={theme}
+                            fontSize={editorFontSize}
+                            lineWrapping={editorLineWrapping}
                           />
                         ) : (
                           (() => {
@@ -5109,6 +4758,8 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                             message={m}
                             isLast={i === smallChatMessages.length - 1}
                             lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
+                            isStreaming={isGenerating && i === smallChatMessages.length - 1}
+                            onUpdateMessage={handleSmallMessageUpdate}
                           />
                         ))}
                       </div>
