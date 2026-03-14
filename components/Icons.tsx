@@ -77,12 +77,13 @@ import {
   Menu,
   Monitor,
   Layers,
+  PanelLeft,
+  PanelRight,
   LayoutPanelLeft,
   LayoutPanelTop,
   Sidebar,
   SidebarClose,
   SidebarOpen,
-  PanelRight,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
