@@ -292,13 +292,13 @@ export const AUTO_COMPILE_DEBOUNCE_LIMITS = {
 } as const;
 
 // --- Theme ---
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "system";
 
 const DEFAULT_THEME: Theme = "dark";
 
 export function getTheme(): Theme {
   return get("theme", DEFAULT_THEME, (v) =>
-    v === "light" || v === "dark" ? v : null
+    v === "light" || v === "dark" || v === "system" ? v : null
   );
 }
 
@@ -309,6 +309,7 @@ export function setTheme(theme: Theme): void {
 export const THEME_LABELS: Record<Theme, string> = {
   light: "Light",
   dark: "Dark",
+  system: "System",
 };
 
 // --- WebRTC Signaling ---

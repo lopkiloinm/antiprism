@@ -34,7 +34,32 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     // Apply theme class to document
     const root = document.documentElement;
     root.classList.remove("theme-light", "theme-dark");
-    root.classList.add(`theme-${theme}`);
+    
+    // Determine actual theme to apply
+    let actualTheme: "light" | "dark";
+    if (theme === "system") {
+      actualTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } else {
+      actualTheme = theme;
+    }
+    
+    root.classList.add(`theme-${actualTheme}`);
+  }, [theme]);
+
+  // Listen for system theme changes when using system theme
+  useEffect(() => {
+    if (theme !== "system") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      const root = document.documentElement;
+      root.classList.remove("theme-light", "theme-dark");
+      const actualTheme = mediaQuery.matches ? "dark" : "light";
+      root.classList.add(`theme-${actualTheme}`);
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme]);
 
   return (
