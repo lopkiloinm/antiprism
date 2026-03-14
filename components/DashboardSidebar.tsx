@@ -10,9 +10,12 @@ import {
   IconHistory,
   IconSun,
   IconMoon,
+  IconMonitor,
   IconLayoutGrid,
   IconX,
+  IconAntiprism,
 } from "./Icons";
+import { Sun as LucideSun, Moon as LucideMoon, Monitor as LucideMonitor } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 type NavItem = "all" | "projects" | "recently-opened" | "servers" | "templates" | "trash";
@@ -164,19 +167,55 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mob
       
       <div className="mt-auto w-full px-1 flex flex-col gap-2">
         <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group text-[var(--muted)] hover:text-[var(--foreground)]"
-          title={`Switch to ${mounted ? (theme === 'dark' ? 'light' : 'dark') : 'light'} mode`}
+          onClick={() => setTheme("light")}
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
+            mounted && theme === "light" 
+              ? "text-[var(--accent)]" 
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
+          }`}
+          title="Light mode"
         >
           <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
-            {mounted ? (
-              theme === "light" ? <IconMoon /> : <IconSun />
-            ) : (
-              <IconMoon />
-            )}
+            <LucideSun />
           </span>
-          <span className="text-[10px] leading-tight font-medium text-center">Theme</span>
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+          <span className="text-[10px] leading-tight font-medium text-center">Light</span>
+          {mounted && theme === "light" && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          )}
+        </button>
+        <button
+          onClick={() => setTheme("dark")}
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
+            mounted && theme === "dark" 
+              ? "text-[var(--accent)]" 
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
+          }`}
+          title="Dark mode"
+        >
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
+            <LucideMoon />
+          </span>
+          <span className="text-[10px] leading-tight font-medium text-center">Dark</span>
+          {mounted && theme === "dark" && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          )}
+        </button>
+        <button
+          onClick={() => setTheme("system")}
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
+            mounted && theme === "system" 
+              ? "text-[var(--accent)]" 
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
+          }`}
+          title="System preference"
+        >
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
+            <LucideMonitor />
+          </span>
+          <span className="text-[10px] leading-tight font-medium text-center">System</span>
+          {mounted && theme === "system" && (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          )}
         </button>
       </div>
     </aside>

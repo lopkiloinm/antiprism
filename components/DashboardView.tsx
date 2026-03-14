@@ -13,6 +13,7 @@ export interface DashboardItemProps {
   bottomAccessory?: React.ReactNode;
   listRightAccessory?: React.ReactNode;
   isActive?: boolean;
+  iconSize?: "small" | "large";
 }
 
 export interface DashboardViewProps {
@@ -128,11 +129,15 @@ export function DashboardView({ items, viewMode, emptyContent }: DashboardViewPr
               
               {/* Spacer/Icon container to push content down or center it */}
               {item.icon ? (
-                <div className="w-12 h-12 rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)] flex items-center justify-center mb-4 mt-8 shrink-0 [&>svg]:w-6 [&>svg]:h-6">
+                <div className={`rounded-lg bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] text-[var(--accent)] flex items-center justify-center mb-4 mt-8 shrink-0 ${
+                  item.iconSize === "large" 
+                    ? "w-16 h-16 [&>svg]:w-8 [&>svg]:h-8" 
+                    : "w-12 h-12 [&>svg]:w-6 [&>svg]:h-6"
+                }`}>
                   {item.icon}
                 </div>
               ) : (
-                <div className="mt-8"></div>
+                <div className={`mt-8 ${item.iconSize === "large" ? "h-16" : "h-12"}`}></div>
               )}
 
               <div className={`flex-1 min-w-0 flex flex-col items-center w-full ${item.bottomAccessory ? 'mb-4' : ''}`}>

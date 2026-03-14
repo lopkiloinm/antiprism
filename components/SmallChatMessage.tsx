@@ -38,8 +38,8 @@ export function SmallChatMessage({
   isStreaming = false, 
   onUpdateMessage 
 }: SmallChatMessageProps) {
-  const { theme } = useTheme();
-  const isDarkTheme = theme === "dark";
+  const { effectiveTheme } = useTheme();
+  const isDarkTheme = effectiveTheme === "dark";
   const streamdownClasses = chatStreamdownClasses;
   const parsedThinking = parseThinkingContent(message.content);
   const [persistedThinkingContent, setPersistedThinkingContent] = useState(message.thinkingContent ?? parsedThinking.thinking);
@@ -141,7 +141,7 @@ export function SmallChatMessage({
           ) : message.content === "Thinking..." ? (
             <span className="text-[var(--muted)] italic">Thinking…</span>
           ) : message.role === "assistant" ? (
-            <div className={`${streamdownClasses} ${theme === 'light' ? 'theme-light' : ''}`}>
+            <div className={`${streamdownClasses} ${effectiveTheme === 'light' ? 'theme-light' : ''}`}>
               <Streamdown 
                 plugins={streamdownPlugins}
                 shikiTheme={getShikiTheme(isDarkTheme)}
