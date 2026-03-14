@@ -24,7 +24,7 @@ export interface DashboardViewProps {
 export function DashboardView({ items, viewMode, emptyContent }: DashboardViewProps) {
   if (items.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[var(--muted)] text-sm">
+      <div className="flex-1 flex items-center justify-center text-[var(--muted)] text-sm min-h-[200px]">
         {emptyContent}
       </div>
     );
@@ -32,16 +32,16 @@ export function DashboardView({ items, viewMode, emptyContent }: DashboardViewPr
 
   if (viewMode === "list") {
     return (
-      <div className="flex-1 overflow-auto">
-        <div className="divide-y divide-[var(--border)]">
+      <div className="flex-1 overflow-auto p-2">
+        <div className="flex flex-col gap-1">
           {items.map((item) => {
             const Wrapper = (item.href ? Link : "div") as any;
             const wrapperProps = {
               ...(item.href ? { href: item.href as any } : {}),
               ...(item.onClick && !item.href ? { onClick: item.onClick } : {}),
-              className: `w-full flex items-center justify-between px-4 py-3 group ${
+              className: `w-full flex items-center justify-between px-3 py-2 rounded-lg group ${
                 item.isActive 
-                  ? "bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)]" 
+                  ? "bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]" 
                   : "hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)]"
               } transition-colors ${item.onClick || item.href ? "cursor-pointer text-left" : ""}`
             };
@@ -96,8 +96,8 @@ export function DashboardView({ items, viewMode, emptyContent }: DashboardViewPr
 
   // Icons view
   return (
-    <div className="flex-1 overflow-auto p-6">
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4">
+    <div className="flex-1 overflow-auto p-4">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
         {items.map((item) => {
           const isClickable = item.onClick || item.href;
           const Wrapper = (item.href ? Link : (item.onClick ? "div" : "div")) as any;
@@ -110,7 +110,7 @@ export function DashboardView({ items, viewMode, emptyContent }: DashboardViewPr
           const wrapperProps = {
             ...(item.href ? { href: item.href as any } : {}),
             ...(item.onClick && !item.href ? { onClick: item.onClick } : {}),
-            className: `flex flex-col items-center p-4 rounded-lg border ${bgClass} transition-colors group relative ${isClickable ? "cursor-pointer" : ""} text-left w-full h-full`
+            className: `flex flex-col items-center p-4 rounded-xl border ${bgClass} transition-colors group relative ${isClickable ? "cursor-pointer" : ""} text-left w-full h-full`
           };
 
           return (

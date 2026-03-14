@@ -3903,6 +3903,20 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
       <aside className="w-12 border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0">
         {/* Main navigation icons - vertical */}
           <div className="flex flex-col gap-1 p-2">
+            {/* Associated Press Logo */}
+            <button
+              onClick={() => router.push("/features")}
+              className="w-8 h-8 flex items-center justify-center rounded transition-all relative group text-[var(--muted)] hover:text-[var(--foreground)]"
+              title="Associated Press - Features"
+            >
+              <img 
+                src="/associated-press.svg" 
+                alt="Associated Press" 
+                className="w-6 h-6 opacity-60 hover:opacity-100 transition-opacity"
+              />
+              {/* Hover accent for non-active buttons */}
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-2 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+            </button>
             <button
               onClick={() => router.push("/")}
               className="w-8 h-8 flex items-center justify-center rounded transition-all relative group text-[var(--muted)] hover:text-[var(--foreground)]"

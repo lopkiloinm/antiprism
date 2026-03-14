@@ -22,22 +22,42 @@ import {
 } from "@/lib/projects";
 import type { Project } from "@/lib/projects";
 import { DashboardSidebar } from "@/components/DashboardSidebar";
-import { DashboardHeader } from "@/components/DashboardHeader";
 import { ProjectList } from "@/components/ProjectList";
 import { SignalingServerList } from "@/components/SignalingServerList";
 import { NameModal } from "@/components/NameModal";
 import { TemplateGallery } from "@/components/TemplateGallery";
 import { useResponsive } from "@/hooks/useResponsive";
-import { IconLayoutDashboard, IconFolder, IconFileText, IconHistory, IconCopy, IconServer, IconTrash2, IconMenu, IconX } from "@/components/Icons";
+import { 
+  IconSearch, 
+  IconPlus, 
+  IconFolderPlus, 
+  IconFilePlus,
+  IconUpload,
+  IconList,
+  IconLayoutGrid,
+  IconX,
+  IconMenu,
+  IconTrash2,
+  IconDownload,
+  IconRotateCcw,
+} from "@/components/Icons";
 
 type NavItem = "all" | "projects" | "recently-opened" | "templates" | "servers" | "trash";
+
+const TITLES: Record<NavItem, string> = {
+  all: "All Projects",
+  projects: "Your Projects",
+  "recently-opened": "Recently Opened",
+  templates: "Templates",
+  servers: "Signaling Servers",
+  trash: "Trashed Projects",
+};
 
 export default function DashboardPage() {
   const router = useRouter();
   const { isMobile } = useResponsive();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Ensure mobile menu is closed when component mounts
   useEffect(() => {
     setMobileMenuOpen(false);
   }, []);
@@ -52,7 +72,6 @@ export default function DashboardPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Close mobile menu when nav changes
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [activeNav]);
@@ -76,7 +95,6 @@ export default function DashboardPage() {
     loadItems();
   }, [loadItems, refresh]);
 
-  // Handle fullscreen state changes
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -85,18 +103,6 @@ export default function DashboardPage() {
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
-
-  const toggleFullscreen = async () => {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch (error) {
-      console.error('Failed to toggle fullscreen:', error);
-    }
-  };
 
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [projectToRename, setProjectToRename] = useState<Project | null>(null);
@@ -131,7 +137,6 @@ export default function DashboardPage() {
         const fs = await mount();
         console.log("Mounted filesystem");
 
-        // Helper function to create directories recursively
         const createDirectoryRecursive = async (dirPath: string) => {
           const parts = dirPath.split('/').filter(part => part.length > 0);
           let currentPath = basePath;
@@ -167,7 +172,6 @@ export default function DashboardPage() {
             const content = await entry.async("arraybuffer");
             const cleanPath = path.replace(/\/$/, "");
             if (cleanPath) {
-              // Create all parent directories recursively
               const dirPath = cleanPath.substring(0, cleanPath.lastIndexOf("/"));
               if (dirPath && dirPath !== cleanPath) {
                 await createDirectoryRecursive(dirPath);
@@ -180,8 +184,6 @@ export default function DashboardPage() {
           }
         }
 
-        // Mark this project as imported so ProjectPageClient won't seed templates.
-        // Write *after* extraction to avoid collisions if the zip contains the same filename.
         try {
           const marker = new TextEncoder().encode("imported").buffer as ArrayBuffer;
           await fs.writeFile(`${basePath}/.antiprism_imported`, marker, { mimeType: "text/plain" });
@@ -228,6 +230,7 @@ export default function DashboardPage() {
           if (dir && dir !== basePath) {
             const parts = dir.replace(basePath + "/", "").split("/");
             let current = basePath;
+            
             for (const p of parts) {
               current += `/${p}`;
               try {
@@ -243,8 +246,6 @@ export default function DashboardPage() {
           });
         }
 
-        // Mark this project as imported so ProjectPageClient won't seed templates.
-        // Write *after* copying to avoid collisions if the folder contains the same filename.
         try {
           const marker = new TextEncoder().encode("imported").buffer as ArrayBuffer;
           await fs.writeFile(`${basePath}/.antiprism_imported`, marker, { mimeType: "text/plain" });
@@ -265,11 +266,9 @@ export default function DashboardPage() {
       deleteRoom(item.id);
     } else {
       if (activeNav === "trash") {
-        // Permanent delete from Trash
         deleteProject(item.id);
         await deleteProjectDataFromStorage(item.id);
       } else {
-        // Soft delete: move to Trash
         trashProject(item.id);
       }
     }
@@ -353,7 +352,6 @@ export default function DashboardPage() {
     setSelectedItems([]);
   };
 
-
   const handleRenameProject = (project: Project, newName: string) => {
     setProjectToRename(project);
     setRenameModalOpen(true);
@@ -367,14 +365,13 @@ export default function DashboardPage() {
     } else {
       renameProject(projectToRename.id, newName);
     }
-    setRefresh((r) => r + 1); // Refresh the project list
+    setRefresh((r) => r + 1);
     setRenameModalOpen(false);
     setProjectToRename(null);
   };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] relative">
-      {/* Mobile Sidebar Overlay */}
       {isMobile && (
         <div 
           className={`absolute inset-0 bg-black/50 z-40 transition-opacity duration-300 ${mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
@@ -382,62 +379,207 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Sidebar */}
       <div className={`
-        ${isMobile ? 'fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 w-64' : 'relative z-10 w-56 shrink-0'}
+        ${isMobile ? 'fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 w-20' : 'relative z-10 w-20 shrink-0'}
         ${isMobile && !mobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}
       `}>
         <DashboardSidebar
           activeNav={activeNav}
           onNavChange={setActiveNav}
           isMobile={isMobile}
+          onClose={() => setMobileMenuOpen(false)}
         />
       </div>
 
-      <main className="flex-1 flex flex-col min-w-0 min-h-0 relative">
-        <DashboardHeader
-          activeNav={activeNav}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          onNewProject={handleNewProject}
-          onImportZip={handleImportZip}
-          onImportFolder={handleImportFolder}
-          onNewServer={handleNewServer}
-          isFullscreen={isFullscreen}
-          onToggleFullscreen={toggleFullscreen}
-          selectedCount={selectedItems.length}
-          onClearSelection={handleClearSelection}
-          onBulkDelete={handleBulkDelete}
-          onBulkDownload={handleBulkDownload}
-          onBulkRestore={handleBulkRestore}
-          isMobile={isMobile}
-          onMenuClick={() => setMobileMenuOpen(true)}
-        />
-        {activeNav === "servers" ? (
-          <SignalingServerList 
-            ref={signalingServerListRef}
-            searchQuery={searchQuery} 
-            viewMode={viewMode}
-            onNewServer={handleNewServer}
-          />
-        ) : activeNav === "templates" ? (
-          <TemplateGallery viewMode={viewMode} searchQuery={searchQuery} />
-        ) : (
-          <ProjectList
-            items={items}
-            viewMode={viewMode}
-            onDelete={handleDelete}
-            onDownload={activeNav === "trash" ? undefined : handleDownloadProject}
-            onRestore={activeNav === "trash" ? handleRestoreProject : undefined}
-            onRename={handleRenameProject}
-            deleteTitle={activeNav === "trash" ? "Delete permanently" : "Move to trash"}
-            selectedItems={selectedItems}
-            onSelectionChange={handleSelectionChange}
-          />
-        )}
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
+        <div className="max-w-4xl mx-auto w-full px-8 py-8 flex flex-col gap-6 pb-32">
+          
+          <div className="flex items-center gap-4">
+            {isMobile && (
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                className="p-2 -ml-2 text-[var(--muted)] hover:text-[var(--foreground)] rounded-xl transition-colors"
+              >
+                <IconMenu />
+              </button>
+            )}
+            {/* Top Search Bar */}
+            <div className="relative w-full shadow-sm">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none w-4 h-4 flex items-center justify-center [&>svg]:w-4 [&>svg]:h-4">
+                <IconSearch />
+              </span>
+              <input
+                type="text"
+                placeholder="Search your projects..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:border-[color-mix(in_srgb,var(--accent)_55%,transparent)] focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Action Cards & Import */}
+          {activeNav !== "servers" && activeNav !== "trash" && (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-sm font-semibold text-[var(--foreground)]">Start Creating</h2>
+                <p className="text-xs text-[var(--muted)]">Click to create a new project, room, or import from zip</p>
+              </div>
+
+              <div className="flex gap-3">
+                <div 
+                  onClick={handleNewProject}
+                  className="flex-1 flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] cursor-pointer transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-md bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform [&>svg]:w-4 [&>svg]:h-4">
+                    <IconFilePlus />
+                  </div>
+                  <span className="text-sm font-medium text-[var(--foreground)]">New Project</span>
+                </div>
+
+                <div 
+                  onClick={() => setActiveNav("templates")}
+                  className="flex-1 flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-[color-mix(in_srgb,var(--border)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_20%,transparent)] cursor-pointer transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-md bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] text-[var(--foreground)] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform [&>svg]:w-4 [&>svg]:h-4">
+                    <IconLayoutGrid />
+                  </div>
+                  <span className="text-sm font-medium text-[var(--foreground)]">From Template</span>
+                </div>
+              </div>
+
+              <div 
+                onClick={handleImportZip}
+                className="w-full border border-dashed border-[var(--border)] rounded-lg p-6 flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-[color-mix(in_srgb,var(--border)_8%,transparent)] transition-colors group"
+              >
+                <div className="w-10 h-10 rounded-full bg-[color-mix(in_srgb,var(--border)_20%,transparent)] flex items-center justify-center text-[var(--muted)] group-hover:text-[var(--foreground)] transition-colors [&>svg]:w-4 [&>svg]:h-4">
+                  <IconUpload />
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-sm font-medium text-[var(--foreground)]">Paste or <span className="text-[var(--accent)] hover:underline">drag & drop</span> a file here</span>
+                  <span className="text-xs text-[var(--muted)] mt-1">File types supported: .ZIP</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* List Section */}
+          <div className="flex flex-col gap-3 mt-2">
+            <div className="flex items-center justify-between min-h-[32px]">
+              {selectedItems.length > 0 && activeNav !== "servers" ? (
+                <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 animate-in fade-in slide-in-from-left-2 duration-200">
+                  <div className="flex items-center gap-1.5 pl-2 pr-1">
+                    <span className="text-xs font-medium text-[var(--muted)]">
+                      <span className="text-[var(--foreground)]">{selectedItems.length}</span> selected
+                    </span>
+                    <button 
+                      onClick={handleClearSelection}
+                      className="h-[26px] w-[26px] rounded-[4px] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5"
+                      title="Clear selection"
+                    >
+                      <IconX />
+                    </button>
+                  </div>
+
+                  <div className="w-px h-3.5 bg-[color-mix(in_srgb,var(--border)_50%,transparent)] mx-0.5" />
+
+                  <div className="flex items-center gap-0.5 px-0.5">
+                    {activeNav !== "trash" && (
+                      <button
+                        onClick={handleBulkDownload}
+                        className="flex items-center gap-1.5 h-[26px] px-2 rounded-[4px] text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors [&>svg]:w-3.5 [&>svg]:h-3.5"
+                      >
+                        <IconDownload />
+                        <span className="hidden sm:inline">Download</span>
+                      </button>
+                    )}
+                    {activeNav === "trash" && (
+                      <button
+                        onClick={handleBulkRestore}
+                        className="flex items-center gap-1.5 h-[26px] px-2 rounded-[4px] text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors [&>svg]:w-3.5 [&>svg]:h-3.5"
+                      >
+                        <IconRotateCcw />
+                        <span className="hidden sm:inline">Restore</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={handleBulkDelete}
+                      className="flex items-center gap-1.5 h-[26px] px-2 rounded-[4px] text-xs font-medium text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-colors [&>svg]:w-3.5 [&>svg]:h-3.5"
+                    >
+                      <IconTrash2 />
+                      <span className="hidden sm:inline">Delete</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <h2 className="text-sm font-semibold text-[var(--foreground)]">{TITLES[activeNav]}</h2>
+              )}
+              
+              <div className="flex items-center gap-2 h-[30px]">
+                {activeNav === "servers" && (
+                  <button
+                    onClick={handleNewServer}
+                    className="px-2 h-full text-xs text-[var(--foreground)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-md transition-colors flex items-center gap-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5"
+                    title="Add new signaling server"
+                  >
+                    <IconPlus />
+                    New
+                  </button>
+                )}
+                
+                {activeNav !== "servers" && (
+                  <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 shrink-0 h-full">
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "list" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                    >
+                      <IconList />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("icons")}
+                      className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "icons" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                    >
+                      <IconLayoutGrid />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-[var(--background)] border border-[var(--border)] rounded-lg overflow-hidden shadow-sm">
+              {activeNav === "servers" ? (
+                <div className="p-0">
+                  <SignalingServerList 
+                    ref={signalingServerListRef}
+                    searchQuery={searchQuery} 
+                    viewMode={viewMode}
+                    onNewServer={handleNewServer}
+                  />
+                </div>
+              ) : activeNav === "templates" ? (
+                <div className="p-0">
+                  <TemplateGallery viewMode={viewMode} searchQuery={searchQuery} />
+                </div>
+              ) : (
+                <div className="p-0">
+                  <ProjectList
+                    items={items}
+                    viewMode={viewMode}
+                    onDelete={handleDelete}
+                    onDownload={activeNav === "trash" ? undefined : handleDownloadProject}
+                    onRestore={activeNav === "trash" ? handleRestoreProject : undefined}
+                    onRename={handleRenameProject}
+                    deleteTitle={activeNav === "trash" ? "Delete permanently" : "Move to trash"}
+                    selectedItems={selectedItems}
+                    onSelectionChange={handleSelectionChange}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </main>
+
       <NameModal
         isOpen={renameModalOpen}
         title={projectToRename?.isRoom ? "Rename room" : "Rename project"}

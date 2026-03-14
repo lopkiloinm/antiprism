@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { IconZoomIn, IconZoomOut, IconDownload, IconRefreshCw, IconMaximize2, IconMinimize2, IconChevronLeft, IconChevronRight } from "./Icons";
+import { IconZoomIn, IconZoomOut, IconDownload, IconRefreshCw, IconMaximize2, IconMinimize2, IconPanelLeft, IconPanelRight } from "./Icons";
 
 // Configure worker - use CDN for Next.js compatibility
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -289,7 +289,7 @@ export function PdfPreview({ pdfUrl, onCompile, isCompiling, latexReady = false,
               onClick={onToggleExpanded}
               title={isExpanded ? "Restore editor and PDF split" : "Expand PDF preview"}
             >
-              {isExpanded ? <IconChevronRight /> : <IconChevronLeft />}
+              {isExpanded ? <IconPanelRight /> : <IconPanelLeft />}
             </button>
           )}
           <button

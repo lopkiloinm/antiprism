@@ -4,17 +4,16 @@ import { useState } from "react";
 import Link from "next/link";
 import AnimatedHero from "@/components/AnimatedHero";
 import {
-  IconAntiprism,
   IconArrowRight,
   IconBrain,
   IconCheckSquare,
   IconFileText,
+  IconGitBranch,
   IconLock,
   IconServer,
   IconSparkles,
   IconUsers,
   IconZap,
-  IconGitBranch,
   IconPlus,
 } from "@/components/Icons";
 
@@ -377,7 +376,6 @@ function FeatureScene({ variant }: { variant: SceneVariant }) {
           <MockupWindow
             headerCenter={
               <span className="text-[11px] font-semibold text-zinc-500 flex items-center gap-1.5 truncate px-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                 <span className="truncate">Browser AI Assistant</span>
               </span>
             }
@@ -538,7 +536,11 @@ export default function FeaturesPage() {
       <header className="sticky top-0 z-50 border-b border-black/5 bg-[#eef2f7]/78 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link href="/features" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-950">
-            <IconAntiprism className="h-5 w-5" />
+            <img 
+              src="/associated-press.svg" 
+              alt="Antiprism" 
+              className="h-7 w-7"
+            />
             Antiprism
           </Link>
 
