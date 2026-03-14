@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const nextConfig: NextConfig = {
+  // Move dev indicator away from bottom left
+  devIndicators: {
+    position: "bottom-right",
+  },
   // Use static export for GitHub Pages, but ensure WASM files are handled correctly
   ...(process.env.NODE_ENV === "production" && { output: "export" as const }),
   // GitHub Pages project sites deploy to /repo-name; basePath/assetPrefix ensure assets resolve

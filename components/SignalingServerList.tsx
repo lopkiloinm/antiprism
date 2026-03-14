@@ -124,6 +124,7 @@ export const SignalingServerList = forwardRef<{ handleNewServer: () => void }, S
       title: server.url,
       subtitle: `${server.id.startsWith('custom') ? 'Custom server' : 'Public server'} · ${server.enabled ? 'Active' : 'Inactive'}`,
       icon: <IconServer />,
+      iconSize: "large",
       leftAccessory: (
         <button
             role="switch"

@@ -3,8 +3,8 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import {
   IconBraces,
-  IconPanelLeft,
-  IconPanelRight,
+  IconSidebarClose,
+  IconSidebarOpen,
   IconFile,
   IconFileArchive,
   IconFileCode,
@@ -248,7 +248,7 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onTog
           className="absolute left-0 top-0 bottom-0 w-8 h-8 m-2 flex items-center justify-center rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors bg-[var(--background)] z-10"
           title={isFileTreeCollapsed ? "Show file tree" : "Collapse file tree"}
         >
-          {isFileTreeCollapsed ? <IconPanelRight /> : <IconPanelLeft />}
+          {isFileTreeCollapsed ? <IconSidebarOpen /> : <IconSidebarClose />}
         </button>
       )}
       
@@ -259,7 +259,7 @@ export function FileTabs({ tabs, activePath, onSelect, onClose, onReorder, onTog
           className="absolute right-0 top-0 bottom-0 w-8 h-8 m-2 flex items-center justify-center rounded text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors bg-[var(--background)] z-10"
           title={isRightPanelCollapsed ? "Show right panel" : "Collapse right panel"}
         >
-          {isRightPanelCollapsed ? <IconPanelLeft /> : <IconPanelRight />}
+          {isRightPanelCollapsed ? <IconSidebarClose /> : <IconSidebarOpen />}
         </button>
       )}
       

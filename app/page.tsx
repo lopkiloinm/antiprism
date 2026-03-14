@@ -26,6 +26,7 @@ import { ProjectList } from "@/components/ProjectList";
 import { SignalingServerList } from "@/components/SignalingServerList";
 import { NameModal } from "@/components/NameModal";
 import { TemplateGallery } from "@/components/TemplateGallery";
+import { BulkActionBar } from "@/components/BulkActionBar";
 import { useResponsive } from "@/hooks/useResponsive";
 import { 
   IconSearch, 
@@ -391,14 +392,14 @@ export default function DashboardPage() {
         />
       </div>
 
-      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-gutter-stable" style={{ scrollbarGutter: 'stable' }}>
         <div className="max-w-4xl mx-auto w-full px-8 py-8 flex flex-col gap-6 pb-32">
           
           <div className="flex items-center gap-4">
             {isMobile && (
               <button
                 onClick={() => setMobileMenuOpen(true)}
-                className="p-2 -ml-2 text-[var(--muted)] hover:text-[var(--foreground)] rounded-xl transition-colors"
+                className="p-2 text-[var(--muted)] hover:text-[var(--foreground)] rounded-xl transition-colors"
               >
                 <IconMenu />
               </button>
@@ -466,52 +467,17 @@ export default function DashboardPage() {
           {/* List Section */}
           <div className="flex flex-col gap-3 mt-2">
             <div className="flex items-center justify-between min-h-[32px]">
-              {selectedItems.length > 0 && activeNav !== "servers" ? (
-                <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 animate-in fade-in slide-in-from-left-2 duration-200">
-                  <div className="flex items-center gap-1.5 pl-2 pr-1">
-                    <span className="text-xs font-medium text-[var(--muted)]">
-                      <span className="text-[var(--foreground)]">{selectedItems.length}</span> selected
-                    </span>
-                    <button 
-                      onClick={handleClearSelection}
-                      className="h-[26px] w-[26px] rounded-[4px] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5"
-                      title="Clear selection"
-                    >
-                      <IconX />
-                    </button>
-                  </div>
-
-                  <div className="w-px h-3.5 bg-[color-mix(in_srgb,var(--border)_50%,transparent)] mx-0.5" />
-
-                  <div className="flex items-center gap-0.5 px-0.5">
-                    {activeNav !== "trash" && (
-                      <button
-                        onClick={handleBulkDownload}
-                        className="flex items-center gap-1.5 h-[26px] px-2 rounded-[4px] text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors [&>svg]:w-3.5 [&>svg]:h-3.5"
-                      >
-                        <IconDownload />
-                        <span className="hidden sm:inline">Download</span>
-                      </button>
-                    )}
-                    {activeNav === "trash" && (
-                      <button
-                        onClick={handleBulkRestore}
-                        className="flex items-center gap-1.5 h-[26px] px-2 rounded-[4px] text-xs font-medium text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors [&>svg]:w-3.5 [&>svg]:h-3.5"
-                      >
-                        <IconRotateCcw />
-                        <span className="hidden sm:inline">Restore</span>
-                      </button>
-                    )}
-                    <button
-                      onClick={handleBulkDelete}
-                      className="flex items-center gap-1.5 h-[26px] px-2 rounded-[4px] text-xs font-medium text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-colors [&>svg]:w-3.5 [&>svg]:h-3.5"
-                    >
-                      <IconTrash2 />
-                      <span className="hidden sm:inline">Delete</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
+              {selectedItems.length > 0 && activeNav !== "servers" && (
+                <BulkActionBar 
+                  selectedCount={selectedItems.length}
+                  onClearSelection={handleClearSelection}
+                  onBulkDownload={handleBulkDownload}
+                  onBulkDelete={handleBulkDelete}
+                  onBulkRestore={handleBulkRestore}
+                  activeNav={activeNav}
+                />
+              )}
+              {selectedItems.length === 0 && (
                 <h2 className="text-sm font-semibold text-[var(--foreground)]">{TITLES[activeNav]}</h2>
               )}
               
