@@ -3,20 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  IconLayoutDashboard,
   IconFolder,
   IconTrash2,
-  IconSettings,
-  IconPlus,
   IconServer,
-  IconAntiprism,
   IconFileText,
   IconHistory,
-  IconChevronDown,
-  IconChevronUp,
   IconSun,
   IconMoon,
-  IconBookOpen,
+  IconLayoutGrid,
   IconX,
 } from "./Icons";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -34,7 +28,6 @@ interface DashboardSidebarProps {
 export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mobileMenuOpen = false, onClose }: DashboardSidebarProps) {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
-  const [themeOpen, setThemeOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -42,135 +35,149 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mob
   }, []);
   
   return (
-    <aside className={`border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0 h-full ${isMobile ? 'w-64' : 'w-56'}`}>
-      <div className="flex h-14 shrink-0 items-center justify-between px-4 border-b border-[var(--border)] relative z-10">
+    <aside className={`border-r border-[var(--border)] flex flex-col bg-[var(--background)] shrink-0 h-full ${isMobile ? 'w-20' : 'w-20'} items-center py-4`}>
+      <div className="flex shrink-0 items-center justify-center mb-6 relative z-10 w-full">
         <div 
           onClick={() => router.push("/features")}
-          className="flex items-center gap-2 px-1 hover:opacity-80 transition-opacity cursor-pointer"
+          className="flex items-center justify-center p-2 rounded-xl hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--accent)] transition-colors cursor-pointer"
+          title="Antiprism Features"
         >
-          <IconAntiprism className="w-5 h-5 text-[var(--foreground)]" />
-          <span className="font-semibold text-[var(--foreground)]">Antiprism</span>
+          <img 
+            src="/associated-press.svg" 
+            alt="Antiprism" 
+            className="w-8 h-8"
+          />
         </div>
         {isMobile && onClose && (
           <button 
             onClick={onClose}
-            className="p-1.5 -mr-1.5 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
+            className="absolute top-0 right-2 p-1 rounded-md text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
           >
             <IconX />
           </button>
         )}
       </div>
-      <nav className="p-2 space-y-0.5">
+      
+      <nav className="flex flex-col gap-2 w-full px-1">
         <button
           onClick={() => onNavChange("all")}
-          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
             activeNav === "all"
-              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
-          <IconFolder />
-          All Projects
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5"><IconFolder /></span>
+          <span className="text-[10px] leading-tight font-medium text-center">All</span>
+          {activeNav === "all" ? (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          ) : (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+          )}
         </button>
+        
         <button
           onClick={() => onNavChange("projects")}
-          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
             activeNav === "projects"
-              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
-          <IconFileText />
-          Your Projects
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5"><IconFileText /></span>
+          <span className="text-[10px] leading-tight font-medium text-center">Projects</span>
+          {activeNav === "projects" ? (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          ) : (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+          )}
         </button>
+        
         <button
           onClick={() => onNavChange("recently-opened")}
-          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
             activeNav === "recently-opened"
-              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
-          <IconHistory />
-          Recently Opened
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5"><IconHistory /></span>
+          <span className="text-[10px] leading-tight font-medium text-center">Recent</span>
+          {activeNav === "recently-opened" ? (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          ) : (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+          )}
         </button>
+        
         <button
           onClick={() => onNavChange("templates")}
-          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
             activeNav === "templates"
-              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
-          <IconBookOpen />
-          Templates
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5"><IconLayoutGrid /></span>
+          <span className="text-[10px] leading-tight font-medium text-center">Templates</span>
+          {activeNav === "templates" ? (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          ) : (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+          )}
         </button>
+        
         <button
           onClick={() => onNavChange("servers")}
-          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
             activeNav === "servers"
-              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
-          <IconServer />
-          Signaling Servers
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5"><IconServer /></span>
+          <span className="text-[10px] leading-tight font-medium text-center">Servers</span>
+          {activeNav === "servers" ? (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          ) : (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+          )}
         </button>
+        
         <button
           onClick={() => onNavChange("trash")}
-          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
+          className={`w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group ${
             activeNav === "trash"
-              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
+              ? "text-[var(--accent)]"
+              : "text-[var(--muted)] hover:text-[var(--foreground)]"
           }`}
         >
-          <IconTrash2 />
-          Trashed Projects
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5"><IconTrash2 /></span>
+          <span className="text-[10px] leading-tight font-medium text-center">Trash</span>
+          {activeNav === "trash" ? (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[var(--accent)] rounded-r transition-all group-hover:h-8 group-hover:w-1" />
+          ) : (
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+          )}
         </button>
       </nav>
-      <div className="mt-auto border-t border-[var(--border)] p-2">
+      
+      <div className="mt-auto w-full px-1 flex flex-col gap-2">
         <button
-          onClick={() => setThemeOpen(!themeOpen)}
-          className={`w-full px-3 py-2 text-left text-sm rounded flex items-center gap-2 transition-colors ${
-            themeOpen
-              ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--foreground)]"
-              : "text-[var(--muted)] hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)] hover:text-[var(--foreground)]"
-          }`}
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="w-full flex flex-col items-center justify-center py-3 px-1 rounded-lg transition-all relative group text-[var(--muted)] hover:text-[var(--foreground)]"
+          title={`Switch to ${mounted ? (theme === 'dark' ? 'light' : 'dark') : 'light'} mode`}
         >
-          {mounted ? (
-            theme === "light" ? <IconSun /> : <IconMoon />
-          ) : (
-            <IconSun />
-          )}
-          <span className="capitalize">{mounted ? theme : "light"}</span>
-          <div className="ml-auto">
-            {themeOpen ? <IconChevronUp /> : <IconChevronDown />}
-          </div>
-        </button>
-        {themeOpen && (
-          <div className="space-y-0.5">
-            <button
-              onClick={() => {
-                setTheme("light");
-                setThemeOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-            >
-              <IconSun />
-              Light
-            </button>
-            <button
-              onClick={() => {
-                setTheme("dark");
-                setThemeOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] flex items-center gap-2"
-            >
+          <span className="mb-1 w-5 h-5 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5">
+            {mounted ? (
+              theme === "light" ? <IconMoon /> : <IconSun />
+            ) : (
               <IconMoon />
-              Dark
-            </button>
-          </div>
-        )}
+            )}
+          </span>
+          <span className="text-[10px] leading-tight font-medium text-center">Theme</span>
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3 bg-[var(--accent)] rounded-r opacity-0 transition-all group-hover:opacity-100" />
+        </button>
       </div>
     </aside>
   );

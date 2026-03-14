@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useInView } from "framer-motion";
 import { IconSparkles, IconZap } from "./Icons";
 import { Streamdown } from "streamdown";
 import { streamdownPlugins, getShikiTheme } from "@/lib/streamdownConfig";
@@ -44,11 +44,17 @@ export default function AnimatedHero() {
   const [isThinkingComplete, setIsThinkingComplete] = useState(false);
   const [loremText, setLoremText] = useState("");
   const [webrtcStep, setWebrtcStep] = useState(0);
+  const [isAnimationActive, setIsAnimationActive] = useState(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(heroRef, { once: true, margin: "-40% 0px -40% 0px" });
   
   const step = STEPS[currentStepIndex];
 
   useEffect(() => {
+    // Only start animation when component is in view
+    if (!isInView || !isAnimationActive) return;
+    
     let timer: NodeJS.Timeout;
     
     const advance = (delay: number) => {
@@ -287,14 +293,36 @@ export default function AnimatedHero() {
     }
 
     return () => clearTimeout(timer);
-  }, [step, currentStepIndex]);
+  }, [step, currentStepIndex, isAnimationActive]);
+
+  // Start animation when component comes into view
+  useEffect(() => {
+    if (isInView && !isAnimationActive) {
+      setIsAnimationActive(true);
+    }
+  }, [isInView, isAnimationActive]);
 
   const showCodePanel = ["WORKSPACE_ZOOM", "MODEL_SELECT_NANBEIGE", "MODEL_DOWNLOAD", "PROMPTING_TEXT", "THINKING_STREAM", "CODE_GEN_STREAM", "SHOW_DIFF", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
   const showPdfPanel = ["SHOW_DIFF", "VISION_TRANSITION", "WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
   const isQwen = ["WORKSPACE_VISION", "MODEL_SELECT_QWEN", "MODEL_DOWNLOAD_QWEN", "UPLOAD_IMAGE", "PROMPTING_IMAGE", "MULTIMODAL_STREAM"].includes(step);
 
   return (
-    <div className="relative w-full min-h-[600px] sm:min-h-[750px] bg-transparent perspective-[1000px] font-sans">
+    <div ref={heroRef} className="relative w-full min-h-[600px] sm:min-h-[750px] bg-transparent perspective-[1000px] font-sans">
+      {/* Progress Indicators */}
+      <div className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-4 z-20 flex flex-col gap-2">
+        {STEPS.map((_, index) => (
+          <div
+            key={index}
+            className={`w-2 h-2 rounded-full transition-all duration-300 ${
+              isAnimationActive && index === currentStepIndex
+                ? "bg-blue-500 scale-125"
+                : "bg-zinc-300 hover:bg-zinc-400"
+            }`}
+            onClick={() => isAnimationActive && setCurrentStepIndex(index)}
+            style={{ cursor: isAnimationActive ? "pointer" : "default" }}
+          />
+        ))}
+      </div>
       <AnimatePresence mode="wait">
         {step === "INTRO" && (
           <motion.div
@@ -305,7 +333,6 @@ export default function AnimatedHero() {
             transition={{ duration: 0.8 }}
             className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center overflow-hidden"
           >
-            <div className="landing-hero-aura absolute inset-[-18%] bg-[radial-gradient(circle_at_50%_50%,rgba(163,205,255,0.4),transparent_60%)]" />
             <motion.h2 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

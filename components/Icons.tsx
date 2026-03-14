@@ -74,6 +74,8 @@ import {
   Home,
   Menu,
   Layers,
+  PanelLeft,
+  PanelRight,
 } from "lucide-react";
 
 const iconProps = { size: 16, strokeWidth: 2 };
@@ -151,34 +153,5 @@ export const IconSun = () => <Sun {...iconProps} />;
 export const IconMoon = () => <Moon {...iconProps} />;
 export const IconHome = () => <Home {...iconProps} />;
 export const IconTemplates = () => <Layers {...iconProps} />;
-export const IconAntiprism = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...iconProps}
-    {...props}
-  >
-    {/* Outer square (bottom face) */}
-    <polygon points="3 3, 21 3, 21 21, 3 21" />
-    
-    {/* Inner rotated square (top face) */}
-    <polygon points="12 6, 18 12, 12 18, 6 12" />
-    
-    {/* Connecting lines forming the 8 triangular faces */}
-    <line x1="3" y1="3" x2="12" y2="6" />
-    <line x1="3" y1="3" x2="6" y2="12" />
-    
-    <line x1="21" y1="3" x2="12" y2="6" />
-    <line x1="21" y1="3" x2="18" y2="12" />
-    
-    <line x1="21" y1="21" x2="18" y2="12" />
-    <line x1="21" y1="21" x2="12" y2="18" />
-    
-    <line x1="3" y1="21" x2="12" y2="18" />
-    <line x1="3" y1="21" x2="6" y2="12" />
-  </svg>
-);
+export const IconPanelLeft = () => <PanelLeft {...iconProps} />;
+export const IconPanelRight = () => <PanelRight {...iconProps} />;

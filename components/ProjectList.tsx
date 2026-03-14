@@ -163,7 +163,7 @@ export function ProjectList({
     <DashboardView 
       items={dashboardItems} 
       viewMode={viewMode} 
-      emptyContent="No projects yet. Create one with + New."
+      emptyContent="No projects yet. Create one above or import a ZIP file."
     />
   );
 }

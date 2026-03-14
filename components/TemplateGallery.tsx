@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createProject } from "@/lib/projects";
 import { mount } from "@wwog/idbfs";
-import { IconFileText, IconPlus } from "./Icons";
+import { IconLayoutGrid } from "./Icons";
 import { DashboardView, DashboardItemProps } from "./DashboardView";
 
 interface Template {
@@ -58,7 +57,6 @@ interface TemplateGalleryProps {
 
 export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps) {
   const router = useRouter();
-  const [isCreating, setIsCreating] = useState<string | null>(null);
 
   const filteredTemplates = TEMPLATES.filter((t) =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -66,9 +64,6 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
   );
 
   const handleCreateFromTemplate = async (template: Template) => {
-    if (isCreating) return;
-    setIsCreating(template.id);
-    
     try {
       // 1. Fetch the template main.tex
       const basePathEnv = process.env.NEXT_PUBLIC_BASE_PATH || "";
@@ -115,7 +110,6 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
     } catch (err) {
       console.error("Failed to create from template:", err);
       alert("Failed to create project from template");
-      setIsCreating(null);
     }
   };
 
@@ -124,31 +118,8 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
       id: template.id,
       title: template.name,
       subtitle: template.description,
-      icon: <IconFileText />,
-      topRightAccessory: (
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            if (isCreating !== null) return;
-            e.preventDefault();
-            e.stopPropagation();
-            handleCreateFromTemplate(template);
-          }}
-          className={`flex items-center gap-1.5 px-2 py-1 text-xs bg-[var(--accent)] text-white rounded transition-opacity cursor-pointer ${
-            isCreating !== null ? "opacity-50 pointer-events-none" : "hover:opacity-90"
-          }`}
-        >
-          {isCreating === template.id ? (
-            <span className="animate-pulse">...</span>
-          ) : (
-            <>
-              <IconPlus />
-              Use
-            </>
-          )}
-        </div>
-      ),
+      icon: <IconLayoutGrid />,
+      onClick: () => handleCreateFromTemplate(template),
     };
   });
 
@@ -158,7 +129,7 @@ export function TemplateGallery({ viewMode, searchQuery }: TemplateGalleryProps)
       viewMode={viewMode}
       emptyContent={
         <div className="flex flex-col items-center gap-2 text-[var(--muted)] text-sm">
-          <IconFileText />
+          <IconLayoutGrid />
           <p>No templates found.</p>
         </div>
       }
