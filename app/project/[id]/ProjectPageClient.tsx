@@ -4406,7 +4406,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       originalContent={activeGitDiffData.originalContent}
                       viewMode={gitDiffViewMode}
                       className="h-full"
-                      theme={theme}
+                      theme={effectiveTheme}
                       fontSize={editorFontSize}
                       lineWrapping={editorLineWrapping}
                     />

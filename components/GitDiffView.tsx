@@ -8,7 +8,7 @@ interface GitDiffViewProps {
   currentContent: string;
   originalContent?: string;
   className?: string;
-  theme?: Theme;
+  theme?: "light" | "dark";
   fontSize?: number;
   lineWrapping?: boolean;
 }
