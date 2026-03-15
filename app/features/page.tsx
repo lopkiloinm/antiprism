@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { motion, useInView } from "framer-motion";
 import AnimatedHero from "@/components/AnimatedHero";
+import { getAssetPath } from "@/lib/assetPath";
 import {
   IconArrowRight,
   IconBrain,
@@ -580,7 +581,7 @@ export default function FeaturesPage() {
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link href="/features" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-950">
             <img 
-              src="/associated-press-black.svg" 
+              src={getAssetPath("/associated-press-black.svg")} 
               alt="Antiprism" 
               className="h-7 w-7"
             />

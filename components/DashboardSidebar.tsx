@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getAssetPath } from "@/lib/assetPath";
 import {
   IconFolder,
   IconTrash2,
@@ -46,7 +47,7 @@ export function DashboardSidebar({ activeNav, onNavChange, isMobile = false, mob
           title="Antiprism Features"
         >
           <img 
-            src="/associated-press.svg" 
+            src={getAssetPath("/associated-press.svg")} 
             alt="Antiprism" 
             className="w-8 h-8"
           />

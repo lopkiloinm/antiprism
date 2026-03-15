@@ -8,6 +8,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic.js";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
+import { getAssetPath } from "@/lib/assetPath";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
@@ -3910,7 +3911,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
               title="Associated Press - Features"
             >
               <img 
-                src="/associated-press.svg" 
+                src={getAssetPath("/associated-press.svg")} 
                 alt="Associated Press" 
                 className="w-6 h-6 opacity-60 hover:opacity-100 transition-opacity"
               />
