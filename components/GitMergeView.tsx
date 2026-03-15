@@ -22,7 +22,7 @@ interface GitMergeViewProps {
   currentContent: string;
   originalContent?: string;
   className?: string;
-  theme?: Theme;
+  theme?: "light" | "dark";
   fontSize?: number;
   lineWrapping?: boolean;
   viewMode?: "split" | "unified";
@@ -92,7 +92,7 @@ const gitMergeViewStyles = `
   }
 `;
 
-function getHighlight(theme: Theme) {
+function getHighlight(theme: "light" | "dark") {
   const isLightTheme = theme === "light";
 
   return HighlightStyle.define(
