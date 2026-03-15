@@ -41,6 +41,8 @@ import {
   IconTrash2,
   IconDownload,
   IconRotateCcw,
+  IconFileCode,
+  IconFileText,
 } from "@/components/Icons";
 
 type NavItem = "all" | "projects" | "recently-opened" | "templates" | "servers" | "trash";
@@ -112,6 +114,18 @@ export default function DashboardPage() {
     if (signalingServerListRef.current) {
       signalingServerListRef.current.handleNewServer();
     }
+  };
+
+  const handleNewTypst = async () => {
+    const project = await createProject("Untitled Typst Project");
+    setRefresh((r) => r + 1);
+    router.push(`/project/${project.id}`);
+  };
+
+  const handleNewLatex = async () => {
+    const project = await createProject("Untitled LaTeX Project");
+    setRefresh((r) => r + 1);
+    router.push(`/project/${project.id}`);
   };
 
   const handleNewProject = async () => {
@@ -393,7 +407,7 @@ export default function DashboardPage() {
       </div>
 
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto overflow-x-hidden scrollbar-gutter-stable" style={{ scrollbarGutter: 'stable' }}>
-        <div className="max-w-4xl mx-auto w-full px-8 py-8 flex flex-col gap-6 pb-32">
+        <div className="max-w-6xl mx-auto w-full px-8 py-8 flex flex-col gap-6 pb-32">
           
           <div className="flex items-center gap-4">
             {isMobile && (
@@ -424,23 +438,33 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
                 <h2 className="text-sm font-semibold text-[var(--foreground)]">Start Creating</h2>
-                <p className="text-xs text-[var(--muted)]">Click to create a new project, room, or import from zip</p>
+                <p className="text-xs text-[var(--muted)]">Choose your project type or start from a template</p>
               </div>
 
-              <div className="flex gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div 
-                  onClick={handleNewProject}
-                  className="flex-1 flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] cursor-pointer transition-colors group"
+                  onClick={handleNewTypst}
+                  className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] cursor-pointer transition-colors group"
                 >
                   <div className="w-8 h-8 rounded-md bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform [&>svg]:w-4 [&>svg]:h-4">
-                    <IconFilePlus />
+                    <IconFileCode />
                   </div>
-                  <span className="text-sm font-medium text-[var(--foreground)]">New Project</span>
+                  <span className="text-sm font-medium text-[var(--foreground)]">New Typst</span>
+                </div>
+
+                <div 
+                  onClick={handleNewLatex}
+                  className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] cursor-pointer transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-md bg-[color-mix(in_srgb,var(--accent)_15%,transparent)] text-[var(--accent)] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform [&>svg]:w-4 [&>svg]:h-4">
+                    <IconFileText />
+                  </div>
+                  <span className="text-sm font-medium text-[var(--foreground)]">New LaTeX</span>
                 </div>
 
                 <div 
                   onClick={() => setActiveNav("templates")}
-                  className="flex-1 flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-[color-mix(in_srgb,var(--border)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_20%,transparent)] cursor-pointer transition-colors group"
+                  className="flex items-center gap-3 p-3 border border-[var(--border)] rounded-lg bg-[color-mix(in_srgb,var(--border)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--border)_20%,transparent)] cursor-pointer transition-colors group"
                 >
                   <div className="w-8 h-8 rounded-md bg-[color-mix(in_srgb,var(--foreground)_5%,transparent)] text-[var(--foreground)] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform [&>svg]:w-4 [&>svg]:h-4">
                     <IconLayoutGrid />

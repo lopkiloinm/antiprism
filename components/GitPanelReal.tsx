@@ -830,7 +830,7 @@ export function GitPanelReal({
                 >
                   <span
                     className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                      stagedCount === changes.length && changes.length > 0 ? "left-[22px]" : "left-1"
+                      stagedCount === changes.length && changes.length > 0 ? "left-[20px]" : "left-1"
                     }`}
                   />
                 </button>
@@ -878,7 +878,7 @@ export function GitPanelReal({
                   >
                     <span
                       className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                        change.staged ? "left-[22px]" : "left-1"
+                        change.staged ? "left-[20px]" : "left-1"
                       }`}
                     />
                   </button>

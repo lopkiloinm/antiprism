@@ -4979,7 +4979,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                 >
                   <span
                     className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                      webrtcConfig.enabled ? "left-[22px]" : "left-1"
+                      webrtcConfig.enabled ? "left-[20px]" : "left-1"
                     }`}
                   />
                 </button>

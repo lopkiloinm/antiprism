@@ -137,7 +137,7 @@ function Toggle({
     >
       <span
         className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-          checked ? "left-[22px]" : "left-1"
+          checked ? "left-[20px]" : "left-1"
         }`}
       />
     </button>

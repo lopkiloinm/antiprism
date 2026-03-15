@@ -142,7 +142,7 @@ export const SignalingServerList = forwardRef<{ handleNewServer: () => void }, S
           >
             <span
               className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                server.enabled ? "left-[22px]" : "left-1"
+                server.enabled ? "left-[20px]" : "left-1"
               }`}
             />
           </button>
