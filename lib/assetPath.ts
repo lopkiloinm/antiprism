@@ -4,14 +4,24 @@
  */
 
 export function getAssetPath(path: string): string {
-  // Remove leading slash if present
-  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+  // Ensure path starts with a slash
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   
-  // Get base path from Next.js config - this should match the basePath in next.config.ts
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  // Get base path from Next.js config
+  let basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  
+  // Ensure basePath starts with a slash if it's not empty
+  if (basePath && !basePath.startsWith('/')) {
+    basePath = `/${basePath}`;
+  }
+  
+  // Remove trailing slash from basePath if present to avoid double slashes
+  if (basePath.endsWith('/')) {
+    basePath = basePath.slice(0, -1);
+  }
   
   // Combine base path with asset path
-  return basePath ? `/${basePath}/${cleanPath}` : `/${cleanPath}`;
+  return `${basePath}${normalizedPath}`;
 }
 
 /**
