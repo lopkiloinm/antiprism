@@ -105,7 +105,7 @@ function isBinaryPath(path: string): boolean {
 
 export default function ProjectPageClient({ idOverride }: { idOverride?: string }) {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { theme, effectiveTheme, setTheme } = useTheme();
   const params = useParams();
   const pathname = usePathname();
   // With middleware rewrite, pathname stays as /project/:id in browser; params.id may be "new"
@@ -3801,7 +3801,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
                           fontSize={Math.max(14, editorFontSize)} // Min 14px on mobile
                           tabSize={editorTabSize}
                           lineWrapping={true} // Force line wrapping on mobile
-                          theme={theme}
+                          theme={effectiveTheme}
                           readOnly={openTabs.find(t => t.path === activeTabPath)?.readOnly || false}
                         />
                       </div>
@@ -4459,7 +4459,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                           availableModels={AVAILABLE_MODELS}
                           promptAsk={promptAsk}
                           promptCreate={promptCreate}
-                          theme={theme}
+                          theme={effectiveTheme}
                           showHiddenYjsDocs={showHiddenYjsDocs}
                           webrtcConfig={webrtcConfig}
                           onThemeChange={setTheme}
@@ -4653,7 +4653,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                             originalContent={diffData.originalContent}
                             viewMode={gitDiffViewMode}
                             className="h-full"
-                            theme={theme}
+                            theme={effectiveTheme}
                             fontSize={editorFontSize}
                             lineWrapping={editorLineWrapping}
                           />
@@ -4690,7 +4690,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                                 fontSize={editorFontSize}
                                 tabSize={editorTabSize}
                                 lineWrapping={editorLineWrapping}
-                                theme={theme}
+                                theme={effectiveTheme}
                                 readOnly={openTabs.find(t => t.path === activeTabPath)?.readOnly || false}
                               />
                             );

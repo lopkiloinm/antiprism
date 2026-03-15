@@ -47,7 +47,7 @@ interface EditorPanelProps {
   fontSize?: number;
   tabSize?: number;
   lineWrapping?: boolean;
-  theme?: Theme;
+  theme?: "light" | "dark";
   /** Whether the editor should be read-only */
   readOnly?: boolean;
 }
