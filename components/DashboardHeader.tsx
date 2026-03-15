@@ -180,14 +180,12 @@ export function DashboardHeader({
               </span>
               <button
                 onClick={onClearSelection}
-                className="px-2 py-1 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                className="p-1 rounded hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
                 title="Clear selection"
               >
                 <IconX />
               </button>
             </div>
-
-            <div className="w-px self-stretch bg-[var(--border)]" />
 
             <div className="flex items-center">
               {onBulkDownload && (
@@ -203,7 +201,7 @@ export function DashboardHeader({
               {onBulkRestore && activeNav === "trash" && (
                 <button
                   onClick={onBulkRestore}
-                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors flex items-center gap-2 border-l border-[var(--border)]"
+                  className="px-3 py-2 text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] transition-colors flex items-center gap-2"
                   title="Restore selected"
                 >
                   <IconRotateCcw />
@@ -212,7 +210,7 @@ export function DashboardHeader({
               )}
               <button
                 onClick={onBulkDelete}
-                className="px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-2 border-l border-[var(--border)]"
+                className="px-3 py-2 text-sm text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-2"
                 title="Delete selected"
               >
                 <IconTrash2 />

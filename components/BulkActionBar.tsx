@@ -35,11 +35,8 @@ export function BulkActionBar({
         </span>
       </div>
 
-      {/* Divider */}
-      <div className="w-px h-3.5 bg-[color-mix(in_srgb,var(--border)_50%,transparent)] mx-0.5" />
-
       {/* Action Buttons */}
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5 ml-2">
         {activeNav !== "trash" && (
           <button
             onClick={onBulkDownload}
