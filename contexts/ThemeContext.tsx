@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { getTheme, setTheme, type Theme } from "@/lib/settings";
+import { getTheme, setTheme, getEffectiveTheme, type Theme } from "@/lib/settings";
 
 interface ThemeContextType {
   theme: Theme;
+  effectiveTheme: "light" | "dark";
   setTheme: (theme: Theme) => void;
 }
 
@@ -24,46 +25,36 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(() => getTheme());
+  const [effectiveTheme, setEffectiveTheme] = useState<"light" | "dark">(() => getEffectiveTheme());
 
   const handleThemeChange = (newTheme: Theme) => {
     setTheme(newTheme);
     setThemeState(newTheme);
+    setEffectiveTheme(getEffectiveTheme());
   };
 
-  useEffect(() => {
-    // Apply theme class to document
-    const root = document.documentElement;
-    root.classList.remove("theme-light", "theme-dark");
-    
-    // Determine actual theme to apply
-    let actualTheme: "light" | "dark";
-    if (theme === "system") {
-      actualTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    } else {
-      actualTheme = theme;
-    }
-    
-    root.classList.add(`theme-${actualTheme}`);
-  }, [theme]);
-
-  // Listen for system theme changes when using system theme
+  // Listen for system theme changes when using "system" theme
   useEffect(() => {
     if (theme !== "system") return;
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = () => {
-      const root = document.documentElement;
-      root.classList.remove("theme-light", "theme-dark");
-      const actualTheme = mediaQuery.matches ? "dark" : "light";
-      root.classList.add(`theme-${actualTheme}`);
+      setEffectiveTheme(getEffectiveTheme());
     };
 
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme]);
 
+  useEffect(() => {
+    // Apply theme class to document
+    const root = document.documentElement;
+    root.classList.remove("theme-light", "theme-dark");
+    root.classList.add(`theme-${effectiveTheme}`);
+  }, [effectiveTheme]);
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme: handleThemeChange }}>
+    <ThemeContext.Provider value={{ theme, effectiveTheme, setTheme: handleThemeChange }}>
       {children}
     </ThemeContext.Provider>
   );

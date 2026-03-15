@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { motion, useInView } from "framer-motion";
 import AnimatedHero from "@/components/AnimatedHero";
 import {
   IconArrowRight,
@@ -15,6 +16,8 @@ import {
   IconUsers,
   IconZap,
   IconPlus,
+  IconAntiprism,
+  IconChevronDown,
 } from "@/components/Icons";
 
 type IconType = typeof IconUsers;
@@ -530,18 +533,58 @@ function FeatureRow({
   );
 }
 
+function ScrollIndicator({ targetRef }: { targetRef: React.RefObject<HTMLDivElement | null> }) {
+  const isInView = useInView(targetRef, { once: true, margin: "-40% 0px -40% 0px" });
+
+  const scrollToAnimation = () => {
+    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  // Don't show if animation is in view
+  if (isInView) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40"
+    >
+      <button
+        onClick={scrollToAnimation}
+        className="group relative flex items-center justify-center w-12 h-12 rounded-full border border-black/10 bg-white/72 shadow-[0_10px_30px_rgba(70,110,170,0.08)] backdrop-blur hover:bg-white/90 transition-all duration-300 hover:scale-105"
+        aria-label="Scroll to animation"
+      >
+        <motion.div
+          animate={{ y: [0, 4, 0] }}
+          transition={{
+            duration: 1.5,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="text-zinc-600"
+        >
+          <IconChevronDown />
+        </motion.div>
+        <div className="absolute inset-0 rounded-full border border-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      </button>
+    </motion.div>
+  );
+}
+
 export default function FeaturesPage() {
+  const animationRef = useRef<HTMLDivElement>(null);
   return (
     <div className="h-dvh w-screen overflow-y-auto overflow-x-hidden bg-[#eef2f7] text-zinc-950">
       <header className="sticky top-0 z-50 border-b border-black/5 bg-[#eef2f7]/78 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
           <Link href="/features" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-950">
             <img 
-              src="/associated-press.svg" 
+              src="/associated-press-black.svg" 
               alt="Antiprism" 
               className="h-7 w-7"
             />
-            Antiprism
+            <span>Antiprism</span>
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm text-zinc-600 md:flex">
@@ -608,7 +651,9 @@ export default function FeaturesPage() {
           </div>
 
           <div className="w-full px-4 sm:px-12 mt-16 max-w-[1600px] mx-auto">
-            <AnimatedHero />
+            <div ref={animationRef}>
+              <AnimatedHero />
+            </div>
           </div>
         </section>
 
@@ -711,6 +756,9 @@ export default function FeaturesPage() {
           </div>
         </section>
       </main>
+
+      {/* Scroll Indicator - always show, will hide based on scroll position */}
+      <ScrollIndicator targetRef={animationRef} />
 
       <footer className="border-t border-black/6 py-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 text-sm text-zinc-500 sm:flex-row sm:items-center sm:justify-between">

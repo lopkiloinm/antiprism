@@ -294,12 +294,25 @@ export const AUTO_COMPILE_DEBOUNCE_LIMITS = {
 // --- Theme ---
 export type Theme = "light" | "dark" | "system";
 
-const DEFAULT_THEME: Theme = "dark";
+const DEFAULT_THEME: Theme = "system";
 
 export function getTheme(): Theme {
   return get("theme", DEFAULT_THEME, (v) =>
     v === "light" || v === "dark" || v === "system" ? v : null
   );
+}
+
+export function getEffectiveTheme(): "light" | "dark" {
+  const theme = getTheme();
+  if (theme === "system") {
+    // Check if we're on the client side
+    if (typeof window !== "undefined") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    // Default to dark theme on server side
+    return "dark";
+  }
+  return theme;
 }
 
 export function setTheme(theme: Theme): void {

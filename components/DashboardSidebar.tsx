@@ -10,8 +10,10 @@ import {
   IconHistory,
   IconSun,
   IconMoon,
+  IconMonitor,
   IconLayoutGrid,
   IconX,
+  IconAntiprism,
 } from "./Icons";
 import { Sun as LucideSun, Moon as LucideMoon, Monitor as LucideMonitor } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";

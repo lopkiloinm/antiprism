@@ -38,8 +38,8 @@ export function BigChatMessage({
   isStreaming = false,
   onUpdateMessage,
 }: BigChatMessageProps) {
-  const { theme } = useTheme();
-  const isDarkTheme = theme === "dark";
+  const { effectiveTheme } = useTheme();
+  const isDarkTheme = effectiveTheme === "dark";
   const streamdownClasses = chatStreamdownClasses;
   const parsedThinking = parseThinkingContent(message.content);
   const [persistedThinkingContent, setPersistedThinkingContent] = useState(message.thinkingContent ?? parsedThinking.thinking);
@@ -141,7 +141,7 @@ export function BigChatMessage({
           {assistantDisplayContent}
         </pre>
       ) : message.role === "assistant" ? (
-        <div className={`${streamdownClasses} ${theme === 'light' ? 'theme-light' : ''}`}>
+        <div className={`${streamdownClasses} ${effectiveTheme === 'light' ? 'theme-light' : ''}`}>
           <Streamdown 
             plugins={streamdownPlugins}
             shikiTheme={getShikiTheme(isDarkTheme)}

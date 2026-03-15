@@ -108,6 +108,7 @@ export function ProjectList({
       title: item.name,
       subtitle: item.isRoom ? "Room" : `Modified ${new Date(item.createdAt).toLocaleDateString()}`,
       icon: item.isRoom ? <IconFolder /> : <IconFile />,
+      iconSize: "large",
       href: `/project/${item.id}`,
       leftAccessory: onSelectionChange ? (
         <button
