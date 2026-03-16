@@ -13,7 +13,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  responseType?: "ask" | "agent";
+  responseType?: "ask" | "agent" | "edit";
   createdPath?: string;
   markdown?: string;
   image?: string;
@@ -47,6 +47,7 @@ export function SmallChatMessage({
   const [thinkingDurationMs, setThinkingDurationMs] = useState<number | undefined>(message.thinkingDurationMs);
   const effectiveThinkingContent = persistedThinkingContent || parsedThinking.thinking;
   const assistantDisplayContent = stripThinkingTags(message.content);
+  const hasAssistantDisplayContent = assistantDisplayContent.trim().length > 0;
 
   const emitMessageUpdate = (overrides: Partial<ChatMessage>) => {
     onUpdateMessage?.({
@@ -57,6 +58,24 @@ export function SmallChatMessage({
       ...overrides,
     });
   };
+
+  useEffect(() => {
+    if (message.thinkingContent && message.thinkingContent !== persistedThinkingContent) {
+      setPersistedThinkingContent(message.thinkingContent);
+    }
+  }, [message.thinkingContent, persistedThinkingContent]);
+
+  useEffect(() => {
+    if (message.thinkingStartedAt !== thinkingStartedAt) {
+      setThinkingStartedAt(message.thinkingStartedAt);
+    }
+  }, [message.thinkingStartedAt, thinkingStartedAt]);
+
+  useEffect(() => {
+    if (message.thinkingDurationMs !== thinkingDurationMs) {
+      setThinkingDurationMs(message.thinkingDurationMs);
+    }
+  }, [message.thinkingDurationMs, thinkingDurationMs]);
 
   useEffect(() => {
     if (message.role !== "assistant") {
@@ -131,10 +150,9 @@ export function SmallChatMessage({
               onToggleExpanded={(expanded) => emitMessageUpdate({ thinkingExpanded: expanded })}
             />
           )}
-          {message.role === "assistant" && message.responseType === "agent" ? (
+          {message.role === "assistant" && (message.responseType === "agent" || message.responseType === "edit") && hasAssistantDisplayContent ? (
             <pre
-              ref={isLast && message.role === "assistant" ? lastMessageRef : undefined}
-              className="text-sm overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded p-3 max-h-64"
+              className="text-sm overflow-x-auto whitespace-pre-wrap break-words font-mono rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_22%,transparent)] p-3"
             >
               {assistantDisplayContent}
             </pre>

@@ -10,7 +10,7 @@ export interface ChatSession {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  responseType?: "ask" | "agent";
+  responseType?: "ask" | "agent" | "edit";
   createdPath?: string;
   markdown?: string;
   image?: string;

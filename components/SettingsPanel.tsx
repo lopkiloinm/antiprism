@@ -44,14 +44,11 @@ import {
   getWebRTCSignalingConfig,
   setWebRTCSignalingConfig,
   type WebRTCSignalingConfig,
-  getShowHiddenYjsDocs,
-  setShowHiddenYjsDocs,
 } from "@/lib/settings";
 import { DEFAULT_PROMPT_ASK } from "@/lib/agent/ask";
 import { DEFAULT_PROMPT_CREATE } from "@/lib/agent/create";
 import { type ModelDef } from "@/lib/modelConfig";
 import { Select } from "./Select";
-import { IconToggleLeft, IconToggleRight } from "./Icons";
 
 interface SettingsPanelProps {
   latexEngine: LaTeXEngine;
@@ -94,22 +91,33 @@ interface SettingsPanelProps {
   onResetRequested: () => void;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mb-5">
-      <h3 className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-2">{title}</h3>
-      <div className="space-y-3">{children}</div>
+    <section className="rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_8%,transparent)] shadow-sm">
+      <div className="border-b border-[color-mix(in_srgb,var(--border)_70%,transparent)] px-5 py-4">
+        <h3 className="text-sm font-semibold text-[var(--foreground)]">{title}</h3>
+        {description ? <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{description}</p> : null}
+      </div>
+      <div className="space-y-4 px-5 py-5">{children}</div>
     </section>
   );
 }
 
 function Label({ id, label, hint }: { id: string; label: string; hint?: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <label htmlFor={id} className="text-sm text-[var(--foreground)]">
+    <div className="min-w-0">
+      <label htmlFor={id} className="block text-sm font-medium text-[var(--foreground)]">
         {label}
       </label>
-      {hint && <span className="text-xs text-[var(--muted)]">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs leading-5 text-[var(--muted)]">{hint}</span>}
     </div>
   );
 }
@@ -125,22 +133,108 @@ function Toggle({
 }) {
   return (
     <button
+      type="button"
       id={id}
       role="switch"
       aria-checked={checked}
       onClick={onToggle}
-      className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+      className={`relative h-7 w-12 rounded-full border transition-all shrink-0 ${
         checked
-          ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
-          : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
+          ? "border-[color-mix(in_srgb,var(--accent)_45%,transparent)] bg-[color-mix(in_srgb,var(--accent)_70%,transparent)]"
+          : "border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_55%,transparent)]"
       }`}
     >
       <span
-        className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-          checked ? "left-[20px]" : "left-1"
+        className={`absolute top-[3px] h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
+          checked ? "left-6" : "left-[3px]"
         }`}
       />
     </button>
+  );
+}
+
+function Field({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-xl border border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[var(--background)]/70 px-3.5 py-3">{children}</div>;
+}
+
+function ToggleRow({
+  id,
+  label,
+  hint,
+  checked,
+  onToggle,
+  disabled = false,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Field>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <Label id={id} label={label} hint={hint} />
+        </div>
+        <div className={`flex shrink-0 items-center gap-3 ${disabled ? "opacity-50" : ""}`}>
+          <span className="text-xs font-medium text-[var(--muted)]">{checked ? "On" : "Off"}</span>
+          <Toggle id={id} checked={checked} onToggle={onToggle} />
+        </div>
+      </div>
+    </Field>
+  );
+}
+
+function SliderField({
+  id,
+  label,
+  hint,
+  value,
+  displayValue,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  value: number;
+  displayValue?: string;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Field>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <Label id={id} label={label} hint={hint} />
+        </div>
+        <div className="rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_20%,transparent)] px-2.5 py-1 text-xs font-medium tabular-nums text-[var(--foreground)]">
+          {displayValue ?? String(value)}
+        </div>
+      </div>
+      <div className="mt-3">
+        <input
+          id={id}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseInt(e.target.value, 10))}
+          className="h-2 w-full cursor-pointer accent-[var(--accent)]"
+        />
+        <div className="mt-1.5 flex items-center justify-between text-[11px] tabular-nums text-[var(--muted)]">
+          <span>{min}</span>
+          <span>{max}</span>
+        </div>
+      </div>
+    </Field>
   );
 }
 
@@ -200,9 +294,22 @@ export function SettingsPanel({
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-auto p-3 text-left">
-      <Section title="Theme">
-        <div className="flex flex-col gap-1.5">
+    <div className="h-full min-h-0 overflow-auto bg-[var(--background)] text-left">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-5 md:px-6 md:py-6">
+        <div className="rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_10%,transparent)] px-5 py-5">
+          <div>
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight text-[var(--foreground)]">Settings</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                Adjust appearance, editing, AI, and collaboration preferences for your workspace.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      <Section title="Appearance" description="Theme and editor presentation settings that affect day-to-day readability.">
+        <Field>
           <Label id="settings-theme" label="Color theme" hint="Choose your preferred color scheme." />
           <Select
             id="settings-theme"
@@ -213,12 +320,13 @@ export function SettingsPanel({
               onThemeChange(newTheme);
             }}
             options={Object.entries(THEME_LABELS).map(([value, label]) => ({ value, label }))}
+            className="mt-3 !px-3 !py-2.5 !text-sm"
           />
-        </div>
+        </Field>
       </Section>
 
-      <Section title="Compiler">
-        <div className="flex flex-col gap-1.5">
+      <Section title="Compiler" description="Control the document engine used when compiling LaTeX sources.">
+        <Field>
           <Label id="settings-latex-engine" label="LaTeX engine" hint="Engine used to compile .tex to PDF." />
           <Select
             id="settings-latex-engine"
@@ -229,116 +337,82 @@ export function SettingsPanel({
               onLatexEngineChange(newEngine);
             }}
             options={Object.entries(LATEX_ENGINE_LABELS).map(([value, label]) => ({ value, label }))}
+            className="mt-3 !px-3 !py-2.5 !text-sm"
           />
-        </div>
+        </Field>
       </Section>
 
-      <Section title="Editor">
-        <div className="flex flex-col gap-1.5">
-          <Label
-            id="settings-font-size"
-            label="Font size"
-            hint={`${EDITOR_FONT_SIZE_LIMITS.min}–${EDITOR_FONT_SIZE_LIMITS.max} px.`}
-          />
-          <div className="relative flex items-center gap-2 mt-4">
-            <input
-              id="settings-font-size"
-              type="range"
-              min={EDITOR_FONT_SIZE_LIMITS.min}
-              max={EDITOR_FONT_SIZE_LIMITS.max}
-              value={editorFontSize}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setEditorFontSize(v);
-                onEditorFontSizeChange(v);
-              }}
-              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
-            />
-            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{editorFontSize}</span>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label
-            id="settings-tab-size"
-            label="Tab size"
-            hint={`${EDITOR_TAB_SIZE_LIMITS.min}–${EDITOR_TAB_SIZE_LIMITS.max} spaces inserted on Tab.`}
-          />
-          <div className="relative flex items-center gap-2 mt-4">
-            <input
-              id="settings-tab-size"
-              type="range"
-              min={EDITOR_TAB_SIZE_LIMITS.min}
-              max={EDITOR_TAB_SIZE_LIMITS.max}
-              value={editorTabSize}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setEditorTabSize(v);
-                onEditorTabSizeChange(v);
-              }}
-              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
-            />
-            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{editorTabSize}</span>
-          </div>
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <Label id="settings-line-wrapping" label="Line wrapping" />
-          <Toggle
-            id="settings-line-wrapping"
-            checked={editorLineWrapping}
-            onToggle={() => {
-              const next = !editorLineWrapping;
-              setEditorLineWrapping(next);
-              onEditorLineWrappingChange(next);
-            }}
-          />
-        </div>
+      <Section title="Editor" description="Keep editing controls large, readable, and easy to scan.">
+        <SliderField
+          id="settings-font-size"
+          label="Font size"
+          hint={`${EDITOR_FONT_SIZE_LIMITS.min}–${EDITOR_FONT_SIZE_LIMITS.max} px.`}
+          value={editorFontSize}
+          displayValue={`${editorFontSize}px`}
+          min={EDITOR_FONT_SIZE_LIMITS.min}
+          max={EDITOR_FONT_SIZE_LIMITS.max}
+          onChange={(v) => {
+            setEditorFontSize(v);
+            onEditorFontSizeChange(v);
+          }}
+        />
+        <SliderField
+          id="settings-tab-size"
+          label="Tab size"
+          hint={`${EDITOR_TAB_SIZE_LIMITS.min}–${EDITOR_TAB_SIZE_LIMITS.max} spaces inserted on Tab.`}
+          value={editorTabSize}
+          displayValue={`${editorTabSize} spaces`}
+          min={EDITOR_TAB_SIZE_LIMITS.min}
+          max={EDITOR_TAB_SIZE_LIMITS.max}
+          onChange={(v) => {
+            setEditorTabSize(v);
+            onEditorTabSizeChange(v);
+          }}
+        />
+        <ToggleRow
+          id="settings-line-wrapping"
+          label="Line wrapping"
+          hint="Wrap long lines instead of forcing horizontal scrolling."
+          checked={editorLineWrapping}
+          onToggle={() => {
+            const next = !editorLineWrapping;
+            setEditorLineWrapping(next);
+            onEditorLineWrappingChange(next);
+          }}
+        />
       </Section>
 
-      <Section title="Build">
-        <div className="flex items-center justify-between gap-2">
-          <Label
-            id="settings-auto-compile-change"
-            label="Auto-compile on change"
-            hint="Recompile after edits (debounced)."
-          />
-          <Toggle
-            id="settings-auto-compile-change"
-            checked={autoCompileOnChange}
-            onToggle={() => {
-              const next = !autoCompileOnChange;
-              setAutoCompileOnChange(next);
-              onAutoCompileOnChangeChange(next);
-            }}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label
-            id="settings-debounce"
-            label="Auto-compile delay (ms)"
-            hint={`${AUTO_COMPILE_DEBOUNCE_LIMITS.min}–${AUTO_COMPILE_DEBOUNCE_LIMITS.max} ms.`}
-          />
-          <div className="relative flex items-center gap-2 mt-4">
-            <input
-              id="settings-debounce"
-              type="range"
-              min={AUTO_COMPILE_DEBOUNCE_LIMITS.min}
-              max={AUTO_COMPILE_DEBOUNCE_LIMITS.max}
-              step={100}
-              value={autoCompileDebounceMs}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                setAutoCompileDebounceMs(v);
-                onAutoCompileDebounceMsChange(v);
-              }}
-              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
-            />
-            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{autoCompileDebounceMs}</span>
-          </div>
-        </div>
+      <Section title="Build" description="Choose how aggressively the preview recompiles while you work.">
+        <ToggleRow
+          id="settings-auto-compile-change"
+          label="Auto-compile on change"
+          hint="Recompile after edits using a debounce delay."
+          checked={autoCompileOnChange}
+          onToggle={() => {
+            const next = !autoCompileOnChange;
+            setAutoCompileOnChange(next);
+            onAutoCompileOnChangeChange(next);
+          }}
+        />
+        <SliderField
+          id="settings-debounce"
+          label="Auto-compile delay"
+          hint={`${AUTO_COMPILE_DEBOUNCE_LIMITS.min}–${AUTO_COMPILE_DEBOUNCE_LIMITS.max} ms.`}
+          value={autoCompileDebounceMs}
+          displayValue={`${autoCompileDebounceMs} ms`}
+          min={AUTO_COMPILE_DEBOUNCE_LIMITS.min}
+          max={AUTO_COMPILE_DEBOUNCE_LIMITS.max}
+          step={100}
+          onChange={(v) => {
+            setAutoCompileDebounceMs(v);
+            onAutoCompileDebounceMsChange(v);
+          }}
+        />
       </Section>
+        </div>
 
-      <Section title="AI">
-        <div className="flex flex-col gap-1.5">
+        <Section title="AI" description="Model-specific behavior, generation limits, and prompt customizations.">
+        <Field>
           <Label
             id="settings-ai-model"
             label="Model"
@@ -349,76 +423,58 @@ export function SettingsPanel({
             value={settingsModelId}
             onChange={(value) => onSettingsModelChange(value)}
             options={availableModels.map((model) => ({ value: model.id, label: model.label }))}
+            className="mt-3 !px-3 !py-2.5 !text-sm"
           />
-        </div>
-        <div className="text-xs text-[var(--muted)]">Editing stored AI settings for {settingsModel.label}</div>
-        <div className="flex flex-col gap-1.5">
-          <Label
-            id="settings-ai-max-tokens"
-            label="Max new tokens"
-            hint={`Optional safeguard for ${settingsModel.label}. Default is no app cap; set a value only if you want to limit responses.`}
-          />
-          <div className="relative flex items-center gap-2 mt-4">
-            <input
-              id="settings-ai-max-tokens"
-              type="range"
-              min={aiMaxTokensUiMin}
-              max={aiMaxTokensUiMax}
-              step={128}
-              value={aiMaxNewTokens}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                onAiMaxNewTokensChange(v);
-              }}
-              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
-            />
-            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{aiMaxNewTokens === 0 ? "No cap" : aiMaxNewTokens}</span>
+          <div className="mt-3 rounded-xl border border-[color-mix(in_srgb,var(--accent)_18%,transparent)] bg-[color-mix(in_srgb,var(--accent)_8%,transparent)] px-3 py-2 text-xs text-[var(--muted)]">
+            Editing stored AI settings for <span className="font-medium text-[var(--foreground)]">{settingsModel.label}</span>
           </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label id="settings-ai-temperature" label="Temperature" hint="Higher = more random." />
-          <div className="relative flex items-center gap-2 mt-4">
-            <input
-              id="settings-ai-temperature"
-              type="range"
-              min={AI_TEMPERATURE_LIMITS.min * 100}
-              max={AI_TEMPERATURE_LIMITS.max * 100}
-              step={5}
-              value={Math.round(aiTemperature * 100)}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10) / 100;
-                setAiTemperature(v);
-                onAiTemperatureChange(v);
-              }}
-              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
-            />
-            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{aiTemperature.toFixed(2)}</span>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label id="settings-ai-top-p" label="Top-p (nucleus)" hint="Sampling threshold." />
-          <div className="relative flex items-center gap-2 mt-4">
-            <input
-              id="settings-ai-top-p"
-              type="range"
-              min={AI_TOP_P_LIMITS.min * 100}
-              max={AI_TOP_P_LIMITS.max * 100}
-              step={5}
-              value={Math.round(aiTopP * 100)}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10) / 100;
-                setAiTopP(v);
-                onAiTopPChange(v);
-              }}
-              className="flex-1 h-2 rounded bg-[color-mix(in_srgb,var(--border)_60%,transparent)] accent-[var(--accent)]"
-            />
-            <span className="absolute text-xs text-[var(--muted)] tabular-nums pointer-events-none" style={{ left: '50%', transform: 'translateX(-50%) translateY(-100%)', top: '-10px' }}>{aiTopP.toFixed(2)}</span>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
+        </Field>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <SliderField
+          id="settings-ai-max-tokens"
+          label="Max new tokens"
+          hint={`Optional safeguard for ${settingsModel.label}. Default is no app cap; set a value only if you want to limit responses.`}
+          value={aiMaxNewTokens}
+          displayValue={aiMaxNewTokens === 0 ? "No cap" : String(aiMaxNewTokens)}
+          min={aiMaxTokensUiMin}
+          max={aiMaxTokensUiMax}
+          step={128}
+          onChange={(v) => onAiMaxNewTokensChange(v)}
+        />
+        <SliderField
+          id="settings-ai-temperature"
+          label="Temperature"
+          hint="Higher values produce more varied output."
+          value={Math.round(aiTemperature * 100)}
+          displayValue={aiTemperature.toFixed(2)}
+          min={AI_TEMPERATURE_LIMITS.min * 100}
+          max={AI_TEMPERATURE_LIMITS.max * 100}
+          step={5}
+          onChange={(v) => {
+            const next = v / 100;
+            setAiTemperature(next);
+            onAiTemperatureChange(next);
+          }}
+        />
+        <SliderField
+          id="settings-ai-top-p"
+          label="Top-p"
+          hint="Nucleus sampling threshold."
+          value={Math.round(aiTopP * 100)}
+          displayValue={aiTopP.toFixed(2)}
+          min={AI_TOP_P_LIMITS.min * 100}
+          max={AI_TOP_P_LIMITS.max * 100}
+          step={5}
+          onChange={(v) => {
+            const next = v / 100;
+            setAiTopP(next);
+            onAiTopPChange(next);
+          }}
+        />
+        <Field>
           <Label 
             id="settings-context-window" 
-            label="Context Window Size" 
+            label="Context window" 
             hint={`Context budget for ${settingsModel.label}. Model max: ${Math.round(settingsModel.maxContextTokens / 1024)}K tokens.`} 
           />
           <Select
@@ -428,25 +484,25 @@ export function SettingsPanel({
               onAiContextWindowChange(value);
             }}
             options={contextOptions}
+            className="mt-3 !px-3 !py-2.5 !text-sm"
           />
+        </Field>
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <Label 
-            id="settings-ai-vision" 
-            label="Enable Vision Processing" 
-            hint={settingsModel.vision ? `Allow image analysis with ${settingsModel.label}.` : `${settingsModel.label} does not support vision input.`} 
-          />
-          <Toggle
-            id="settings-ai-vision"
-            checked={aiVisionEnabled}
-            onToggle={() => {
-              const next = !aiVisionEnabled;
-              setAiVisionEnabled(next);
-              onAiVisionEnabledChange(next);
-            }}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
+        <ToggleRow
+          id="settings-ai-vision"
+          label="Vision processing"
+          hint={settingsModel.vision ? `Allow image analysis with ${settingsModel.label}.` : `${settingsModel.label} does not support vision input.`}
+          checked={aiVisionEnabled}
+          disabled={!settingsModel.vision}
+          onToggle={() => {
+            if (!settingsModel.vision) return;
+            const next = !aiVisionEnabled;
+            setAiVisionEnabled(next);
+            onAiVisionEnabledChange(next);
+          }}
+        />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Field>
           <Label
             id="settings-prompt-ask"
             label="Ask mode system prompt"
@@ -461,7 +517,7 @@ export function SettingsPanel({
             }}
             placeholder={DEFAULT_PROMPT_ASK}
             rows={4}
-            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] placeholder-[var(--muted)] resize-y min-h-[80px]"
+            className="mt-3 min-h-[120px] w-full resize-y rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] px-3 py-2.5 text-sm leading-6 text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
           />
           <button
             type="button"
@@ -469,12 +525,12 @@ export function SettingsPanel({
               setPromptAsk("");
               onPromptAskChange("");
             }}
-            className="text-xs text-[var(--muted)] hover:text-[var(--foreground)]"
+            className="mt-3 inline-flex rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
           >
             Restore default
           </button>
-        </div>
-        <div className="flex flex-col gap-1.5">
+        </Field>
+        <Field>
           <Label
             id="settings-prompt-create"
             label="Create mode system prompt"
@@ -489,7 +545,7 @@ export function SettingsPanel({
             }}
             placeholder={DEFAULT_PROMPT_CREATE}
             rows={4}
-            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] placeholder-[var(--muted)] resize-y min-h-[80px]"
+            className="mt-3 min-h-[120px] w-full resize-y rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] px-3 py-2.5 text-sm leading-6 text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
           />
           <button
             type="button"
@@ -497,35 +553,30 @@ export function SettingsPanel({
               setPromptCreate("");
               onPromptCreateChange("");
             }}
-            className="text-xs text-[var(--muted)] hover:text-[var(--foreground)]"
+            className="mt-3 inline-flex rounded-lg border border-[var(--border)] px-3 py-2 text-xs font-medium text-[var(--muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] hover:text-[var(--foreground)]"
           >
             Restore default
           </button>
+        </Field>
         </div>
       </Section>
 
-      <Section title="WebRTC Collaboration">
-        <div className="flex items-center justify-between gap-4">
-          <Label
-            id="settings-webrtc-enabled"
-            label="Enable real-time collaboration"
-            hint="Allow other users to edit documents with you via WebRTC."
-          />
-          <div className="flex items-center">
-            <Toggle
-              id="settings-webrtc-enabled"
-              checked={webrtcConfig.enabled}
-              onToggle={() => {
-                const newConfig = { ...webrtcConfig, enabled: !webrtcConfig.enabled };
-                setWebrtcConfig(newConfig);
-                setWebRTCSignalingConfig(newConfig);
-                onWebRTCSignalingConfigChange(newConfig);
-              }}
-            />
-          </div>
-        </div>
+      <Section title="WebRTC Collaboration" description="Keep collaboration setup clear and separated from day-to-day editor preferences.">
+        <ToggleRow
+          id="settings-webrtc-enabled"
+          label="Enable real-time collaboration"
+          hint="Allow other users to edit documents with you via WebRTC."
+          checked={webrtcConfig.enabled}
+          onToggle={() => {
+            const newConfig = { ...webrtcConfig, enabled: !webrtcConfig.enabled };
+            setWebrtcConfig(newConfig);
+            setWebRTCSignalingConfig(newConfig);
+            onWebRTCSignalingConfigChange(newConfig);
+          }}
+        />
 
-        <div className="flex flex-col gap-1.5">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Field>
           <Label
             id="settings-webrtc-servers"
             label="Custom signaling servers"
@@ -543,11 +594,11 @@ export function SettingsPanel({
             }}
             placeholder="wss://your-signaling-server.com:4444&#10;wss://backup-server.com"
             rows={3}
-            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] placeholder-[var(--muted)] resize-y min-h-[60px] font-mono"
+            className="mt-3 min-h-[120px] w-full resize-y rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] px-3 py-2.5 font-mono text-sm leading-6 text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
+        <Field>
           <Label
             id="settings-webrtc-password"
             label="Signaling password (optional)"
@@ -564,11 +615,11 @@ export function SettingsPanel({
               onWebRTCSignalingConfigChange(newConfig);
             }}
             placeholder="Optional encryption password"
-            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] placeholder-[var(--muted)]"
+            className="mt-3 w-full rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] px-3 py-2.5 text-sm text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
+        <Field>
           <Label
             id="settings-webrtc-max-connections"
             label="Maximum peer connections"
@@ -587,53 +638,54 @@ export function SettingsPanel({
               setWebRTCSignalingConfig(newConfig);
               onWebRTCSignalingConfigChange(newConfig);
             }}
-            className="w-full text-sm rounded bg-[color-mix(in_srgb,var(--border)_18%,transparent)] border border-[var(--border)] text-[var(--foreground)] px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)] placeholder-[var(--muted)]"
+            className="mt-3 w-full rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)] px-3 py-2.5 text-sm text-[var(--foreground)] placeholder-[var(--muted)] focus:outline-none focus:ring-1 focus:ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
           />
-        </div>
+        </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <div className="text-xs text-[var(--muted)] p-2 rounded bg-[color-mix(in_srgb,var(--border)_10%,transparent)]">
-            <p className="font-medium mb-1">WebRTC Collaboration Tips:</p>
-            <ul className="space-y-0.5 text-xs">
-              <li>Share the project URL with collaborators to connect</li>
-              <li>Works best with 2-10 users per project</li>
-              <li>Custom servers provide better privacy and reliability</li>
-              <li>Password protects signaling traffic, not the documents themselves</li>
+        <Field>
+          <div className="text-xs text-[var(--muted)]">
+            <p className="mb-2 text-sm font-medium text-[var(--foreground)]">Collaboration tips</p>
+            <ul className="space-y-2 leading-5">
+              <li>Share the project URL with collaborators to connect.</li>
+              <li>WebRTC works best with small groups, usually 2-10 users.</li>
+              <li>Custom servers improve privacy and reliability.</li>
+              <li>Password protects signaling traffic, not the documents themselves.</li>
             </ul>
           </div>
+        </Field>
         </div>
       </Section>
 
-      <Section title="Filetree">
-        <div className="flex items-center justify-between gap-2">
-          <Label
-            id="settings-show-hidden-yjs-docs"
-            label="Show hidden Y.js documents"
-            hint="Display internal Y.js documents (chats, filetree) in the filetree for advanced debugging."
-          />
-          <Toggle
-            id="settings-show-hidden-yjs-docs"
-            checked={showHiddenYjsDocs}
-            onToggle={() => {
-              const next = !showHiddenYjsDocs;
-              onShowHiddenYjsDocsChange(next);
-            }}
-          />
-        </div>
+      <Section title="Filetree" description="Advanced visibility controls for internal project data.">
+        <ToggleRow
+          id="settings-show-hidden-yjs-docs"
+          label="Show hidden Y.js documents"
+          hint="Display internal Y.js documents in the filetree for advanced debugging."
+          checked={showHiddenYjsDocs}
+          onToggle={() => {
+            const next = !showHiddenYjsDocs;
+            onShowHiddenYjsDocsChange(next);
+          }}
+        />
       </Section>
 
-      <Section title="Reset">
-        <p className="text-xs text-[var(--muted)] mb-2">
-          Restore all settings to their default values. This cannot be undone.
-        </p>
-        <button
-          type="button"
-          onClick={handleResetAll}
-          className="px-3 py-2 text-sm rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors"
-        >
-          Reset all to defaults
-        </button>
+      <Section title="Reset" description="Restore the default app configuration if you want a clean baseline.">
+        <Field>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <p className="max-w-xl text-sm leading-6 text-[var(--muted)]">
+              Restore all settings to their default values. This affects editor, AI, collaboration, and appearance preferences.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetAll}
+              className="inline-flex shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_22%,transparent)] px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+            >
+              Reset all to defaults
+            </button>
+          </div>
+        </Field>
       </Section>
+      </div>
     </div>
   );
 }

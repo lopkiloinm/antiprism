@@ -548,32 +548,34 @@ export default function AnimatedHero() {
                   </div>
                   
                   {/* AI Input Box */}
-                  <div className={`relative rounded-xl border bg-white p-2 flex items-center gap-2 mt-auto sticky bottom-0 transition-all duration-300 ${
-                    (step === "PROMPTING_TEXT" || step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE") 
-                      ? "border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]" 
-                      : "border-zinc-200 shadow-sm"
+                  <div className={`relative rounded-xl border bg-white p-2 gap-2 mt-auto sticky bottom-0 transition-all duration-300 ${
+                    (step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE") 
+                      ? "flex flex-col border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]" 
+                      : "flex items-center border-zinc-200 shadow-sm"
                   }`}>
                     {(step === "UPLOAD_IMAGE" || step === "PROMPTING_IMAGE") && (
-                      <div className="relative h-16 w-24 rounded-lg bg-white flex flex-col items-center justify-center border border-zinc-200 overflow-hidden shadow-sm shrink-0 mb-0.5 ml-0.5">
+                      <div className="relative h-16 w-24 rounded-lg bg-white flex flex-col items-center justify-center border border-zinc-200 overflow-hidden shadow-sm shrink-0">
                         <span className="font-serif text-sm text-black">I ∝ 1/λ⁴</span>
                       </div>
                     )}
                     
-                    {isQwen && step !== "UPLOAD_IMAGE" && step !== "PROMPTING_IMAGE" && (
-                      <button className="text-zinc-400 hover:text-zinc-600 p-1.5 relative rounded-md hover:bg-zinc-50 transition-colors shrink-0 self-center">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                      </button>
-                    )}
-                    
-                    <div className="flex-1 min-h-[32px] bg-transparent text-[14px] text-zinc-600 flex items-center px-1">
-                      {step === "PROMPTING_TEXT" ? (promptText || <span className="text-zinc-400">Ask anything</span>) : 
-                       step === "PROMPTING_IMAGE" ? (visionPromptText || <span className="text-zinc-400">Ask anything</span>) : 
-                       (step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") ? "" : 
-                       <span className="text-zinc-400">Ask anything</span>}
-                    </div>
-                    
-                    <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-400 shrink-0 self-center">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    <div className="flex items-center gap-2 flex-1">
+                      {isQwen && step !== "UPLOAD_IMAGE" && step !== "PROMPTING_IMAGE" && (
+                        <button className="text-zinc-400 hover:text-zinc-600 p-1.5 relative rounded-md hover:bg-zinc-50 transition-colors shrink-0">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        </button>
+                      )}
+                      
+                      <div className="flex-1 min-h-[32px] bg-transparent text-[14px] text-zinc-600 flex items-center px-1">
+                        {step === "PROMPTING_TEXT" ? (promptText || <span className="text-zinc-400">Ask anything</span>) : 
+                         step === "PROMPTING_IMAGE" ? (visionPromptText || <span className="text-zinc-400">Ask anything</span>) : 
+                         (step === "THINKING_STREAM" || step === "CODE_GEN_STREAM" || step === "SHOW_DIFF" || step === "VISION_TRANSITION" || step === "WORKSPACE_VISION" || step === "MODEL_SELECT_QWEN" || step === "MODEL_DOWNLOAD_QWEN" || step === "UPLOAD_IMAGE" || step === "MULTIMODAL_STREAM" || step === "WEBRTC_TRANSITION" || step === "REALTIME_SYNC") ? "" : 
+                         <span className="text-zinc-400">Ask anything</span>}
+                      </div>
+                      
+                      <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-400 shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                      </div>
                     </div>
                   </div>
                 </div>

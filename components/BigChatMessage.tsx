@@ -13,7 +13,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-  responseType?: "ask" | "agent";
+  responseType?: "ask" | "agent" | "edit";
   createdPath?: string;
   markdown?: string;
   image?: string;
@@ -47,12 +47,12 @@ export function BigChatMessage({
   const [thinkingDurationMs, setThinkingDurationMs] = useState<number | undefined>(message.thinkingDurationMs);
   const effectiveThinkingContent = persistedThinkingContent || parsedThinking.thinking;
   const assistantDisplayContent = stripThinkingTags(message.content);
+  const hasAssistantDisplayContent = assistantDisplayContent.trim().length > 0;
   const shouldRenderAssistantBubble =
     message.role !== "assistant" ||
     message.image ||
-    message.responseType === "agent" ||
     message.content === "Thinking..." ||
-    !!assistantDisplayContent;
+    hasAssistantDisplayContent;
 
   const emitMessageUpdate = (overrides: Partial<ChatMessage>) => {
     onUpdateMessage?.({
@@ -63,6 +63,24 @@ export function BigChatMessage({
       ...overrides,
     });
   };
+
+  useEffect(() => {
+    if (message.thinkingContent && message.thinkingContent !== persistedThinkingContent) {
+      setPersistedThinkingContent(message.thinkingContent);
+    }
+  }, [message.thinkingContent, persistedThinkingContent]);
+
+  useEffect(() => {
+    if (message.thinkingStartedAt !== thinkingStartedAt) {
+      setThinkingStartedAt(message.thinkingStartedAt);
+    }
+  }, [message.thinkingStartedAt, thinkingStartedAt]);
+
+  useEffect(() => {
+    if (message.thinkingDurationMs !== thinkingDurationMs) {
+      setThinkingDurationMs(message.thinkingDurationMs);
+    }
+  }, [message.thinkingDurationMs, thinkingDurationMs]);
 
   useEffect(() => {
     if (message.role !== "assistant") {
@@ -133,10 +151,9 @@ export function BigChatMessage({
             <span className="whitespace-pre-wrap">{message.content}</span>
           )}
         </div>
-      ) : message.role === "assistant" && message.responseType === "agent" ? (
+      ) : message.role === "assistant" && (message.responseType === "agent" || message.responseType === "edit") && hasAssistantDisplayContent ? (
         <pre
-          ref={isLast && message.role === "assistant" ? lastMessageRef : undefined}
-          className="text-sm overflow-x-auto whitespace-pre-wrap break-words font-mono max-w-[85%]"
+          className="text-sm overflow-x-auto whitespace-pre-wrap break-words font-mono max-w-[85%] rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_22%,transparent)] p-3"
         >
           {assistantDisplayContent}
         </pre>

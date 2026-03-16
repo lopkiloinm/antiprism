@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { IconSend, IconImage } from "@/components/Icons";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { IconSend, IconImage, IconMessageSquare, IconBraces, IconPencil } from "@/components/Icons";
 import { ModelDropdown } from "@/components/ModelDropdown";
 
 interface ChatInputProps {
   chatInput: string;
   setChatInput: (v: string) => void;
-  chatMode: "ask" | "agent";
-  setChatMode: (m: "ask" | "agent") => void;
+  chatMode: "ask" | "agent" | "edit";
+  setChatMode: (m: "ask" | "agent" | "edit") => void;
   isGenerating: boolean;
   onSend: () => void;
   selectedModelId?: string;
@@ -33,6 +34,16 @@ export function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modeButtonRef = useRef<HTMLButtonElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ bottom: 0, left: 0 });
+  const modeOptions = [
+    { value: "ask" as const, label: "Ask", title: "Ask mode", Icon: IconMessageSquare },
+    { value: "agent" as const, label: "Create", title: "Create mode: create new LaTeX files", Icon: IconBraces },
+    { value: "edit" as const, label: "Edit", title: "Edit mode: revise the active file and open a diff", Icon: IconPencil },
+  ];
+  const activeMode = modeOptions.find((option) => option.value === chatMode) ?? modeOptions[0];
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -98,6 +109,63 @@ export function ChatInput({
     el.style.overflowY = h >= 280 ? "auto" : "hidden";
   }, [chatInput]);
 
+  useEffect(() => {
+    if (!isModeMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      const inButton = !!modeButtonRef.current && modeButtonRef.current.contains(target);
+      const inMenu = !!modeMenuRef.current && modeMenuRef.current.contains(target);
+      if (!inButton && !inMenu) {
+        setIsModeMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsModeMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isModeMenuOpen]);
+
+  const recomputeMenuPosition = useCallback(() => {
+    if (!modeButtonRef.current) return;
+    const rect = modeButtonRef.current.getBoundingClientRect();
+    const gap = 6;
+    const bottom = Math.max(8, window.innerHeight - rect.top + gap);
+    const left = rect.left;
+    setMenuPosition({ bottom, left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isModeMenuOpen) return;
+    recomputeMenuPosition();
+    requestAnimationFrame(() => recomputeMenuPosition());
+  }, [isModeMenuOpen, recomputeMenuPosition]);
+
+  useEffect(() => {
+    if (!isModeMenuOpen) return;
+
+    const onScroll = () => recomputeMenuPosition();
+    const onResize = () => recomputeMenuPosition();
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isModeMenuOpen, recomputeMenuPosition]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -127,27 +195,63 @@ export function ChatInput({
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={chatMode === "ask" ? "Ask about your LaTeX (⌘⏎)" : "Describe the document to create (⌘⏎)"}
+          placeholder={
+            chatMode === "ask"
+              ? "Ask about the current file (⌘⏎)"
+              : chatMode === "agent"
+                ? "Describe the document to create (⌘⏎)"
+                : "Describe the edits to make to the active file (⌘⏎)"
+          }
           rows={1}
         />
       </div>
       <div className="flex items-center justify-between gap-2 px-3 py-2 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="flex rounded bg-[color-mix(in_srgb,var(--border)_22%,transparent)] border border-[var(--border)] overflow-hidden">
+          <div className="relative">
             <button
-              onClick={() => setChatMode("ask")}
-              className={`px-2 py-1 text-xs font-medium transition-colors ${chatMode === "ask" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-              title="Ask mode"
+              ref={modeButtonRef}
+              type="button"
+              onClick={() => setIsModeMenuOpen((open) => !open)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded border border-[var(--border)] bg-[color-mix(in_srgb,var(--border)_22%,transparent)] text-[var(--foreground)] transition-colors hover:bg-[color-mix(in_srgb,var(--border)_40%,transparent)]"
+              title={activeMode.title}
+              aria-haspopup="menu"
+              aria-expanded={isModeMenuOpen}
             >
-              Ask
+              <activeMode.Icon />
             </button>
-            <button
-              onClick={() => setChatMode("agent")}
-              className={`px-2 py-1 text-xs font-medium transition-colors ${chatMode === "agent" ? "bg-[color-mix(in_srgb,var(--border)_55%,transparent)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-              title="Create mode: create new LaTeX files"
-            >
-              Create
-            </button>
+            {isModeMenuOpen && createPortal(
+              <div
+                ref={modeMenuRef}
+                style={{
+                  position: "fixed",
+                  bottom: menuPosition.bottom,
+                  left: menuPosition.left,
+                  zIndex: 999999,
+                  minWidth: "160px",
+                }}
+                className="rounded border border-[var(--border)] bg-[var(--background)] shadow-xl overflow-hidden"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                {modeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setChatMode(option.value);
+                      setIsModeMenuOpen(false);
+                    }}
+                    className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${chatMode === option.value ? "bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] text-[var(--accent)]" : "text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"}`}
+                    title={option.title}
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center">
+                      <option.Icon />
+                    </span>
+                    <span>{option.label}</span>
+                  </button>
+                ))}
+              </div>,
+              document.body
+            )}
           </div>
           {selectedModelId && onModelChange && (
             <ModelDropdown
@@ -162,7 +266,7 @@ export function ChatInput({
               {chatInput.length > 0 ? chatInput.length : ''}
             </div>
             <div className="flex items-center gap-1">
-              {isVisionModel && onImageChange && (
+              {isVisionModel && onImageChange && chatMode !== "edit" && (
                 <button
                   className="w-6 h-6 rounded flex items-center justify-center text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)] transition-colors shrink-0"
                   onClick={() => fileInputRef.current?.click()}

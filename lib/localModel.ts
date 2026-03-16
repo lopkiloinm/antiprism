@@ -22,6 +22,7 @@ import {
   buildMessages,
   parseAskResponse,
   parseCreateResponse,
+  parseEditResponse,
   type AgentResponse,
   type AgentMode,
   type PriorMessage,
@@ -87,6 +88,9 @@ export async function generateChatResponse(
       const { latex, title, markdown } = await parseCreateResponse(rawOutput);
       return { type: "agent", content: latex, title, markdown };
     }
+    if (mode === "edit") {
+      return { type: "edit", content: parseEditResponse(rawOutput) };
+    }
     return { type: "ask", content: parseAskResponse(rawOutput) };
   }
 
@@ -94,6 +98,9 @@ export async function generateChatResponse(
   if (mode === "agent") {
     const { latex, title, markdown } = await parseCreateResponse(rawOutput);
     return { type: "agent", content: latex, title, markdown };
+  }
+  if (mode === "edit") {
+    return { type: "edit", content: parseEditResponse(rawOutput) };
   }
   return { type: "ask", content: parseAskResponse(rawOutput) };
 }

@@ -6,10 +6,12 @@
 export type { ChatMessage, PriorMessage, AgentMode, AgentResponse } from "./types";
 export { buildAskMessages, parseAskResponse } from "./ask";
 export { buildCreateMessages, parseCreateResponse, type CreateParseResult } from "./create";
+export { buildEditMessages, parseEditResponse } from "./edit";
 
 import type { ChatMessage, PriorMessage, AgentMode } from "./types";
 import { buildAskMessages } from "./ask";
 import { buildCreateMessages } from "./create";
+import { buildEditMessages } from "./edit";
 import { getPromptAsk, getPromptCreate } from "../settings";
 
 /**
@@ -24,6 +26,9 @@ export function buildMessages(
 ): ChatMessage[] {
   if (mode === "agent") {
     return buildCreateMessages(userMessage, priorMessages, getPromptCreate() || undefined);
+  }
+  if (mode === "edit") {
+    return buildEditMessages(userMessage, context, priorMessages);
   }
   return buildAskMessages(userMessage, context, priorMessages, getPromptAsk() || undefined);
 }

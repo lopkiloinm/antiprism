@@ -151,13 +151,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [bigChatMessages, setBigChatMessages] = useState<
-    { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent"; createdPath?: string; markdown?: string }[]
+    { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent" | "edit"; createdPath?: string; markdown?: string }[]
   >([]);
   const [smallChatMessages, setSmallChatMessages] = useState<
     { 
       role: "user" | "assistant"; 
       content: string; 
-      responseType?: "ask" | "agent"; 
+      responseType?: "ask" | "agent" | "edit"; 
       createdPath?: string; 
       markdown?: string;
       thinkingExpanded?: boolean;
@@ -470,7 +470,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [chatImageDataUrl, setChatImageDataUrl] = useState<string | null>(null);
 
   
-  const [chatMode, setChatMode] = useState<"ask" | "agent">("ask");
+  const [chatMode, setChatMode] = useState<"ask" | "agent" | "edit">("ask");
   const [latexEngine, setLatexEngineState] = useState<LaTeXEngine>(() => getLatexEngine());
   const [editorFontSize, setEditorFontSizeState] = useState(() => getEditorFontSize());
   const [editorTabSize, setEditorTabSizeState] = useState(() => getEditorTabSize());
@@ -2467,6 +2467,54 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     [openTabs, activeTabPath, currentPath, basePath, fs, imageUrlCache, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent]
   );
 
+  const handleAcceptEditDiff = useCallback(async (diffPath: string) => {
+    if (!fs) return;
+
+    const diffTab = openTabs.find((tab) => tab.path === diffPath);
+    const diffData = diffTab?.diffData;
+    if (!diffTab || !diffData) return;
+
+    const targetPath = diffData.filePath;
+    const nextContent = diffData.currentContent;
+    const targetDoc = fileDocManagerRef.current?.getDocument(targetPath, true);
+    const targetYText = targetDoc?.text ?? null;
+    if (targetYText) {
+      targetYText.delete(0, targetYText.length);
+      targetYText.insert(0, nextContent);
+    }
+
+    const lowerPath = targetPath.toLowerCase();
+    const mimeType = lowerPath.endsWith(".typ")
+      ? "text/x-typst"
+      : lowerPath.endsWith(".json")
+        ? "application/json"
+        : "text/x-tex";
+
+    try {
+      const exists = await fs.exists(targetPath).catch(() => false);
+      if (exists) {
+        await fs.rm(targetPath, false).catch(() => undefined);
+      }
+      await fs.writeFile(
+        targetPath,
+        new TextEncoder().encode(nextContent).buffer as ArrayBuffer,
+        { mimeType }
+      );
+    } catch (error) {
+      console.warn("Failed to persist accepted AI edit:", error);
+    }
+
+    textContentCacheRef.current.set(targetPath, nextContent);
+    setOpenTabs((tabs) => tabs.filter((tab) => tab.path !== diffPath));
+    setActiveTabPath(targetPath);
+    setCurrentPath(targetPath);
+    setRefreshTrigger((t) => t + 1);
+  }, [fs, openTabs]);
+
+  const handleDismissEditDiff = useCallback((diffPath: string) => {
+    handleTabClose(diffPath);
+  }, [handleTabClose]);
+
   // Handle file delete
   const handleFileDelete = useCallback(
     async (item: TreeItem) => {
@@ -2868,6 +2916,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     const currentModelDef = getModelById(selectedModelId);
     const isVision = !!currentModelDef.vision;
     const capturedImage = chatImageDataUrl;
+    const activeEditTab = openTabs.find((t) => t.path === activeTabPathRef.current);
+    const isEditMode = chatMode === "edit";
     const aiEventId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     aiLogger.info("handleSendChat start", {
       aiEventId,
@@ -2881,6 +2931,24 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       bigChatCount: bigChatMessages.length,
       smallChatCount: smallChatMessages.length,
     });
+
+    if (isEditMode && (activeEditTab?.type !== "text" || activeTabPathRef.current.endsWith(":diff"))) {
+      const errorMessage = { role: "assistant" as const, content: "Error: Edit mode requires an open text file as the active tab." };
+      const setMsgs = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
+      setMsgs((msgs: any[]) => [...msgs, { role: "user", content: userMessage }, errorMessage]);
+      setChatInput("");
+      setChatImageDataUrl(null);
+      return;
+    }
+
+    if (isEditMode && isVision) {
+      const errorMessage = { role: "assistant" as const, content: "Error: Edit mode currently requires a text model, not a vision model." };
+      const setMsgs = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
+      setMsgs((msgs: any[]) => [...msgs, { role: "user", content: userMessage }, errorMessage]);
+      setChatInput("");
+      setChatImageDataUrl(null);
+      return;
+    }
     
     // Check if model is loaded, if not, load it first
     if (isVision) {
@@ -2936,6 +3004,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       // 🎯 CRITICAL: Get current tab's content, not stale global ytext
       const currentYText = getCurrentYText();
       const context = currentYText?.toString() ?? "";
+      const editTargetPath = activeTabPathRef.current;
       aiLogger.info("AI context prepared", {
         aiEventId,
         activeTabPath: activeTabPathRef.current,
@@ -2959,7 +3028,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         console.log('--- MODE ---');
         console.log(chatMode);
         console.log('--- FULL PROMPT WOULD BE ---');
-        const fullPrompt = isAsk ? `Context:\n${context}\n\nUser: ${userMessage}` : userMessage;
+        const fullPrompt = chatMode === "ask" || chatMode === "edit" ? `Context:\n${context}\n\nUser: ${userMessage}` : userMessage;
         console.log(fullPrompt.length > 2000 ? fullPrompt.substring(0, 2000) + "... (truncated)" : fullPrompt);
         
         // Add debug response to chat
@@ -2998,8 +3067,14 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           const next = [...msgs];
           const li = next.length - 1;
           if (li >= 0 && next[li].role === "assistant") {
-            const prev = next[li].content === "Thinking..." ? "" : next[li].content;
-            next[li] = { role: "assistant", content: prev + text, responseType: chatMode };
+            const previousAssistant = next[li];
+            const prev = previousAssistant.content === "Thinking..." ? "" : previousAssistant.content;
+            next[li] = {
+              ...previousAssistant,
+              role: "assistant",
+              content: prev + text,
+              responseType: chatMode,
+            };
           }
           return next;
         });
@@ -3052,12 +3127,12 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         aiLogger.info("Text generation request", {
           aiEventId,
           mode: chatMode,
-          contextChars: isAsk ? context.length : 0,
+          contextChars: chatMode === "ask" || chatMode === "edit" ? context.length : 0,
           priorMessages: (getCurrentChatContext() === "big" ? bigChatMessages : smallChatMessages).length,
         });
         reply = await generateChatResponse(
           userMessage,
-          isAsk ? context : undefined,
+          chatMode === "ask" || chatMode === "edit" ? context : undefined,
           chatMode,
           {
             onChunk,
@@ -3100,6 +3175,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       }
 
       let createdPath: string | undefined;
+      let editedDiffPath: string | undefined;
       if (reply.type === "agent" && fs && reply.content) {
         const titleText = reply.title ?? reply.content.match(/\\title\s*\{([^{}]+)\}/)?.[1]?.trim() ?? "";
         const slug =
@@ -3125,25 +3201,50 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         setRefreshTrigger((t) => t + 1);
         await handleFileSelect(path);
       }
+      if (reply.type === "edit" && reply.content) {
+        const sourcePath = editTargetPath.endsWith(":diff") ? editTargetPath.replace(":diff", "") : editTargetPath;
+        const diffPath = `${sourcePath}:diff`;
+        editedDiffPath = diffPath;
+        setOpenTabs((tabs) => {
+          const nextTab = {
+            path: diffPath,
+            type: "text" as const,
+            readOnly: true,
+            diffData: {
+              filePath: sourcePath,
+              currentContent: reply.content,
+              originalContent: context,
+            },
+          };
+
+          if (tabs.some((tab) => tab.path === diffPath)) {
+            return tabs.map((tab) => (tab.path === diffPath ? { ...tab, ...nextTab } : tab));
+          }
+
+          return [...tabs, nextTab];
+        });
+        setActiveTabPath(diffPath);
+        setCurrentPath(sourcePath);
+      }
 
       const chatContext = getCurrentChatContext();
       const setMessages = chatContext === "big" ? setBigChatMessages : setSmallChatMessages;
       setMessages((msgs: any) => {
         const next = [...msgs];
         const lastIdx = next.length - 1;
-        
-        // Preserve accumulated content instead of overwriting
-        const currentContent = lastIdx >= 0 && next[lastIdx].role === "assistant" 
-          ? next[lastIdx].content 
-          : "";
-        
-        // Only use reply.content if it's longer/better than accumulated content
-        const finalContent = reply.content.length > currentContent.length ? reply.content : currentContent;
-        
+        const previousAssistant =
+          lastIdx >= 0 && next[lastIdx].role === "assistant"
+            ? next[lastIdx]
+            : null;
+
         const assistantMsg = {
           role: "assistant" as const,
-          content: finalContent,
+          content: reply.content,
           responseType: reply.type,
+          ...(previousAssistant?.thinkingContent && { thinkingContent: previousAssistant.thinkingContent }),
+          ...(previousAssistant?.thinkingStartedAt && { thinkingStartedAt: previousAssistant.thinkingStartedAt }),
+          ...(typeof previousAssistant?.thinkingDurationMs === "number" && { thinkingDurationMs: previousAssistant.thinkingDurationMs }),
+          ...(typeof previousAssistant?.thinkingExpanded === "boolean" && { thinkingExpanded: previousAssistant.thinkingExpanded }),
           ...(createdPath && { createdPath }),
           ...(reply.type === "agent" && reply.markdown && { markdown: reply.markdown }),
         };
@@ -3160,6 +3261,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         replyType: reply.type,
         replyChars: reply.content.length,
         createdPath,
+        editedDiffPath,
       });
     } catch (e) {
       console.error("Chat Generation Error:", e);
@@ -4647,16 +4749,39 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                         className="absolute inset-0 overflow-hidden"
                       >
                         {isDiffTab && diffData ? (
-                          <GitMergeView
-                            filePath={diffData.filePath}
-                            currentContent={diffData.currentContent}
-                            originalContent={diffData.originalContent}
-                            viewMode={gitDiffViewMode}
-                            className="h-full"
-                            theme={effectiveTheme}
-                            fontSize={editorFontSize}
-                            lineWrapping={editorLineWrapping}
-                          />
+                          <div className="absolute inset-0 flex min-h-0 flex-col overflow-hidden">
+                            <div className="pointer-events-none absolute right-3 top-3 z-10">
+                              <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_92%,transparent)] p-1 shadow-sm backdrop-blur">
+                                <span className="px-2 text-[11px] font-medium text-[var(--muted)]">
+                                  AI edit
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDismissEditDiff(activeTabPath)}
+                                  className="rounded px-2.5 py-1 text-xs text-[var(--foreground)] transition-colors hover:bg-[color-mix(in_srgb,var(--border)_45%,transparent)]"
+                                >
+                                  Reject
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAcceptEditDiff(activeTabPath)}
+                                  className="rounded bg-[var(--accent)] px-2.5 py-1 text-xs text-white transition-colors hover:bg-[var(--accent-hover)]"
+                                >
+                                  Accept
+                                </button>
+                              </div>
+                            </div>
+                            <GitMergeView
+                              filePath={diffData.filePath}
+                              currentContent={diffData.currentContent}
+                              originalContent={diffData.originalContent}
+                              viewMode="unified"
+                              className="min-h-0 flex-1"
+                              theme={effectiveTheme}
+                              fontSize={editorFontSize}
+                              lineWrapping={editorLineWrapping}
+                            />
+                          </div>
                         ) : (
                           (() => {
                             // Don't render until fully initialized

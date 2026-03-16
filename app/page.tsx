@@ -509,7 +509,7 @@ export default function DashboardPage() {
                 {activeNav === "servers" && (
                   <button
                     onClick={handleNewServer}
-                    className="px-2 h-full text-xs text-[var(--foreground)] bg-[var(--accent)] hover:bg-[var(--accent-hover)] rounded-md transition-colors flex items-center gap-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5"
+                    className="px-3 py-1.5 text-xs font-medium text-[var(--foreground)] bg-[var(--background)] border-[var(--border)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded-md transition-colors flex items-center gap-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5"
                     title="Add new signaling server"
                   >
                     <IconPlus />

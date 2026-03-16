@@ -12,8 +12,9 @@ export interface PriorMessage {
   content: string;
 }
 
-export type AgentMode = "ask" | "agent";
+export type AgentMode = "ask" | "agent" | "edit";
 
 export type AgentResponse =
   | { type: "ask"; content: string }
-  | { type: "agent"; content: string; title?: string; markdown?: string };
+  | { type: "agent"; content: string; title?: string; markdown?: string }
+  | { type: "edit"; content: string };
