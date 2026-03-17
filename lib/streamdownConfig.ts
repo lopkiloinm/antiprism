@@ -14,8 +14,8 @@ export const streamdownPlugins = {
 
 // Shared styling classes for both chat interfaces - using Tailwind utilities
 export const chatStreamdownClasses = [
-  // Base styling
-  "max-w-none",
+  // Base styling with proper width constraints
+  "max-w-full",
   "prose-headings:text-[var(--foreground)]",
   "prose-p:text-[var(--foreground)]", 
   "prose-li:text-[var(--foreground)]",
@@ -28,6 +28,26 @@ export const chatStreamdownClasses = [
   "[&_ul]:my-1", 
   "[&_ol]:my-1",
   "[&_li]:my-0",
+  
+  // Line wrapping and overflow handling
+  "[&_p]:whitespace-pre-wrap",
+  "[&_p]:break-words",
+  "[&_p]:overflow-wrap-break-word",
+  
+  // Table overflow handling
+  "[&_table]:w-full",
+  "[&_table]:max-w-full",
+  "[&_table]:overflow-x-auto",
+  "[&_table]:block",
+  "[&_table_td]:whitespace-pre-wrap",
+  "[&_table_td]:break-words",
+  "[&_table_th]:whitespace-pre-wrap",
+  "[&_table_th]:break-words",
+  
+  // Inline code overflow handling
+  "[&_code]:whitespace-pre-wrap",
+  "[&_code]:break-words",
+  "[&_code]:overflow-wrap-break-word",
   
   // Enhanced code block styling using Tailwind
   "[&_pre[data-streamdown='code-block]]:bg-[var(--streamdown-code-bg)]",

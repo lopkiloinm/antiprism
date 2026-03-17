@@ -1,7 +1,7 @@
 "use client";
 import { getModelById, ModelDef } from "./modelConfig";
 import { fireProgressCallback, getActiveModelId } from "./localModel";
-import { parseCreateResponse, type AgentMode, type AgentResponse } from "./agent";
+import { parseCreateResponse, parseEditResponse, type AgentMode, type AgentResponse, type CreateOutputFormat } from "./agent";
 
 function getVLModelDef() {
   const activeId = getActiveModelId();
@@ -104,12 +104,12 @@ export function disposeVLModel() {
   etS = eiS = decS = tok = null; loading = false; loadP = null;
 }
 
-export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
+export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask", createFormat: CreateOutputFormat = "latex"): Promise<string | AgentResponse> {
   if (!isVLModelLoaded()) await initializeVLModel();
   
   // Handle Qwen3.5 with Transformers.js
   if ((window as any).__qwenModel && (window as any).__qwenProcessor) {
-    return generateQwen3_5Response(msgs, cb, maxTok, mode);
+    return generateQwen3_5Response(msgs, cb, maxTok, mode, createFormat);
   }
   
   // Handle other models with raw ONNX
@@ -141,10 +141,23 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
   let emb = await runEmbedTok(ids);
   if (imgEmb) emb = mergeImg(ids, emb, imgEmb);
 
-  return runDecode(emb, ids.length, cb, maxTok);
+  const result = await runDecode(emb, ids.length, cb, maxTok);
+  
+  // Handle Agent mode with pandoc conversion
+  if (mode === "agent") {
+    const { latex, title, markdown, typst } = await parseCreateResponse(result, createFormat);
+    return { type: "agent", content: createFormat === "typst" ? (typst || "") : latex, title, markdown, typst };
+  }
+  
+  // Handle Edit mode with proper parsing
+  if (mode === "edit") {
+    return { type: "edit", content: parseEditResponse(result) };
+  }
+  
+  return result;
 }
 
-async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask"): Promise<string | AgentResponse> {
+async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask", createFormat: CreateOutputFormat = "latex"): Promise<string | AgentResponse> {
   const model = (window as any).__qwenModel;
   const processor = (window as any).__qwenProcessor;
   const { RawImage, TextStreamer } = await import("@huggingface/transformers");
@@ -224,8 +237,13 @@ async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks
   
   // Handle Agent mode with pandoc conversion
   if (mode === "agent") {
-    const { latex, title, markdown } = await parseCreateResponse(result);
-    return { type: "agent", content: latex, title, markdown };
+    const { latex, title, markdown, typst } = await parseCreateResponse(result, createFormat);
+    return { type: "agent", content: createFormat === "typst" ? (typst || "") : latex, title, markdown, typst };
+  }
+  
+  // Handle Edit mode with proper parsing
+  if (mode === "edit") {
+    return { type: "edit", content: parseEditResponse(result) };
   }
   
   return result;

@@ -11,7 +11,9 @@ Keep the document as close as possible to the original except for the requested 
 Preserve structure, formatting style, and unchanged content unless a change is necessary.
 Do not explain your edits.
 Do not wrap the result in code fences.
-Do not prepend or append commentary.`;
+Do not prepend or append commentary.
+
+IMPORTANT: The markers <antiprism_document> and </antiprism_document> are NOT part of the document. They only mark where the document begins and ends. When editing, only modify the actual document content between these markers, never the markers themselves.`;
 
 export function buildEditMessages(
   userMessage: string,
@@ -19,8 +21,8 @@ export function buildEditMessages(
   priorMessages?: PriorMessage[]
 ): ChatMessage[] {
   const originalDocument = context?.trim().length
-    ? `\n\n[CURRENT FILE]\n${context}\n[END CURRENT FILE]`
-    : "\n\n[CURRENT FILE]\n\n[END CURRENT FILE]";
+    ? `\n\n<antiprism_document>\n${context}\n</antiprism_document>`
+    : "\n\n<antiprism_document>\n\n</antiprism_document>";
 
   const prior: ChatMessage[] = (priorMessages ?? []).map((m) => ({ role: m.role, content: m.content }));
 
@@ -45,6 +47,19 @@ export function parseEditResponse(rawOutput: string): string {
   if (fencedMatch) {
     result = fencedMatch[1].trim();
   }
+
+  // Extract content from antiprism_document tags if present
+  const docMatch = result.match(/<antiprism_document>\s*([\s\S]*?)\s*<\/antiprism_document>/);
+  if (docMatch) {
+    result = docMatch[1].trim();
+  }
+
+  // Remove any ask mode markers that might have leaked in
+  result = result
+    .replace(/\s*<antiprism_reference_document>\s*[\s\S]*?<\/antiprism_reference_document>\s*$/i, "")
+    .replace(/\s*<antiprism_reference_document>\s*/gi, "")
+    .replace(/\s*<\/antiprism_reference_document>\s*/gi, "")
+    .trim();
 
   return result;
 }

@@ -16,5 +16,5 @@ export type AgentMode = "ask" | "agent" | "edit";
 
 export type AgentResponse =
   | { type: "ask"; content: string }
-  | { type: "agent"; content: string; title?: string; markdown?: string }
+  | { type: "agent"; content: string; title?: string; markdown?: string; typst?: string }
   | { type: "edit"; content: string };

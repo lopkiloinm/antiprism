@@ -8,8 +8,8 @@ import { ModelDropdown } from "@/components/ModelDropdown";
 interface ChatInputProps {
   chatInput: string;
   setChatInput: (v: string) => void;
-  chatMode: "ask" | "agent" | "edit";
-  setChatMode: (m: "ask" | "agent" | "edit") => void;
+  chatMode: "ask" | "agent-latex" | "agent-typst" | "agent-beamer" | "edit";
+  setChatMode: (m: "ask" | "agent-latex" | "agent-typst" | "agent-beamer" | "edit") => void;
   isGenerating: boolean;
   onSend: () => void;
   selectedModelId?: string;
@@ -17,6 +17,7 @@ interface ChatInputProps {
   imageDataUrl?: string | null;
   onImageChange?: (dataUrl: string | null) => void;
   isVisionModel?: boolean;
+  chatContext?: "big" | "small";
 }
 
 export function ChatInput({
@@ -31,6 +32,7 @@ export function ChatInput({
   imageDataUrl,
   onImageChange,
   isVisionModel,
+  chatContext = "small",
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -38,12 +40,27 @@ export function ChatInput({
   const modeMenuRef = useRef<HTMLDivElement>(null);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ bottom: 0, left: 0 });
-  const modeOptions = [
+  
+  const allModeOptions = [
     { value: "ask" as const, label: "Ask", title: "Ask mode", Icon: IconMessageSquare },
-    { value: "agent" as const, label: "Create", title: "Create mode: create new LaTeX files", Icon: IconBraces },
+    { value: "agent-latex" as const, label: "Create LaTeX", title: "Create LaTeX documents", Icon: IconBraces },
+    { value: "agent-typst" as const, label: "Create Typst", title: "Create Typst documents", Icon: IconBraces },
+    { value: "agent-beamer" as const, label: "Create Beamer", title: "Create Beamer slide decks", Icon: IconBraces },
     { value: "edit" as const, label: "Edit", title: "Edit mode: revise the active file and open a diff", Icon: IconPencil },
   ];
+  const modeOptions = chatContext === "big" 
+    ? allModeOptions.filter(option => option.value !== "edit")
+    : allModeOptions;
+  
+  // Determine active mode
   const activeMode = modeOptions.find((option) => option.value === chatMode) ?? modeOptions[0];
+
+  // Auto-switch to ask mode if we're in big chat and current mode is edit
+  useEffect(() => {
+    if (chatContext === "big" && chatMode === "edit") {
+      setChatMode("ask");
+    }
+  }, [chatContext, chatMode, setChatMode]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -198,9 +215,11 @@ export function ChatInput({
           placeholder={
             chatMode === "ask"
               ? "Ask about the current file (⌘⏎)"
-              : chatMode === "agent"
-                ? "Describe the document to create (⌘⏎)"
-                : "Describe the edits to make to the active file (⌘⏎)"
+              : chatMode === "edit"
+                ? "Describe the edits to make to the active file (⌘⏎)"
+                : chatMode === "agent-beamer"
+                  ? "Describe the slide deck to create (⌘⏎)"
+                  : "Describe the document to create (⌘⏎)"
           }
           rows={1}
         />

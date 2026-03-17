@@ -158,7 +158,7 @@ export function BigChatMessage({
           {assistantDisplayContent}
         </pre>
       ) : message.role === "assistant" ? (
-        <div className={`${streamdownClasses} ${effectiveTheme === 'light' ? 'theme-light' : ''}`}>
+        <div className={`${streamdownClasses} ${effectiveTheme === 'light' ? 'theme-light' : ''} max-w-full overflow-hidden`}>
           <Streamdown 
             plugins={streamdownPlugins}
             shikiTheme={getShikiTheme(isDarkTheme)}

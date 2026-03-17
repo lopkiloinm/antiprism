@@ -26,6 +26,7 @@ import {
   type AgentResponse,
   type AgentMode,
   type PriorMessage,
+  type CreateOutputFormat,
 } from "./agent";
 
 export function checkWebGPUSupport(): boolean {
@@ -60,7 +61,8 @@ export async function generateChatResponse(
   context?: string,
   mode: AgentMode = "ask",
   streamCallbacks?: StreamCallbacks,
-  priorMessages?: PriorMessage[]
+  priorMessages?: PriorMessage[],
+  createFormat: CreateOutputFormat = "latex"
 ): Promise<AgentResponse> {
   const activeModelDef = _getActiveModelDef();
   const maxContextTokensForDoc = Math.max(
@@ -76,7 +78,7 @@ export async function generateChatResponse(
           ? context
           : await truncateToTokenLimit(context, maxContextTokensForDoc)
         : undefined;
-  const messages = buildMessages(userMessage, docContext, mode, priorMessages);
+  const messages = buildMessages(userMessage, docContext, mode, priorMessages, createFormat);
 
   if (streamCallbacks) {
     const rawOutput = await generateFromMessagesStreaming(messages, {
@@ -85,8 +87,8 @@ export async function generateChatResponse(
       onComplete: streamCallbacks.onComplete,
     });
     if (mode === "agent") {
-      const { latex, title, markdown } = await parseCreateResponse(rawOutput);
-      return { type: "agent", content: latex, title, markdown };
+      const { latex, title, markdown, typst } = await parseCreateResponse(rawOutput, createFormat);
+      return { type: "agent", content: createFormat === "typst" ? (typst || "") : latex, title, markdown, typst };
     }
     if (mode === "edit") {
       return { type: "edit", content: parseEditResponse(rawOutput) };
@@ -96,8 +98,8 @@ export async function generateChatResponse(
 
   const rawOutput = await generateFromMessages(messages);
   if (mode === "agent") {
-    const { latex, title, markdown } = await parseCreateResponse(rawOutput);
-    return { type: "agent", content: latex, title, markdown };
+    const { latex, title, markdown, typst } = await parseCreateResponse(rawOutput, createFormat);
+    return { type: "agent", content: createFormat === "typst" ? (typst || "") : latex, title, markdown, typst };
   }
   if (mode === "edit") {
     return { type: "edit", content: parseEditResponse(rawOutput) };

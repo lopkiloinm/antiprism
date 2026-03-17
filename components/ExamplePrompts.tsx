@@ -12,7 +12,7 @@ interface ExamplePrompt {
 
 interface ExamplePromptsProps {
   onSelectPrompt: (prompt: string) => void;
-  chatMode: "ask" | "agent";
+  chatMode: "ask" | "agent" | "agent-latex" | "agent-typst" | "agent-beamer" | "edit";
 }
 
 const examplePrompts: ExamplePrompt[] = [
@@ -62,7 +62,7 @@ const examplePrompts: ExamplePrompt[] = [
 
 export function ExamplePrompts({ onSelectPrompt, chatMode }: ExamplePromptsProps) {
   // Filter prompts based on chat mode
-  const filteredPrompts = chatMode === "agent" 
+  const filteredPrompts = (chatMode === "agent" || chatMode === "agent-latex" || chatMode === "agent-typst" || chatMode === "agent-beamer")
     ? examplePrompts.filter(p => p.category === "document")
     : examplePrompts;
 
