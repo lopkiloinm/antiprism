@@ -113,14 +113,12 @@ export function ProjectList({
       leftAccessory: onSelectionChange ? (
         <button
           type="button"
-          role="switch"
+          role="checkbox"
           aria-checked={isSelected}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            // Don't navigate when clicking the toggle
             if (onSelectionChange) {
-              const isSelected = selectedItems?.includes(item.id) || false;
               if (isSelected) {
                 onSelectionChange(selectedItems.filter(id => id !== item.id));
               } else {
@@ -133,7 +131,6 @@ export function ProjectList({
               e.preventDefault();
               e.stopPropagation();
               if (onSelectionChange) {
-                const isSelected = selectedItems?.includes(item.id) || false;
                 if (isSelected) {
                   onSelectionChange(selectedItems.filter(id => id !== item.id));
                 } else {
@@ -142,19 +139,13 @@ export function ProjectList({
               }
             }
           }}
-          className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+          className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
             isSelected
-              ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
-              : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
-          }`}
+              ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+              : "border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-transparent"
+          } hover:border-[color-mix(in_srgb,var(--accent)_70%,transparent)]`}
           title={isSelected ? "Deselect" : "Select"}
-        >
-          <span
-            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-              isSelected ? "left-[20px]" : "left-1"
-            }`}
-          />
-        </button>
+        />
       ) : undefined,
       topRightAccessory: rightAccessories,
     };

@@ -75,6 +75,19 @@ export default function DashboardPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const selectableIds = items.map((item) => item.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedItems.includes(id));
+  const someSelected = selectedItems.length > 0 && !allSelected;
+
+  const toggleSelectAll = () => {
+    if (selectableIds.length === 0) return;
+    if (allSelected) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(selectableIds);
+    }
+  };
+
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [activeNav]);
@@ -490,53 +503,82 @@ export default function DashboardPage() {
 
           {/* List Section */}
           <div className="flex flex-col gap-3 mt-2">
-            <div className="flex items-center justify-between min-h-[32px]">
-              {selectedItems.length > 0 && activeNav !== "servers" && (
-                <BulkActionBar 
-                  selectedCount={selectedItems.length}
-                  onClearSelection={handleClearSelection}
-                  onBulkDownload={handleBulkDownload}
-                  onBulkDelete={handleBulkDelete}
-                  onBulkRestore={handleBulkRestore}
-                  activeNav={activeNav}
-                />
-              )}
-              {selectedItems.length === 0 && (
-                <h2 className="text-sm font-semibold text-[var(--foreground)]">{TITLES[activeNav]}</h2>
-              )}
-              
-              <div className="flex items-center gap-2 h-[30px]">
-                {activeNav === "servers" && (
-                  <button
-                    onClick={handleNewServer}
-                    className="px-3 py-1.5 text-xs font-medium text-[var(--foreground)] bg-[var(--background)] border-[var(--border)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded-md transition-colors flex items-center gap-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5"
-                    title="Add new signaling server"
-                  >
-                    <IconPlus />
-                    New
-                  </button>
-                )}
-                
-                {activeNav !== "servers" && (
-                  <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 shrink-0 h-full">
-                    <button
-                      onClick={() => setViewMode("list")}
-                      className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "list" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-                    >
-                      <IconList />
-                    </button>
-                    <button
-                      onClick={() => setViewMode("icons")}
-                      className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "icons" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
-                    >
-                      <IconLayoutGrid />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
             <div className="bg-[var(--background)] border border-[var(--border)] rounded-lg overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between min-h-[40px] px-5 py-2 border-b border-[var(--border)]">
+                <div className="flex items-center gap-3 text-sm font-semibold text-[var(--foreground)]">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={allSelected ? true : someSelected ? "mixed" : false}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleSelectAll();
+                    }}
+                    disabled={selectableIds.length === 0}
+                    className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
+                      allSelected
+                        ? "border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-[color-mix(in_srgb,var(--accent)_70%,transparent)]"
+                        : someSelected
+                          ? "border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-[color-mix(in_srgb,var(--accent)_70%,transparent)]"
+                          : "border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-[color-mix(in_srgb,var(--border)_18%,transparent)]"
+                    } ${selectableIds.length === 0 ? "opacity-50 cursor-not-allowed" : "hover:border-[color-mix(in_srgb,var(--accent)_80%,transparent)]"}`}
+                    title={allSelected ? "Deselect all" : "Select all"}
+                  >
+                    {someSelected && (
+                      <span className="w-2.5 h-0.5 rounded-sm bg-white" />
+                    )}
+                  </button>
+                  {selectedItems.length > 0 && activeNav !== "servers" ? (
+                    <div className="flex items-center gap-3">
+                      <span className="whitespace-nowrap">{TITLES[activeNav]}</span>
+                      <div className="pl-3.5">
+                        <BulkActionBar 
+                          selectedCount={selectedItems.length}
+                          onClearSelection={handleClearSelection}
+                          onBulkDownload={handleBulkDownload}
+                          onBulkDelete={handleBulkDelete}
+                          onBulkRestore={handleBulkRestore}
+                          activeNav={activeNav}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <span>{TITLES[activeNav]}</span>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-2 h-[30px]">
+                  {activeNav === "servers" && (
+                    <button
+                      onClick={handleNewServer}
+                      className="px-3 py-1.5 text-xs font-medium text-[var(--foreground)] bg-[var(--background)] border-[var(--border)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded-md transition-colors flex items-center gap-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5"
+                      title="Add new signaling server"
+                    >
+                      <IconPlus />
+                      New
+                    </button>
+                  )}
+                  
+                  {activeNav !== "servers" && (
+                    <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 shrink-0 h-full">
+                      <button
+                        onClick={() => setViewMode("list")}
+                        className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "list" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                      >
+                        <IconList />
+                      </button>
+                      <button
+                        onClick={() => setViewMode("icons")}
+                        className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "icons" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                      >
+                        <IconLayoutGrid />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {activeNav === "servers" ? (
                 <div className="p-0">
                   <SignalingServerList 

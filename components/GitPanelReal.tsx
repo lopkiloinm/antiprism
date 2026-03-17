@@ -818,21 +818,29 @@ export function GitPanelReal({
             <div className="shrink-0">
               <div className="flex items-center gap-2 min-w-0 text-sm px-3 py-2">
                 <button
-                  role="switch"
-                  aria-checked={stagedCount === changes.length && changes.length > 0}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={
+                    stagedCount === changes.length && changes.length > 0
+                      ? true
+                      : stagedCount > 0
+                        ? "mixed"
+                        : false
+                  }
                   onClick={() => stagedCount === changes.length ? unstageAll() : stageAll()}
                   disabled={changes.length === 0}
-                  className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
-                    stagedCount === changes.length && changes.length > 0
-                      ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
-                      : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
-                  }`}
+                  className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
+                    stagedCount === 0
+                      ? "border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-transparent"
+                      : stagedCount === changes.length
+                        ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                        : "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                  } ${changes.length === 0 ? "opacity-50 cursor-not-allowed" : "hover:border-[color-mix(in_srgb,var(--accent)_70%,transparent)]"}`}
+                  title={stagedCount === changes.length ? "Unstage all" : "Stage all"}
                 >
-                  <span
-                    className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                      stagedCount === changes.length && changes.length > 0 ? "left-[20px]" : "left-1"
-                    }`}
-                  />
+                  {stagedCount > 0 && stagedCount < changes.length && (
+                    <span className="w-2.5 h-0.5 rounded-sm bg-white" />
+                  )}
                 </button>
                 <span className="truncate min-w-0 flex-1 text-[var(--foreground)]">Changes ({stagedCount} staged)</span>
                 <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}></span>
@@ -864,24 +872,20 @@ export function GitPanelReal({
                   onClick={() => handleFileClick(change.path)}
                 >
                   <button
-                    role="switch"
+                    type="button"
+                    role="checkbox"
                     aria-checked={change.staged}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleStage(i);
                     }}
-                    className={`relative w-10 h-6 rounded-full transition-colors shrink-0 ${
+                    className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
                       change.staged
-                        ? "bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
-                        : "bg-[color-mix(in_srgb,var(--border)_70%,transparent)]"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${
-                        change.staged ? "left-[20px]" : "left-1"
-                      }`}
-                    />
-                  </button>
+                        ? "border-[color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color-mix(in_srgb,var(--accent)_60%,transparent)]"
+                        : "border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-transparent"
+                    } hover:border-[color-mix(in_srgb,var(--accent)_70%,transparent)]`}
+                    title={change.staged ? "Unstage" : "Stage"}
+                  />
                   <span className="truncate min-w-0 flex-1" title={change.path}>{change.path.split('/').pop() || change.path}</span>
                   <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}>{statusIcon(change.status)}</span>
                 </div>
