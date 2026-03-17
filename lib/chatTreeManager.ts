@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 // @ts-ignore - yjs-orderedtree types are not properly resolved
 import { checkForYTree, YTree } from 'yjs-orderedtree';
+import './yjsOrderedTreePatch';
 import type { ChatSession } from './chatStore';
 
 export interface ChatTreeItem extends ChatSession {

@@ -12,7 +12,7 @@ import { getAssetPath } from "@/lib/assetPath";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { mount } from "@wwog/idbfs";
 import ExifReader from 'exifreader';
-import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig, getShowHiddenYjsDocs, setShowHiddenYjsDocs } from "@/lib/settings";
+import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig, getShowHiddenYjsDocs, setShowHiddenYjsDocs, WEBRTC_SIGNALING_STORAGE_KEY, WEBRTC_SIGNALING_CHANGE_EVENT } from "@/lib/settings";
 import { FileTree } from "@/components/FileTree";
 import { OrderedFileTree } from "@/components/OrderedFileTree";
 import { FileTreeManager, TreeItem } from "@/lib/fileTreeManager";
@@ -191,6 +191,14 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [gitDiffViewMode, setGitDiffViewMode] = useState<"split" | "unified">("split");
   const [searchQuery, setSearchQuery] = useState("");
   const [showHiddenYjsDocs, setShowHiddenYjsDocsState] = useState(getShowHiddenYjsDocs());
+  const [webrtcConfig, setWebrtcConfig] = useState<WebRTCSignalingConfig>({
+    enabled: false,
+    customServers: [],
+    password: "",
+    maxConnections: 35,
+  });
+  const [webrtcConfigReadyProjectId, setWebrtcConfigReadyProjectId] = useState<string | null>(null);
+  const webrtcConfigReady = webrtcConfigReadyProjectId === id;
   
   // Update showHiddenYjsDocs when setting changes
   useEffect(() => {
@@ -233,19 +241,68 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   }, [id]); // Removed projectName from deps to avoid re-triggering on rename
 
   useEffect(() => {
-    setWebrtcConfig(getWebRTCSignalingConfig());
-  }, []);
+    if (typeof window === "undefined") return;
+    setWebrtcConfigReadyProjectId(null);
 
-  useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'antiprism.webrtcConfig') {
-        setWebrtcConfig(getWebRTCSignalingConfig());
+    const syncWebrtcConfig = () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const serverParam = urlParams.get("server");
+        const passwordParam = urlParams.get("password");
+        let nextConfig = getWebRTCSignalingConfig();
+
+        if (serverParam) {
+          const cleanServerParam = serverParam.replace(/\/$/, "");
+          const hasServer = nextConfig.customServers.includes(cleanServerParam);
+
+          if (!hasServer || !nextConfig.enabled) {
+            nextConfig = {
+              ...nextConfig,
+              customServers: hasServer
+                ? nextConfig.customServers
+                : [...nextConfig.customServers, cleanServerParam],
+              enabled: true,
+            };
+            setWebRTCSignalingConfig(nextConfig);
+            console.log("🔗 Automatically configured signaling server from shared link:", cleanServerParam);
+          }
+
+        if (passwordParam && passwordParam !== nextConfig.password) {
+          nextConfig = {
+            ...nextConfig,
+            password: passwordParam,
+          };
+          setWebRTCSignalingConfig(nextConfig);
+          console.log("🔐 Applied WebRTC password from shared link");
+        }
+        }
+
+        setWebrtcConfig(nextConfig);
+      } catch (error) {
+        console.warn("Failed to process WebRTC configuration:", error);
+      } finally {
+        setWebrtcConfigReadyProjectId(id);
       }
     };
 
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === WEBRTC_SIGNALING_STORAGE_KEY) {
+        syncWebrtcConfig();
+      }
+    };
+
+    const handleWebrtcConfigChange = () => {
+      syncWebrtcConfig();
+    };
+
+    syncWebrtcConfig();
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(WEBRTC_SIGNALING_CHANGE_EVENT, handleWebrtcConfigChange);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(WEBRTC_SIGNALING_CHANGE_EVENT, handleWebrtcConfigChange);
+    };
+  }, [id]);
 
   // Register project managers with UserManager
   useEffect(() => {
@@ -258,6 +315,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
   // Initialize ChatTreeManager
   useEffect(() => {
+    if (!id || !webrtcConfigReady) return;
+
     let cancelled = false;
 
     // Create Y.Doc and Y.Map for chat tree (matching FileTreeManager pattern exactly)
@@ -265,7 +324,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     const chatMap = chatDoc.getMap(`${id}-chat-tree`); // ✅ Use project-specific map name
     
     // Create WebRTC provider for chat tree using user's configuration (optional for collaboration)
-    const webrtcConfig = getWebRTCSignalingConfig();
     console.log('🔗 WebRTC Config for chat:', {
       enabled: webrtcConfig.enabled,
       customServers: webrtcConfig.customServers,
@@ -318,7 +376,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
       }
       chatDoc.destroy();
     };
-  }, [id]);
+  }, [id, webrtcConfigReady, webrtcConfig.enabled, webrtcConfig.password, webrtcConfig.maxConnections, webrtcConfig.customServers.join("|")]);
 
   // Global search functionality
   const [searchResults, setSearchResults] = useState<Array<{
@@ -455,12 +513,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [summaryContent, setSummaryContent] = useState("");
   const [summaryData, setSummaryData] = useState<any>(null);
   const [isFormatting, setIsFormatting] = useState(false);
-  const [webrtcConfig, setWebrtcConfig] = useState<WebRTCSignalingConfig>({
-    enabled: false,
-    customServers: [],
-    password: "",
-    maxConnections: 35,
-  });
   const fsRef = useRef<any>(null);
   const [sidebarWidth, setSidebarWidth] = useState(256);
   const [editorFraction, setEditorFraction] = useState(0.5);
@@ -554,38 +606,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     }
   }, [id]);
 
-  // Handle URL parameters for shared links
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const serverParam = urlParams.get('server');
-      
-      if (serverParam) {
-        // Clean up server URL (remove trailing slash)
-        const cleanServerParam = serverParam.replace(/\/$/, '');
-        
-        // Automatically set the signaling server from URL parameter
-        const currentConfig = getWebRTCSignalingConfig();
-        
-        // Only update if the server is not already in the custom servers
-        if (!currentConfig.customServers.includes(cleanServerParam)) {
-          const updatedConfig = {
-            ...currentConfig,
-            customServers: [...currentConfig.customServers, cleanServerParam],
-            enabled: true
-          };
-          
-          setWebRTCSignalingConfig(updatedConfig);
-          console.log('🔗 Automatically configured signaling server from shared link:', cleanServerParam);
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to process URL parameters:', error);
-    }
-  }, [id]);
-
   // Handle fullscreen state changes
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -645,7 +665,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   }, [bigChatMessages, smallChatMessages, isGenerating]);
 
   useEffect(() => {
-    if (!id || initRef.current) return;
+    if (!id || !webrtcConfigReady || initRef.current) return;
     initRef.current = true;
     let cancelled = false;
 
@@ -673,7 +693,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         
         // Create WebRTC provider for collaboration (shared across all files)
         const doc = new Y.Doc();
-        const webrtcConfig = getWebRTCSignalingConfig();
         
         console.log('🔗 WebRTC Config for file tree:', {
           enabled: webrtcConfig.enabled,
@@ -880,20 +899,30 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           });
         };
 
+        const localProject = getAllProjects().find((project) => project.id === id);
+        const hasLocalProject = !!localProject || id === "new";
         const hasSharedTreeItemsAfterSettle = await waitForAuthoritativeTreeState();
-        const shouldBootstrapTreeFromFilesystem = !hasSharedTreeItemsAfterSettle;
+        const shouldBootstrapTreeFromFilesystem =
+          !hasSharedTreeItemsAfterSettle && (!isCollaborativeSession || hasLocalProject);
 
         if (shouldBootstrapTreeFromFilesystem) {
           await syncFilesystemToFileTree(fileTreeManager, idbfs, basePath);
         }
 
-        await reconcileFileTreeToFilesystem(fileTreeManager, idbfs, basePath);
-        setRefreshTrigger((t) => t + 1);
+        const hasAuthoritativeTreeState =
+          hasSharedTreeItemsAfterSettle || shouldBootstrapTreeFromFilesystem || hasSharedTreeState();
 
-        if (isCollaborativeSession) {
-          await waitForAuthoritativeTreeState();
+        if (hasAuthoritativeTreeState) {
           await reconcileFileTreeToFilesystem(fileTreeManager, idbfs, basePath);
           setRefreshTrigger((t) => t + 1);
+        }
+
+        if (isCollaborativeSession) {
+          const hasSharedTreeStateAfterFollowup = await waitForAuthoritativeTreeState();
+          if (hasSharedTreeStateAfterFollowup) {
+            await reconcileFileTreeToFilesystem(fileTreeManager, idbfs, basePath);
+            setRefreshTrigger((t) => t + 1);
+          }
         }
 
         const mainPath = `${basePath}/main.tex`;
@@ -911,7 +940,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         const hasDiagram = files.some((f: { name: string }) => f.name === "diagram.jpg");
         const hasSharedTreeItems = fileTreeManager.getTreeItems().length > 0;
         const defaultsSeeded = projectMetaMap.get("defaultsSeeded") === true;
-        const isNewProject = !isImported && isEmpty && !hasSharedTreeItems && !defaultsSeeded;
+        const canSeedDefaults = hasLocalProject || id === "new";
+        const isNewProject =
+          canSeedDefaults &&
+          !isImported &&
+          isEmpty &&
+          !hasSharedTreeItems &&
+          !defaultsSeeded;
 
         // Cache existing binary files for display
         if (!isNewProject) {
@@ -1264,7 +1299,7 @@ What would you like to work on today?`,
       });
       directoryProvidersRef.current.clear();
     };
-  }, [id]);
+  }, [id, webrtcConfigReady, webrtcConfig.enabled, webrtcConfig.password, webrtcConfig.maxConnections, webrtcConfig.customServers.join("|")]);
 
   useEffect(() => {
     ensureLatexReady()
@@ -1284,13 +1319,16 @@ What would you like to work on today?`,
     
     if (!manager || !path) {
       if (!silent) {
-        console.log('🔍 getCurrentYText: missing manager or path', { hasManager: !!manager, path });
-        yjsLogger.warn("getCurrentYText missing manager/path", {
-          hasManager: !!manager,
-          path,
-          activeTabPathState: activeTabPath,
-          openTabCount: openTabs.length,
-        });
+        const shouldWarn = !!path || !!activeTabPath || openTabs.length > 0;
+        if (shouldWarn) {
+          console.log('🔍 getCurrentYText: missing manager or path', { hasManager: !!manager, path });
+          yjsLogger.warn("getCurrentYText missing manager/path", {
+            hasManager: !!manager,
+            path,
+            activeTabPathState: activeTabPath,
+            openTabCount: openTabs.length,
+          });
+        }
       }
       return null;
     }
@@ -2169,6 +2207,66 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     [fs, getBufferMgr]
   );
 
+  const getBestInitialOpenPath = useCallback(
+    async (): Promise<string | null> => {
+      if (!fs) return null;
+
+      const lastActiveFileKey = `lastActiveFile-${id}`;
+      const savedActivePath = typeof window !== "undefined" ? localStorage.getItem(lastActiveFileKey) : null;
+      const treeItems = fileTreeManagerRef.current?.getTreeItems() ?? [];
+      const treeFilePaths = treeItems
+        .filter((item) => !item.isFolder)
+        .map((item) => `${basePath}/${item.path}`.replace(/\/+/g, "/"));
+
+      const candidatePaths = [
+        savedActivePath,
+        `${basePath}/main.tex`,
+        `${basePath}/main.typ`,
+        ...treeFilePaths.filter((path) => !isBinaryPath(path)),
+        ...treeFilePaths.filter((path) => isBinaryPath(path)),
+      ].filter((path): path is string => !!path);
+
+      const seen = new Set<string>();
+      for (const candidatePath of candidatePaths) {
+        if (seen.has(candidatePath)) continue;
+        seen.add(candidatePath);
+        const exists = await fs.exists(candidatePath).catch(() => false);
+        if (exists) {
+          return candidatePath;
+        }
+      }
+
+      const findFirstOpenableFile = async (dir: string): Promise<string | null> => {
+        const { dirs, files } = await fs.readdir(dir).catch(() => ({ dirs: [] as { name: string }[], files: [] as { name: string }[] }));
+
+        for (const file of files) {
+          const fullPath = `${dir}/${file.name}`.replace(/\/+/g, "/");
+          if (!isBinaryPath(fullPath)) {
+            return fullPath;
+          }
+        }
+
+        for (const file of files) {
+          const fullPath = `${dir}/${file.name}`.replace(/\/+/g, "/");
+          return fullPath;
+        }
+
+        for (const subdir of dirs) {
+          const nestedPath = `${dir}/${subdir.name}`.replace(/\/+/g, "/");
+          const found = await findFirstOpenableFile(nestedPath);
+          if (found) {
+            return found;
+          }
+        }
+
+        return null;
+      };
+
+      return findFirstOpenableFile(basePath);
+    },
+    [fs, id, basePath, isBinaryPath]
+  );
+
   const handleFileSelect = useCallback(
     async (path: string) => {
       if (!fs) return;
@@ -2263,6 +2361,46 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     },
     [fs, openTabs, basePath, getBufferMgr, saveActiveTextToCache, loadTextIntoEditor, resolveFileContent, id, listProjectChats, isBinaryPath, setActiveTabPath, setCurrentPath, setAddTargetPath, setOpenTabs, setImageUrlCache]
   );
+
+  useEffect(() => {
+    if (!isInitialized || !fs || activeTabPath || openTabs.length > 0) return;
+
+    let cancelled = false;
+
+    const ensureInitialFileSelection = async () => {
+      const initialPath = await getBestInitialOpenPath();
+      if (cancelled || !initialPath) return;
+      await handleFileSelect(initialPath);
+    };
+
+    ensureInitialFileSelection();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isInitialized, fs, activeTabPath, openTabs.length, refreshTrigger, getBestInitialOpenPath, handleFileSelect]);
+
+  // Watch for late-arriving collaborative file tree updates and auto-open a file
+  useEffect(() => {
+    if (!isInitialized || activeTabPath || openTabs.length > 0) return;
+    const mgr = fileTreeManagerRef.current;
+    if (!mgr) return;
+
+    const poll = async () => {
+      const items = mgr.getTreeItems();
+      if (!items || items.length === 0) return;
+      const path = await getBestInitialOpenPath();
+      if (path) {
+        await handleFileSelect(path);
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void poll();
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [isInitialized, activeTabPath, openTabs.length, getBestInitialOpenPath, handleFileSelect]);
 
   // Handle file rename
   const handleFileRename = useCallback(
@@ -3427,13 +3565,20 @@ ${documentContext}
       const urlParams = new URLSearchParams();
 
       const signalingConfig = getWebRTCSignalingConfig();
-      const activeServer = signalingConfig.customServers.find((server) => typeof server === "string" && server.trim());
+      const activeServer = signalingConfig.enabled
+        ? signalingConfig.customServers.find((server) => typeof server === "string" && server.trim())
+        : null;
+      const password = signalingConfig.password?.trim();
 
       if (activeServer) {
         urlParams.set('server', activeServer.replace(/\/$/, ''));
       }
+      if (password) {
+        urlParams.set('password', password);
+      }
 
-      setShareUrl(`${baseUrl}?${urlParams.toString()}`);
+      const queryString = urlParams.toString();
+      setShareUrl(queryString ? `${baseUrl}?${queryString}` : baseUrl);
       setShareModalOpen(true);
       return;
       

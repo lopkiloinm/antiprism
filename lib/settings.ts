@@ -340,9 +340,12 @@ const DEFAULT_WEBRTC_CONFIG: WebRTCSignalingConfig = {
   maxConnections: 35,
 };
 
+export const WEBRTC_SIGNALING_STORAGE_KEY = PREFIX + "webrtcSignalingConfig";
+export const WEBRTC_SIGNALING_CHANGE_EVENT = "antiprism:webrtc-signaling-config-changed";
+
 export function getWebRTCSignalingConfig(): WebRTCSignalingConfig {
   try {
-    const stored = localStorage.getItem(PREFIX + "webrtcSignalingConfig");
+    const stored = localStorage.getItem(WEBRTC_SIGNALING_STORAGE_KEY);
     if (!stored) return DEFAULT_WEBRTC_CONFIG;
     const config = JSON.parse(stored);
     return {
@@ -365,7 +368,8 @@ export function setWebRTCSignalingConfig(config: WebRTCSignalingConfig): void {
       password: String(config.password || ""),
       maxConnections: Math.max(1, Math.min(100, Number(config.maxConnections) || DEFAULT_WEBRTC_CONFIG.maxConnections)),
     };
-    localStorage.setItem(PREFIX + "webrtcSignalingConfig", JSON.stringify(validConfig));
+    localStorage.setItem(WEBRTC_SIGNALING_STORAGE_KEY, JSON.stringify(validConfig));
+    window.dispatchEvent(new CustomEvent(WEBRTC_SIGNALING_CHANGE_EVENT, { detail: validConfig }));
   } catch {
     /* ignore */
   }

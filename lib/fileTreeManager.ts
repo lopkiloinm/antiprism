@@ -31,6 +31,8 @@ export type SortCriteria = 'name-asc' | 'name-desc' | 'modified' | 'created' | '
  * Each directory gets its own Y.Map containing a Y-OrderedTree for true nested synchronization
  */
 export class FileTreeManager {
+  private static readonly ROOT_NODE_KEY = "project-root";
+  private static readonly DIRECTORY_ROOT_KEY = "directory-root";
   private yTree: YTree;
   private rootNodeId: string = '';
   private yMap: Y.Map<any>;
@@ -64,22 +66,22 @@ export class FileTreeManager {
       this.initializeRoot();
     }
     
-    // Get root node (should always exist after initialization)
-    const rootChildren = this.yTree.getNodeChildrenFromKey("root");
-    
-    // ✅ FIXED: Initialize rootNodeId properly for both new and existing trees
+    // Get project root node (child of the y-orderedtree built-in "root")
+    let rootChildren: string[] = [];
+    try {
+      rootChildren = this.yTree.getNodeChildrenFromKey("root");
+    } catch (e) {
+      console.warn("⚠️ yTree missing built-in root; creating", e);
+      this.initializeRoot();
+      rootChildren = this.yTree.getNodeChildrenFromKey("root");
+    }
+
     if (rootChildren.length > 0) {
-      this.rootNodeId = rootChildren[0]; // Use existing root from loaded tree
+      this.rootNodeId = rootChildren[0];
       console.log('🌳 Using existing root node from loaded tree:', this.rootNodeId);
     } else {
-      // For new trees, initializeRoot should have already set this.rootNodeId
-      // If not, create a new root node
-      if (!this.rootNodeId) {
-        this.rootNodeId = this.createRootNode();
-        console.log('🌳 Created new root node:', this.rootNodeId);
-      } else {
-        console.log('🌳 Using root node ID from initializeRoot:', this.rootNodeId);
-      }
+      this.rootNodeId = this.createRootNode();
+      console.log('🌳 Created new root node:', this.rootNodeId);
     }
     
     console.log('🌳 Final root node ID:', this.rootNodeId);
@@ -94,7 +96,7 @@ export class FileTreeManager {
   }
 
   private initializeRoot(): void {
-    const rootNodeKey = this.yTree.generateNodeKey();
+    const rootNodeKey = FileTreeManager.ROOT_NODE_KEY;
     this.yTree.createNode("root", rootNodeKey, {
       type: "project",
       name: "root",
@@ -151,7 +153,7 @@ export class FileTreeManager {
       console.log(`🗂️ Initializing YTree for directory: ${directoryPath}`);
       try {
         const directoryYTree = new YTree(directoryMap);
-        const rootNodeKey = directoryYTree.generateNodeKey();
+        const rootNodeKey = FileTreeManager.DIRECTORY_ROOT_KEY;
         directoryYTree.createNode("root", rootNodeKey, {
           type: "directory",
           path: directoryPath,
