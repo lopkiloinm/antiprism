@@ -3179,6 +3179,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         return;
       }
       // Streaming chunk handler shared by both paths
+      const streamingChatContext = getCurrentChatContext();
       let streamedChars = 0;
       let streamedChunks = 0;
       const onChunk = (text: string) => {
@@ -3189,10 +3190,14 @@ Buffer manager exists: ${!!getBufferMgr()}`;
           chunkIndex: streamedChunks,
           chunkChars: text.length,
           totalStreamedChars: streamedChars,
-          chatContext: getCurrentChatContext(),
+          chatContext: streamingChatContext,
         });
-        const ctx = getCurrentChatContext();
-        const setMsgs = ctx === "big" ? setBigChatMessages : setSmallChatMessages;
+        console.debug("[chat] onChunk append", {
+          ctx: streamingChatContext,
+          chunkIndex: streamedChunks,
+          chunkText: text,
+        });
+        const setMsgs = streamingChatContext === "big" ? setBigChatMessages : setSmallChatMessages;
         setMsgs((msgs: any) => {
           const next = [...msgs];
           const li = next.length - 1;

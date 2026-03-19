@@ -83,7 +83,7 @@ export const AVAILABLE_MODELS: ModelDef[] = [
     id: "nemotron3-nano-4b",
     label: "Nemotron 3 Nano 4B",
     hfId: "onnx-community/NVIDIA-Nemotron-3-Nano-4B-BF16-ONNX",
-    dtype: "q4f16",
+    dtype: "q4",
     revision: "main",
     hiddenSize: 3136,
     numKVHeads: 8,

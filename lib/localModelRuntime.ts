@@ -843,6 +843,8 @@ export async function generateFromMessages(messages: ChatMessage[]): Promise<str
     await loadModel();
   }
 
+  const activeDef = getActiveModelDef();
+
   const input = tokenizer.apply_chat_template(messages, {
     add_generation_prompt: true,
     return_dict: true,
@@ -860,7 +862,6 @@ export async function generateFromMessages(messages: ChatMessage[]): Promise<str
     inputLen = (inputIds as { size: number }).size;
   }
 
-  const activeDef = getActiveModelDef();
   const modelMaxTokens = getEffectiveMaxNewTokens(activeDef, inputLen);
   const temperature = getAiTemperature();
   const topP = getAiTopP();
@@ -892,6 +893,22 @@ export async function generateFromMessagesStreaming(
     await loadModel();
   }
 
+  const activeDef = getActiveModelDef();
+  // Some ONNX configs may lack _name_or_path; tag them for logging/debug.
+  if (model && (!model.config?._name_or_path)) {
+    (model as any).config = { ...(model as any).config, _name_or_path: activeDef?.id };
+  }
+  if (tokenizer && (!tokenizer.config?._name_or_path)) {
+    (tokenizer as any).config = { ...(tokenizer as any).config, _name_or_path: activeDef?.id };
+  }
+
+  console.debug("[transformers] entering streaming", {
+    modelId: model?.config?._name_or_path,
+    tokenizerModel: tokenizer?.config?._name_or_path,
+    activeDefId: activeDef?.id,
+    activeDefLabel: activeDef?.label,
+  });
+
   const { TextStreamer } = await import("@huggingface/transformers");
   let fullText = "";
   const startTime = performance.now();
@@ -901,6 +918,10 @@ export async function generateFromMessagesStreaming(
     add_generation_prompt: true,
     return_dict: true,
   });
+
+  // DEBUG: log template and applied input ids for troubleshooting thinking rendering.
+  console.debug("[transformers] chat_template", tokenizer.chat_template);
+  console.debug("[transformers] input_ids length", Array.isArray(input.input_ids) ? input.input_ids.length : input.input_ids);
 
   const inputIds = input.input_ids;
   let inputTokens = 0;
@@ -916,21 +937,25 @@ export async function generateFromMessagesStreaming(
 
   const streamer = new TextStreamer(tokenizer, {
     skip_prompt: true,
+    // NOTE: allow special tokens to pass through for debugging models that may emit only specials (e.g., Nemotron).
     skip_special_tokens: true,
     callback_function: (text: string) => {
       fullText += text;
       callbacks.onChunk(text);
+      console.debug("[transformers] stream chunk", JSON.stringify(text));
     },
     token_callback_function: callbacks.onTokensPerSec
       ? () => {
           tokenCount++;
           const elapsedSec = (performance.now() - startTime) / 1000;
+          if (tokenCount <= 3 || tokenCount % 50 === 0) {
+            console.debug("[transformers] token tick", { tokenCount, elapsedSec: Math.round(elapsedSec * 1000) / 1000 });
+          }
           callbacks.onTokensPerSec!(tokenCount / elapsedSec, tokenCount, elapsedSec, inputTokens);
         }
       : undefined,
   });
 
-  const activeDef = getActiveModelDef();
   const modelMaxTokens = getEffectiveMaxNewTokens(activeDef, inputTokens);
   const temperature = getAiTemperature();
   const topP = getAiTopP();
@@ -943,10 +968,52 @@ export async function generateFromMessagesStreaming(
     streamer,
   });
 
+  const summarizeOutputs = (o: any) => {
+    if (!o) return { defined: false };
+    if (Array.isArray(o)) return { defined: true, type: "array", length: o.length, firstType: typeof o[0] };
+    const keys = Object.keys(o);
+    return { defined: true, type: typeof o, keys };
+  };
+  console.debug("[transformers] outputs summary", summarizeOutputs(outputs));
+
+  // Fallback: if streamer produced no text, decode the full output once.
+  if (!fullText || fullText.length === 0) {
+    const extractIds = (o: any): number[] | null => {
+      if (!o) return null;
+      if (Array.isArray(o)) {
+        if (Array.isArray(o[0])) return o[0] as number[];
+        if (typeof o[0] === "number") return o as number[];
+      }
+      if (Array.isArray(o.output_ids)) return o.output_ids[0];
+      if (Array.isArray(o.sequences)) return o.sequences[0];
+      if (typeof o.tolist === "function") {
+        const t = o.tolist();
+        if (Array.isArray(t)) return Array.isArray(t[0]) ? t[0] : t;
+      }
+      if (Array.isArray(o.data)) return o.data as number[];
+      return null;
+    };
+
+    const outputIds = extractIds(outputs);
+    console.debug("[transformers] fallback decode", {
+      hasOutputIds: !!outputIds,
+      outputType: outputs ? typeof outputs : "undefined",
+    });
+    if (outputIds) {
+      const decoded = tokenizer.decode(outputIds, { skip_special_tokens: true });
+      fullText = decoded;
+      if (decoded && decoded.length > 0 && callbacks.onChunk) {
+        callbacks.onChunk(decoded);
+      }
+    }
+  }
+
   if (callbacks.onComplete) {
     const elapsedSec = (performance.now() - startTime) / 1000;
     callbacks.onComplete(tokenCount, elapsedSec, inputTokens);
   }
+
+  console.debug("[transformers] stream complete", { tokenCount, fullText });
 
   return fullText;
 }
