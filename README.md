@@ -43,14 +43,14 @@ The README is intentionally more technical than the product tour on `/features`.
 
 | Mode | Purpose | Context | Model Used |
 |------|---------|---------|------------|
-| **Ask** | Document-aware Q&A, edits, and LaTeX assistance | Active document + conversation history | Active text model (LFM2.5 Instruct, LFM2.5 Thinking, or Nanbeige4.1-3B) |
+| **Ask** | Document-aware Q&A, edits, and LaTeX assistance | Active document + conversation history | Active text model (LFM2.5 Instruct, LFM2.5 Thinking, Nanbeige4.1-3B, or Nemotron 3 Nano 4B) |
 | **Agent** | Generate or restructure papers through a markdown-first workflow | Conversation history + structured agent prompts | Active text model with pandoc-wasm conversion back to LaTeX |
 | **Vision** | Image + text analysis inside the chat workflow | Uploaded image + prompt | Active vision-capable model |
 | **Multimodal** | Higher-fidelity visual reasoning and image-grounded explanations | Uploaded image + prompt + conversation context | Typically Qwen3.5-0.8B, or another selected vision-capable model |
 
 #### AI Models Overview
 
-Antiprism currently defines five local model profiles in `lib/modelConfig.ts`. They are downloaded on demand, cached with the Cache API, and executed through ONNX Runtime Web + WebGPU:
+Antiprism currently defines six local model profiles in `lib/modelConfig.ts`. They are downloaded on demand, cached with the Cache API, and executed through ONNX Runtime Web + WebGPU:
 
 **1. LFM2.5-1.2B Q4 (Instruct Model)**
 - **Purpose**: Text generation for chat, LaTeX assistance, and document creation
@@ -137,6 +137,19 @@ Antiprism currently defines five local model profiles in `lib/modelConfig.ts`. T
   - Multi-tile processing for high-resolution images
   - Visual token integration with text tokens
   - Cross-generational parity with text-only performance
+
+**6. Nemotron 3 Nano 4B (NVIDIA Reasoning Model)**
+- **Purpose**: Fast, compact reasoning and drafting with structured thinking output
+- **Architecture**: 4B parameters, BF16 base, exported as q4f16 for efficient browser execution
+- **Runtime Profile**: `q4f16`, `maxContextTokens: 262,144`, `maxNewTokens: 2,048`
+- **Processing/Behavior**:
+  - Emits structured `<think>...</think>` reasoning blocks alongside final answers
+  - Optimized for concise, latency-friendly replies
+  - Uses the same chat template/logging and streaming path as other text models
+- **Use Cases**:
+  - Lightweight local reasoning when you want faster turnaround than larger models
+  - Short-form drafting, quick Q&A, and code/math helpers
+  - Experiments with NVIDIA’s thinking-style outputs inside the Antiprism UI
 
 #### Model Integration
 

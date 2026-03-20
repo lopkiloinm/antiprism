@@ -81,7 +81,7 @@ const FEATURE_ROWS: Array<{
     eyebrow: "Step 2: AI Assistance",
     title: "Project-aware AI in your browser",
     description:
-      "Run state-of-the-art models entirely locally. Liquid's LFM2.5-1.2B Thinking and Boss Zhipin's Nanbeige4.1-3B power deep reasoning, while Alibaba's Qwen3.5-0.8B and Liquid's LFM2.5-1.6B inspects images natively without cloud APIs.",
+      "Run state-of-the-art models entirely locally. Liquid's LFM2.5-1.2B Thinking, NVIDIA's Nemotron 3 Nano 4B, and Boss Zhipin's Nanbeige4.1-3B power deep reasoning, while Alibaba's Qwen3.5-0.8B and Liquid's LFM2.5-1.6B inspect images natively without cloud APIs.",
     points: [
       "Browser-native ONNX model execution",
       "Full privacy: code and data never leave your device",
