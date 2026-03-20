@@ -919,6 +919,11 @@ export async function generateFromMessagesStreaming(
     return_dict: true,
   });
 
+  if (!input || !input.input_ids) {
+    console.error("[transformers] tokenizer returned empty input_ids", input);
+    throw new Error("Tokenizer produced no input_ids for generation");
+  }
+
   // DEBUG: log template and applied input ids for troubleshooting thinking rendering.
   console.debug("[transformers] chat_template", tokenizer.chat_template);
   console.debug("[transformers] input_ids length", Array.isArray(input.input_ids) ? input.input_ids.length : input.input_ids);

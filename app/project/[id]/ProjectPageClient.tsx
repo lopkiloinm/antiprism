@@ -1012,38 +1012,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             }
           }
 
-          // Create initial welcome chat for new projects
-          try {
-            if (localChatManager) {
-              await localChatManager.whenReady();
-              const welcomeChatId = localChatManager.createChat({
-                title: "Welcome Chat",
-                createdAt: Date.now(),
-                modelId: getActiveModelId()
-              });
-              
-              // Add welcome message
-              const welcomeMessage: ChatMessage = {
-                role: "assistant",
-                content: `🎉 **Welcome to your new Antiprism project!**
-
-I'm here to help you get started with your document. Here's what you can do:
-
-📝 **Edit your document** - I can see you have a \`main.tex\` file ready to edit
-🤖 **Ask for help** - I can assist with LaTeX, explain concepts, or help structure your document
-🔍 **Research** - I can help find information and cite sources
-✨ **Generate content** - I can help write sections, format citations, and more
-
-What would you like to work on today?`,
-                markdown: "true"
-              };
-              
-              await saveProjectChatMessages(id, welcomeChatId, [welcomeMessage]);
-              console.log('🎉 Created welcome chat with message for new project:', welcomeChatId);
-            }
-          } catch (error) {
-            console.warn('⚠️ Failed to create welcome chat:', error);
-          }
+          // Skip creating default welcome chat; user will start conversations manually.
           if (typContent?.trim() && !hasMainTyp) {
             try {
               await idbfs.writeFile(mainTypPath, new TextEncoder().encode(typContent).buffer as ArrayBuffer, { mimeType: "text/x-typst" });

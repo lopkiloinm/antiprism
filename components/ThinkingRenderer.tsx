@@ -19,6 +19,16 @@ export function parseThinkingContent(content: string): ThinkingParseResult {
   const thinkStartIndex = content.indexOf(thinkStartTag);
 
   if (thinkStartIndex === -1) {
+    // Handle outputs that emit only a closing tag; treat prefix as thinking
+    const orphanEnd = content.indexOf(thinkEndTag);
+    if (orphanEnd !== -1) {
+      return {
+        hasThinking: true,
+        thinking: content.substring(0, orphanEnd).trim(),
+        remainder: content.substring(orphanEnd + thinkEndTag.length).trim(),
+      };
+    }
+
     return {
       hasThinking: false,
       thinking: "",
@@ -98,10 +108,14 @@ export function ThinkingRenderer({ thinkingContent, isStreaming = false, onToggl
   };
 
   return (
-    <div className="mb-2 inline-flex max-w-full flex-col rounded-md border border-[var(--border)] bg-[var(--background)] overflow-hidden">
+    <div
+      className={`mb-2 flex flex-col overflow-hidden rounded-md border border-[var(--border)] bg-[var(--background)] ${
+        isExpanded ? "w-full" : "w-fit max-w-full"
+      }`}
+    >
       <button
         onClick={handleToggle}
-        className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors"
+        className={`inline-flex max-w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors ${isExpanded ? "w-full" : "w-fit"}`}
       >
         <span className="flex h-4 w-4 items-center justify-center text-[var(--muted)]">
           {isExpanded ? <IconChevronDown /> : <IconChevronRight />}
