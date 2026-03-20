@@ -98,10 +98,10 @@ export function ThinkingRenderer({ thinkingContent, isStreaming = false, onToggl
   };
 
   return (
-    <div className="mb-2 rounded-md border border-[var(--border)] bg-[var(--background)] overflow-hidden">
+    <div className="mb-2 inline-flex max-w-full flex-col rounded-md border border-[var(--border)] bg-[var(--background)] overflow-hidden">
       <button
         onClick={handleToggle}
-        className="w-full px-3 py-1.5 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors flex items-center gap-2"
+        className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] transition-colors"
       >
         <span className="flex h-4 w-4 items-center justify-center text-[var(--muted)]">
           {isExpanded ? <IconChevronDown /> : <IconChevronRight />}
