@@ -508,6 +508,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     }, 100); // Small delay to ensure the editor is ready
   };
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [chatHeight, setChatHeight] = useState(60); // percentage of viewport height
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
   const [summaryContent, setSummaryContent] = useState("");
@@ -5061,7 +5062,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       </button>
                     )}
                     <div className={`flex flex-col bg-[var(--background)] rounded-lg border border-[var(--border)] shadow-lg overflow-hidden ${
-                      chatExpanded ? "max-h-[60vh]" : ""
+                      chatExpanded ? `max-h-[${chatHeight}vh]` : ""
                     }`}>
                     <div className="flex items-center justify-between shrink-0 bg-[color-mix(in_srgb,var(--border)_8%,transparent)]">
                       <div className="flex items-center gap-2">
@@ -5103,22 +5104,48 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       </div>
                     </div>
                     {chatExpanded && (
-                      <div
-                        ref={chatScrollRef}
-                        className="flex-1 min-h-0 overflow-auto px-3 py-2 text-sm space-y-3 shrink min-h-0 flex flex-col scroll-smooth"
-                        style={{ scrollBehavior: "smooth" }}
-                      >
-                        {smallChatMessages.map((m: any, i: any) => (
-                          <SmallChatMessage 
-                            key={i}
-                            message={m}
-                            isLast={i === smallChatMessages.length - 1}
-                            lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
-                            isStreaming={isGenerating && i === smallChatMessages.length - 1}
-                            onUpdateMessage={handleSmallMessageUpdate}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        <div
+                          ref={chatScrollRef}
+                          className="flex-1 min-h-0 overflow-auto px-3 py-2 text-sm space-y-3 shrink min-h-0 flex flex-col scroll-smooth"
+                          style={{ scrollBehavior: "smooth" }}
+                        >
+                          {smallChatMessages.map((m: any, i: any) => (
+                            <SmallChatMessage 
+                              key={i}
+                              message={m}
+                              isLast={i === smallChatMessages.length - 1}
+                              lastMessageRef={lastMessageRef}
+                              isStreaming={isGenerating && i === smallChatMessages.length - 1 && m.role === "assistant" && m.content === "Thinking..."}
+                              onUpdateMessage={handleSmallMessageUpdate}
+                            />
+                          ))}
+                        </div>
+                        <div 
+                          className="h-2 bg-[color-mix(in_srgb,var(--border)_30%,transparent)] cursor-ns-resize hover:bg-[color-mix(in_srgb,var(--border)_50%,transparent)] transition-colors shrink-0"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            const startY = e.clientY;
+                            const startHeight = chatHeight;
+                            const startVh = window.innerHeight * startHeight / 100;
+                            
+                            const handleMouseMove = (e: MouseEvent) => {
+                              const deltaY = startY - e.clientY;
+                              const newVh = startVh + deltaY;
+                              const newHeight = Math.max(20, Math.min(90, (newVh / window.innerHeight) * 100));
+                              setChatHeight(newHeight);
+                            };
+                            
+                            const handleMouseUp = () => {
+                              document.removeEventListener('mousemove', handleMouseMove);
+                              document.removeEventListener('mouseup', handleMouseUp);
+                            };
+                            
+                            document.addEventListener('mousemove', handleMouseMove);
+                            document.addEventListener('mouseup', handleMouseUp);
+                          }}
+                        />
+                      </>
                     )}
                     <div>
                       <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />

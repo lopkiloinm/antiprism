@@ -60,7 +60,7 @@
     "react-range-slider-input": "^3.3.2",
     "rxdb": "^16.21.1",
     "streamdown": "^2.4.0",
-    "texlyre-busytex": "^0.1.2-alpha",
+    "texlyre-busytex": "^0.1.4-alpha",
     "wasm-latex-tools": "^0.1.1",
     "y-codemirror.next": "^0.3.5",
     "y-indexeddb": "^9.0.12",
