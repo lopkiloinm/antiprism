@@ -5104,48 +5104,50 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                       </div>
                     </div>
                     {chatExpanded && (
-                      <>
-                        <div
-                          ref={chatScrollRef}
-                          className="flex-1 min-h-0 overflow-auto px-3 py-2 text-sm space-y-3 shrink min-h-0 flex flex-col scroll-smooth"
-                          style={{ scrollBehavior: "smooth" }}
-                        >
-                          {smallChatMessages.map((m: any, i: any) => (
-                            <SmallChatMessage 
-                              key={i}
-                              message={m}
-                              isLast={i === smallChatMessages.length - 1}
-                              lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
-                              isStreaming={isGenerating && i === smallChatMessages.length - 1 && m.role === "assistant" && m.content === "Thinking..."}
-                              onUpdateMessage={handleSmallMessageUpdate}
-                            />
-                          ))}
-                        </div>
-                        <div 
-                          className="h-2 bg-[color-mix(in_srgb,var(--border)_30%,transparent)] cursor-ns-resize hover:bg-[color-mix(in_srgb,var(--border)_50%,transparent)] transition-colors shrink-0"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            const startY = e.clientY;
-                            const startHeight = chatHeight;
-                            const startVh = window.innerHeight * startHeight / 100;
-                            
-                            const handleMouseMove = (e: MouseEvent) => {
-                              const deltaY = startY - e.clientY;
-                              const newVh = startVh + deltaY;
-                              const newHeight = Math.max(20, Math.min(90, (newVh / window.innerHeight) * 100));
-                              setChatHeight(newHeight);
-                            };
-                            
-                            const handleMouseUp = () => {
-                              document.removeEventListener('mousemove', handleMouseMove);
-                              document.removeEventListener('mouseup', handleMouseUp);
-                            };
-                            
-                            document.addEventListener('mousemove', handleMouseMove);
-                            document.addEventListener('mouseup', handleMouseUp);
-                          }}
-                        />
-                      </>
+                      <div 
+                        className="h-2 bg-[color-mix(in_srgb,var(--border)_30%,transparent)] cursor-ns-resize hover:bg-[color-mix(in_srgb,var(--border)_50%,transparent)] transition-colors"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          const startY = e.clientY;
+                          const startHeight = chatHeight;
+                          
+                          const handleMouseMove = (e: MouseEvent) => {
+                            const deltaY = startY - e.clientY;
+                            const deltaHeight = (deltaY / window.innerHeight) * 100;
+                            const newHeight = Math.max(25, Math.min(80, startHeight + deltaHeight));
+                            setChatHeight(newHeight);
+                          };
+                          
+                          const handleMouseUp = () => {
+                            document.removeEventListener('mousemove', handleMouseMove);
+                            document.removeEventListener('mouseup', handleMouseUp);
+                          };
+                          
+                          document.addEventListener('mousemove', handleMouseMove);
+                          document.addEventListener('mouseup', handleMouseUp);
+                        }}
+                      />
+                    )}
+                    {chatExpanded && (
+                      <div
+                        ref={chatScrollRef}
+                        className="overflow-auto px-3 py-2 text-sm space-y-3 scroll-smooth"
+                        style={{ 
+                          scrollBehavior: "smooth",
+                          height: `${chatHeight * 0.8}vh` // Use 80% since resize handle is now separate
+                        }}
+                      >
+                        {smallChatMessages.map((m: any, i: any) => (
+                          <SmallChatMessage 
+                            key={i}
+                            message={m}
+                            isLast={i === smallChatMessages.length - 1}
+                            lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
+                            isStreaming={isGenerating && i === smallChatMessages.length - 1 && m.role === "assistant" && m.content === "Thinking..."}
+                            onUpdateMessage={handleSmallMessageUpdate}
+                          />
+                        ))}
+                      </div>
                     )}
                     <div>
                       <ChatTelemetry streamingStats={streamingStats} isGenerating={isGenerating} />
