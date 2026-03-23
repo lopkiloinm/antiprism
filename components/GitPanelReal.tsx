@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { NameModal } from "./NameModal";
-import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconChevronDown, IconChevronUp } from "./Icons";
+import { IconGitBranch, IconGitCommit, IconPlus, IconTrash2, IconChevronDown, IconChevronUp, IconCheck, IconMinus } from "./Icons";
 import { gitStore, GitStore, type GitChange } from "@/lib/gitStore";
 import type { EditorBufferManager } from "@/lib/editorBufferManager";
 import { getProjects } from "@/lib/projects";
@@ -839,7 +839,14 @@ export function GitPanelReal({
                   title={stagedCount === changes.length ? "Unstage all" : "Stage all"}
                 >
                   {stagedCount > 0 && stagedCount < changes.length && (
-                    <span className="w-2.5 h-0.5 rounded-sm bg-white" />
+                    <span className="w-3 h-3 text-white flex items-center justify-center">
+                      <IconMinus />
+                    </span>
+                  )}
+                  {stagedCount === changes.length && changes.length > 0 && (
+                    <span className="w-3 h-3 text-white flex items-center justify-center">
+                      <IconCheck />
+                    </span>
                   )}
                 </button>
                 <span className="truncate min-w-0 flex-1 text-[var(--foreground)]">Changes ({stagedCount} staged)</span>
@@ -885,7 +892,13 @@ export function GitPanelReal({
                         : "border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-transparent"
                     } hover:border-[color-mix(in_srgb,var(--accent)_70%,transparent)]`}
                     title={change.staged ? "Unstage" : "Stage"}
-                  />
+                  >
+                    {change.staged && (
+                      <span className="w-2.5 h-2.5 text-white flex items-center justify-center">
+                        <IconCheck />
+                      </span>
+                    )}
+                  </button>
                   <span className="truncate min-w-0 flex-1" title={change.path}>{change.path.split('/').pop() || change.path}</span>
                   <span className="shrink-0 flex items-center text-right" style={{ minWidth: '16px' }}>{statusIcon(change.status)}</span>
                 </div>

@@ -618,18 +618,32 @@ export default function FeaturesPage() {
         <section className="relative overflow-x-hidden pb-20 pt-12 sm:pt-16 w-full">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(210,231,255,0.9),transparent_38%),radial-gradient(circle_at_85%_10%,rgba(191,220,255,0.65),transparent_24%),radial-gradient(circle_at_18%_35%,rgba(255,225,242,0.35),transparent_24%)]" />
           <div className="relative mx-auto max-w-5xl px-6 text-center">
-            <div className="mx-auto inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/72 px-4 py-2 text-sm text-zinc-600 shadow-[0_10px_30px_rgba(70,110,170,0.08)] backdrop-blur">
-              <span className="font-medium text-zinc-900">Local-first scientific writing</span>
-              <span className="text-zinc-500">with collaboration and browser-native AI</span>
-            </div>
-            <h1 className="mx-auto mt-8 max-w-5xl text-5xl font-semibold tracking-tight text-zinc-950 sm:text-7xl">
+            <motion.h1 
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.8 }}
+              className="mx-auto mt-8 max-w-5xl text-5xl font-semibold tracking-tight text-zinc-950 sm:text-7xl"
+            >
               Scientific writing, collaboration, and AI in one calm workspace
-            </h1>
-            <p className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-zinc-700 sm:text-xl">
+            </motion.h1>
+            <motion.p 
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+              className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-zinc-700 sm:text-xl"
+            >
               Draft with peers, compile locally, run ONNX models in-browser, and work with text and images without
               sending your project to a cloud backend.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            </motion.p>
+            <motion.div 
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+              className="mt-8 flex flex-wrap items-center justify-center gap-3"
+            >
               <Link
                 href="/new"
                 className="inline-flex items-center gap-2 rounded-full bg-black px-6 py-3 text-base font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.14)]"
@@ -645,10 +659,16 @@ export default function FeaturesPage() {
               >
                 View GitHub
               </a>
-            </div>
-            <p className="mt-5 text-sm text-zinc-500">
+            </motion.div>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.8, delay: 0.6 }}
+              className="mt-5 text-sm text-zinc-500"
+            >
               Works in the browser. Offline workflows are available after initial asset and model caching.
-            </p>
+            </motion.p>
           </div>
 
           <div className="w-full px-4 sm:px-12 mt-16 max-w-[1600px] mx-auto">
@@ -660,13 +680,23 @@ export default function FeaturesPage() {
 
         <section id="why" className="py-24">
           <div className="mx-auto max-w-6xl px-6">
-            <h2 className="text-center text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">
+            <motion.h2 
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.6 }}
+              className="text-center text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl"
+            >
               Built to accelerate everyday scientific work
-            </h2>
+            </motion.h2>
             <div className="mt-14 grid gap-6 lg:grid-cols-3">
-              {VALUE_CARDS.map(({ title, description, Icon }) => (
-                <article
+              {VALUE_CARDS.map(({ title, description, Icon }, index) => (
+                <motion.article
                   key={title}
+                  initial={{ opacity: 0, y: 40 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ margin: "-50px" }}
+                  transition={{ duration: 0.6, delay: index * 0.1 }}
                   className="rounded-[30px] border border-black/8 bg-white/72 p-8 shadow-[0_20px_70px_rgba(94,129,180,0.08)] backdrop-blur"
                 >
                   <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-black/8 bg-[#f8fbff] text-zinc-800 shadow-sm">
@@ -674,7 +704,7 @@ export default function FeaturesPage() {
                   </span>
                   <h3 className="mt-6 text-3xl font-semibold tracking-tight text-zinc-950">{title}</h3>
                   <p className="mt-4 text-lg leading-relaxed text-zinc-700">{description}</p>
-                </article>
+                </motion.article>
               ))}
             </div>
           </div>
@@ -683,8 +713,16 @@ export default function FeaturesPage() {
         <section id="product" className="py-8">
           <div className="mx-auto max-w-6xl px-6">
             <div className="space-y-24">
-              {FEATURE_ROWS.map((feature) => (
-                <FeatureRow key={feature.title} {...feature} />
+              {FEATURE_ROWS.map((feature, index) => (
+                <motion.div
+                  key={feature.title}
+                  initial={{ opacity: 0, y: 60 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ margin: "-100px" }}
+                  transition={{ duration: 0.8, delay: index * 0.2 }}
+                >
+                  <FeatureRow {...feature} />
+                </motion.div>
               ))}
             </div>
           </div>
@@ -692,19 +730,44 @@ export default function FeaturesPage() {
 
         <section id="included" className="py-24">
           <div className="mx-auto max-w-5xl px-6 text-center">
-            <h2 className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">
+            <motion.h2 
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.6 }}
+              className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl"
+            >
               A complete workspace for scientific writing
-            </h2>
-            <p className="mx-auto mt-5 max-w-3xl text-lg leading-relaxed text-zinc-700">
+            </motion.h2>
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="mx-auto mt-5 max-w-3xl text-lg leading-relaxed text-zinc-700"
+            >
               Antiprism combines collaboration, manuscript-aware AI, local compile, and open project portability in one
               browser-native environment.
-            </p>
+            </motion.p>
           </div>
 
-          <div className="mx-auto mt-14 max-w-4xl px-6">
+          <motion.div 
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ margin: "-50px" }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="mx-auto mt-14 max-w-4xl px-6"
+          >
             <div className="overflow-hidden rounded-[34px] border border-black/8 bg-white/72 shadow-[0_24px_80px_rgba(94,129,180,0.08)] backdrop-blur">
               {[0, 1, 2, 3, 4].map((index) => (
-                <div key={index} className="grid gap-4 border-b border-black/8 px-6 py-5 last:border-b-0 md:grid-cols-2">
+                <motion.div 
+                  key={index} 
+                  initial={{ opacity: 0, x: index % 2 === 0 ? -30 : 30 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ margin: "-50px" }}
+                  transition={{ duration: 0.5, delay: 0.6 + index * 0.1 }}
+                  className="grid gap-4 border-b border-black/8 px-6 py-5 last:border-b-0 md:grid-cols-2"
+                >
                   <div className="flex items-center gap-3 text-left text-lg text-zinc-900">
                     <IconCheckSquare />
                     <span>{INCLUDED_LEFT[index]}</span>
@@ -713,31 +776,61 @@ export default function FeaturesPage() {
                     <IconCheckSquare />
                     <span>{INCLUDED_RIGHT[index]}</span>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
         </section>
 
         <section className="pb-32 pt-16">
           <div className="mx-auto max-w-5xl px-6">
-            <div className="relative overflow-hidden rounded-[40px] border border-zinc-200/50 bg-[linear-gradient(135deg,#f0f9ff,#e0f2fe_44%,#f0f9ff)] px-6 py-20 shadow-[0_35px_120px_rgba(103,142,196,0.12)] sm:px-16 sm:py-24 text-center flex flex-col items-center">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ margin: "-100px" }}
+              transition={{ duration: 0.8 }}
+              className="relative overflow-hidden rounded-[40px] border border-zinc-200/50 bg-[linear-gradient(135deg,#f0f9ff,#e0f2fe_44%,#f0f9ff)] px-6 py-20 shadow-[0_35px_120px_rgba(103,142,196,0.12)] sm:px-16 sm:py-24 text-center flex flex-col items-center"
+            >
               <div className="landing-hero-aura absolute inset-[-15%] opacity-70 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.7),transparent_30%),radial-gradient(circle_at_82%_74%,rgba(255,255,255,0.5),transparent_30%)]" />
               <div className="relative z-10 flex flex-col items-center">
-                <div className="flex flex-wrap justify-center gap-2 mb-8">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ margin: "-50px" }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                  className="flex flex-wrap justify-center gap-2 mb-8"
+                >
                   <SurfaceChip label="Local-first" />
                   <SurfaceChip label="Real-time sync" />
                   <SurfaceChip label="Browser-native AI" />
                   <SurfaceChip label="Git integration" />
-                </div>
+                </motion.div>
 
-                <h2 className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl max-w-3xl">
+                <motion.h2 
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ margin: "-50px" }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl max-w-3xl"
+                >
                   Ready to upgrade your scientific writing?
-                </h2>
-                <p className="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-700">
+                </motion.h2>
+                <motion.p 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ margin: "-50px" }}
+                  transition={{ duration: 0.6, delay: 0.6 }}
+                  className="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-700"
+                >
                   Join researchers drafting, compiling, and reasoning in a single local-first environment. No cloud lock-in, no central servers.
-                </p>
-                <div className="mt-10 flex flex-wrap justify-center gap-4">
+                </motion.p>
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ margin: "-50px" }}
+                  transition={{ duration: 0.6, delay: 0.8 }}
+                  className="mt-10 flex flex-wrap justify-center gap-4"
+                >
                   <Link
                     href="/new"
                     className="inline-flex items-center gap-2 rounded-full bg-black px-8 py-4 text-base font-medium text-white shadow-[0_18px_40px_rgba(0,0,0,0.14)] hover:bg-zinc-800 transition-colors"
@@ -751,9 +844,9 @@ export default function FeaturesPage() {
                   >
                     Go to dashboard
                   </Link>
-                </div>
+                </motion.div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </section>
       </main>

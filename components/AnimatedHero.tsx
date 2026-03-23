@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useInView } from "framer-motion";
 import { IconSparkles, IconZap } from "./Icons";
 import { Streamdown } from "streamdown";
@@ -665,28 +665,13 @@ export default function AnimatedHero() {
                         initial={{ y: 20, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         transition={{ delay: 0.3 }}
-                        className="w-full bg-white shadow-md border border-zinc-200 p-8 sm:p-10 flex flex-col items-center shrink-0 min-h-max"
+                        className="w-full bg-white shadow-md border border-zinc-200 p-8 flex flex-col items-center shrink-0 min-h-max"
                       >
-                        <h1 className="text-2xl sm:text-3xl font-serif font-bold text-center mb-2 text-black">Why is the Sky Blue?</h1>
-                        <div className="text-sm sm:text-base font-serif text-center mb-8 text-zinc-600">AI Assistant</div>
-                        
-                        <h2 className="text-lg sm:text-xl font-serif font-bold self-start w-full mb-3 text-black">1 Introduction</h2>
-                        <motion.p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify mb-6 text-zinc-800">
-                          The sky appears blue to the human eye primarily due to a phenomenon known as <strong>Rayleigh scattering</strong>.
-                        </motion.p>
-                        
-                        <h3 className="text-base sm:text-lg font-serif font-bold self-start w-full mb-2 text-black">1.1 The Physics of Light</h3>
-                        <motion.p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify mb-4 text-zinc-800">
-                          When sunlight reaches Earth's atmosphere, gases and particles scatter the light in all directions. Sunlight looks white but is made up of all colors of the visible spectrum. Shorter wavelengths (blue and violet) scatter more easily than longer wavelengths (red and yellow).
-                        </motion.p>
-                        
-                        <div className="w-full my-6 flex justify-center py-4 border-y border-zinc-100">
-                          <BlockMath math="I \propto \frac{1}{\lambda^4}" />
-                        </div>
-                        
-                        <motion.p className="text-sm sm:text-[15px] font-serif leading-relaxed text-justify text-zinc-800">
-                          Since blue light has a shorter wavelength <InlineMath math="\lambda" /> than red light, it scatters more intensely across the sky, which is why we perceive the sky as blue during the day.
-                        </motion.p>
+                        <img 
+                          src="/main-pdf-gs.png" 
+                          alt="PDF Preview" 
+                          className="w-full h-96 object-cover object-top"
+                        />
                       </motion.div>
                     </div>
                   </motion.div>

@@ -43,6 +43,8 @@ import {
   IconRotateCcw,
   IconFileCode,
   IconFileText,
+  IconCheck,
+  IconMinus,
 } from "@/components/Icons";
 
 type NavItem = "all" | "projects" | "recently-opened" | "templates" | "servers" | "trash";
@@ -525,24 +527,14 @@ export default function DashboardPage() {
                     } ${selectableIds.length === 0 ? "opacity-50 cursor-not-allowed" : "hover:border-[color-mix(in_srgb,var(--accent)_80%,transparent)]"}`}
                     title={allSelected ? "Deselect all" : "Select all"}
                   >
-                    {someSelected && (
-                      <span className="w-2.5 h-0.5 rounded-sm bg-white" />
+                    {(allSelected || someSelected) && (
+                      <span className="w-3 h-3 text-white flex items-center justify-center">
+                        {allSelected ? <IconCheck /> : <IconMinus />}
+                      </span>
                     )}
                   </button>
                   {selectedItems.length > 0 && activeNav !== "servers" ? (
-                    <div className="flex items-center gap-3">
-                      <span className="whitespace-nowrap">{TITLES[activeNav]}</span>
-                      <div className="pl-3.5">
-                        <BulkActionBar 
-                          selectedCount={selectedItems.length}
-                          onClearSelection={handleClearSelection}
-                          onBulkDownload={handleBulkDownload}
-                          onBulkDelete={handleBulkDelete}
-                          onBulkRestore={handleBulkRestore}
-                          activeNav={activeNav}
-                        />
-                      </div>
-                    </div>
+                    <span className="whitespace-nowrap">Selected ({selectedItems.length})</span>
                   ) : (
                     <span>{TITLES[activeNav]}</span>
                   )}
@@ -550,17 +542,42 @@ export default function DashboardPage() {
                 
                 <div className="flex items-center gap-2 h-[30px]">
                   {activeNav === "servers" && (
-                    <button
-                      onClick={handleNewServer}
-                      className="px-3 py-1.5 text-xs font-medium text-[var(--foreground)] bg-[var(--background)] border-[var(--border)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded-md transition-colors flex items-center gap-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5"
-                      title="Add new signaling server"
-                    >
-                      <IconPlus />
-                      New
-                    </button>
+                    <>
+                      <button
+                        onClick={handleNewServer}
+                        className="px-3 py-1.5 text-xs font-medium text-[var(--foreground)] bg-[var(--background)] border-[var(--border)] hover:bg-[color-mix(in_srgb,var(--border)_35%,transparent)] rounded-md transition-colors flex items-center gap-1.5 [&>svg]:w-3.5 [&>svg]:h-3.5"
+                        title="Add new signaling server"
+                      >
+                        <IconPlus />
+                        New
+                      </button>
+                      <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 shrink-0 h-full">
+                        <button
+                          onClick={() => setViewMode("list")}
+                          className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "list" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                        >
+                          <IconList />
+                        </button>
+                        <button
+                          onClick={() => setViewMode("icons")}
+                          className={`h-full w-[26px] rounded-[4px] flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 transition-colors ${viewMode === "icons" ? "bg-[var(--background)] text-[var(--foreground)]" : "text-[var(--muted)] hover:text-[var(--foreground)]"}`}
+                        >
+                          <IconLayoutGrid />
+                        </button>
+                      </div>
+                    </>
                   )}
                   
-                  {activeNav !== "servers" && (
+                  {activeNav !== "servers" && selectedItems.length > 0 ? (
+                    <BulkActionBar 
+                      selectedCount={selectedItems.length}
+                      onClearSelection={handleClearSelection}
+                      onBulkDownload={handleBulkDownload}
+                      onBulkDelete={handleBulkDelete}
+                      onBulkRestore={handleBulkRestore}
+                      activeNav={activeNav}
+                    />
+                  ) : activeNav !== "servers" && (
                     <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 shrink-0 h-full">
                       <button
                         onClick={() => setViewMode("list")}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Project } from "@/lib/projects";
-import { IconDownload, IconRestore, IconTrash2, IconPencil, IconFolder, IconFile } from "./Icons";
+import { IconDownload, IconRestore, IconTrash2, IconPencil, IconFolder, IconFile, IconCheck } from "./Icons";
 import { DashboardView, DashboardItemProps } from "./DashboardView";
 import { useResponsive } from "@/hooks/useResponsive";
 
@@ -145,7 +145,13 @@ export function ProjectList({
               : "border-[color-mix(in_srgb,var(--border)_70%,transparent)] bg-transparent"
           } hover:border-[color-mix(in_srgb,var(--accent)_70%,transparent)]`}
           title={isSelected ? "Deselect" : "Select"}
-        />
+        >
+          {isSelected && (
+            <span className="w-3 h-3 text-white flex items-center justify-center">
+              <IconCheck />
+            </span>
+          )}
+        </button>
       ) : undefined,
       topRightAccessory: rightAccessories,
     };

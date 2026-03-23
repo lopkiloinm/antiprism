@@ -42,12 +42,14 @@ import {
   Wifi,
   WifiOff,
   Lock,
+  Minus,
   Zap,
   LayoutDashboard,
   Eye,
   Server,
   FileCode,
   ArrowRight,
+  Check,
   CheckSquare,
   Square,
   X,
@@ -129,12 +131,14 @@ export const IconShield = () => <Shield {...iconProps} />;
 export const IconWifi = () => <Wifi {...iconProps} />;
 export const IconWifiOff = () => <WifiOff {...iconProps} />;
 export const IconLock = () => <Lock {...iconProps} />;
+export const IconMinus = () => <Minus {...iconProps} />;
 export const IconZap = () => <Zap {...iconProps} />;
 export const IconLayoutDashboard = () => <LayoutDashboard {...iconProps} />;
 export const IconEye = () => <Eye {...iconProps} />;
 export const IconServer = () => <Server {...iconProps} />;
 export const IconFileCode = () => <FileCode {...iconProps} />;
 export const IconArrowRight = () => <ArrowRight {...iconProps} />;
+export const IconCheck = () => <Check {...iconProps} />;
 export const IconCheckSquare = () => <CheckSquare {...iconProps} />;
 export const IconSquare = () => <Square {...iconProps} />;
 export const IconX = () => <X {...iconProps} />;

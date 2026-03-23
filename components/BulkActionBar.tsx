@@ -1,6 +1,6 @@
 "use client";
 
-import { IconX, IconDownload, IconTrash2, IconRotateCcw } from "./Icons";
+import { IconDownload, IconTrash2, IconRotateCcw } from "./Icons";
 
 interface BulkActionBarProps {
   selectedCount: number;
@@ -21,22 +21,8 @@ export function BulkActionBar({
 }: BulkActionBarProps) {
   return (
     <div className="flex items-center bg-[color-mix(in_srgb,var(--border)_15%,transparent)] rounded-[6px] p-0.5 shrink-0 h-full animate-in fade-in slide-in-from-left-2 duration-200">
-      {/* Selection Info */}
-      <div className="flex items-center gap-0.5">
-        <button 
-          onClick={onClearSelection}
-          className="h-[26px] w-[26px] rounded-[4px] text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--border)_25%,transparent)] transition-colors flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 shrink-0"
-          title="Clear selection"
-        >
-          <IconX />
-        </button>
-        <span className="text-xs font-medium text-[var(--foreground)]">
-          {selectedCount} selected
-        </span>
-      </div>
-
       {/* Action Buttons */}
-      <div className="flex items-center gap-0.5 ml-2">
+      <div className="flex items-center gap-0.5">
         {activeNav !== "trash" && (
           <button
             onClick={onBulkDownload}
