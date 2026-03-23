@@ -5115,7 +5115,7 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
                               key={i}
                               message={m}
                               isLast={i === smallChatMessages.length - 1}
-                              lastMessageRef={lastMessageRef}
+                              lastMessageRef={lastMessageRef as React.RefObject<HTMLPreElement>}
                               isStreaming={isGenerating && i === smallChatMessages.length - 1 && m.role === "assistant" && m.content === "Thinking..."}
                               onUpdateMessage={handleSmallMessageUpdate}
                             />
