@@ -191,7 +191,7 @@ Antiprism currently defines seven local model profiles in `lib/modelConfig.ts`. 
 
 #### Model Integration
 
-All five model definitions share the same runtime infrastructure, but they do not all execute through the exact same path:
+All seven model definitions share the same runtime infrastructure, but they do not all execute through the exact same path:
 - **`lib/modelConfig.ts`** centralizes Hugging Face IDs, dtypes, KV-cache geometry, context windows, and generation limits.
 - **`lib/localModelRuntime.ts`** handles text-only generation, model switching, download progress, and streamed tokens.
 - **`lib/vlModelRuntime.ts`** handles session-style vision execution for image-capable models.
@@ -418,7 +418,7 @@ If you want collaboration outside a public/default signaling setup, deploy `sign
 | **Storage** | @wwog/idbfs (IndexedDB filesystem) |
 | **Version Control** | Custom git implementation with IndexedDB |
 | **LaTeX** | texlyre-busytex (WASM), pandoc-wasm (md→tex), wasm-latex-tools |
-| **AI** | @huggingface/transformers (LFM2.5-1.2B Q4 ONNX, LFM2.5-VL-1.6B, Nanbeige4.1-3B, Qwen3.5-0.8B) |
+| **AI** | @huggingface/transformers (LFM2.5-1.2B Q4 ONNX, LFM2.5-VL-1.6B, Nanbeige4.1-3B, Qwen3.5-0.8B, Gemma 4 E2B) |
 | **Markdown / Math Rendering** | streamdown, KaTeX, react-katex |
 | **PDF** | react-pdf |
 | **Styling** | Tailwind CSS |
