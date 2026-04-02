@@ -550,10 +550,10 @@ async function doLoad(): Promise<void> {
         // Try fp16 first (more efficient)
         model = await ModelClass.from_pretrained(VL.hfId, {
           dtype: {
-            embed_tokens: "q4",
+            embed_tokens: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
             vision_encoder: "fp16",
-            decoder_model_merged: "q4",
-            audio_encoder: "fp16",
+            decoder_model_merged: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
+            audio_encoder: VL.hfId.includes("gemma-4") ? "q4f16" : "fp16",
           },
           device: "webgpu",
         });
@@ -565,10 +565,10 @@ async function doLoad(): Promise<void> {
           const ModelClass = VL.hfId.includes("gemma-4") ? AutoModelForCausalLM : Qwen3_5ForConditionalGeneration;
           model = await ModelClass.from_pretrained(VL.hfId, {
             dtype: {
-              embed_tokens: "q4",
+              embed_tokens: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
               vision_encoder: "fp32",
-              decoder_model_merged: "q4",
-              audio_encoder: "fp32",
+              decoder_model_merged: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
+              audio_encoder: VL.hfId.includes("gemma-4") ? "q4f16" : "fp32",
             },
             device: "webgpu",
           });
