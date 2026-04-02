@@ -64,7 +64,7 @@ export interface VLStreamCallbacks {
   onComplete?: (tokens: number, elapsed: number) => void;
 }
 
-let ort: any, etS: any, eiS: any, decS: any, tok: any;
+let ort: any, etS: any, eiS: any, eaS: any, decS: any, tok: any;
 let imgTok = -1, imgStartTok = -1, imgEndTok = -1, eosTok = 2, loading = false, loadP: Promise<void>|null = null;
 let progCb: ((p: number, s: string) => void)|null = null;
 
@@ -78,6 +78,10 @@ export const setVLProgressCallback = (cb: (p: number, s: string) => void) => { p
 export const isVLModelLoaded = () => {
   // For Qwen3.5, check if Transformers.js model is loaded
   if ((window as any).__qwenModel && (window as any).__qwenProcessor) {
+    return true;
+  }
+  // For Gemma 4, check if Transformers.js model is loaded
+  if ((window as any).__gemmaModel && (window as any).__gemmaProcessor) {
     return true;
   }
   // For other models, check ONNX sessions
@@ -98,10 +102,15 @@ export function disposeVLModel() {
     (window as any).__qwenModel = null;
     (window as any).__qwenProcessor = null;
   }
+  // Dispose Gemma 4 Transformers.js model
+  if ((window as any).__gemmaModel) {
+    (window as any).__gemmaModel = null;
+    (window as any).__gemmaProcessor = null;
+  }
   
   // Dispose raw ONNX sessions
-  etS?.release?.(); eiS?.release?.(); decS?.release?.();
-  etS = eiS = decS = tok = null; loading = false; loadP = null;
+  etS?.release?.(); eiS?.release?.(); eaS?.release?.(); decS?.release?.();
+  etS = eiS = eaS = decS = tok = null; loading = false; loadP = null;
 }
 
 export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask", createFormat: CreateOutputFormat = "latex"): Promise<string | AgentResponse> {
@@ -110,6 +119,11 @@ export async function generateVLResponse(msgs: VLMessage[], cb?: VLStreamCallbac
   // Handle Qwen3.5 with Transformers.js
   if ((window as any).__qwenModel && (window as any).__qwenProcessor) {
     return generateQwen3_5Response(msgs, cb, maxTok, mode, createFormat);
+  }
+  
+  // Handle Gemma 4 with Transformers.js
+  if ((window as any).__gemmaModel && (window as any).__gemmaProcessor) {
+    return generateGemma4Response(msgs, cb, maxTok, mode, createFormat);
   }
   
   // Handle other models with raw ONNX
@@ -242,6 +256,88 @@ async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks
   }
   
   // Handle Edit mode with proper parsing
+  if (mode === "edit") {
+    return { type: "edit", content: parseEditResponse(result) };
+  }
+  
+  return result;
+}
+
+async function generateGemma4Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask", createFormat: CreateOutputFormat = "latex"): Promise<string | AgentResponse> {
+  const model = (window as any).__gemmaModel;
+  const processor = (window as any).__gemmaProcessor;
+  const { RawImage, TextStreamer } = await import("@huggingface/transformers");
+  
+  const start = performance.now();
+  
+  // Convert messages to chat template format
+  const text = processor.tokenizer.apply_chat_template(msgs, {
+    add_generation_prompt: true,
+  });
+  
+  // Handle image if present
+  let image = null;
+  const msgWithImage = msgs.find(msg => msg.image);
+  if (msgWithImage && msgWithImage.image) {
+    image = await (await RawImage.read(msgWithImage.image)).resize(448, 448);
+  }
+  
+  // Handle audio if present
+  let audio = null;
+  const msgWithAudio = msgs.find(msg => msg.audio);
+  if (msgWithAudio && msgWithAudio.audio) {
+    // For now, we'll skip audio handling as it requires additional processing
+    console.warn("[VL] Audio input detected but not yet supported in Gemma 4 integration");
+  }
+  
+  // Prepare inputs
+  const inputs = await processor(text, image, audio);
+  
+  // Calculate remaining context budget if no cap set
+  let effectiveMaxTok = maxTok;
+  if (!effectiveMaxTok || effectiveMaxTok <= 0) {
+    const VL = getVLModelDef();
+    const inputLength = inputs.input_ids.dims.at(-1);
+    effectiveMaxTok = Math.max(1, VL.maxContextTokens - inputLength);
+  }
+  
+  // Generate response
+  const streamer = new TextStreamer(processor.tokenizer, {
+    skip_prompt: true,
+    skip_special_tokens: false,
+    callback_function: (token: string) => {
+      cb?.onChunk?.(token);
+    }
+  });
+  
+  const generationOptions = effectiveMaxTok && effectiveMaxTok > 0 ? { max_new_tokens: effectiveMaxTok } : {};
+  const outputs = await model.generate({
+    ...inputs,
+    ...generationOptions,
+    streamer: streamer,
+  });
+  
+  // Decode final output
+  const decoded = processor.batch_decode(
+    outputs.slice(null, [inputs.input_ids.dims.at(-1), null]),
+    {
+      skip_special_tokens: true,
+    },
+  );
+  
+  const elapsed = (performance.now() - start) / 1000;
+  const result = decoded[0];
+  const tokens = result.length;
+  
+  cb?.onComplete?.(tokens, elapsed);
+  
+  // Handle Agent mode with pandoc conversion
+  if (mode === "agent") {
+    const { latex, title, markdown, typst } = await parseCreateResponse(result, createFormat);
+    return { type: "agent", content: createFormat === "typst" ? (typst || "") : latex, title, markdown, typst };
+  }
+  
+  // Handle Edit mode
   if (mode === "edit") {
     return { type: "edit", content: parseEditResponse(result) };
   }
@@ -432,15 +528,15 @@ async function doLoad(): Promise<void> {
     
     updateProgress(0, "Loading Qwen3.5 model...");
     
-    // Use Transformers.js for Qwen3.5 (proper approach)
-    if (VL.hfId.includes("Qwen3.5")) {
+    // Use Transformers.js for Qwen3.5 and Gemma 4 (proper approach)
+    if (VL.hfId.includes("Qwen3.5") || VL.hfId.includes("gemma-4")) {
       // Configure model-specific cache BEFORE importing Transformers.js
       const cache = await caches.open(cacheNameForVL());
       const transformers = await import("@huggingface/transformers");
       transformers.env.useCustomCache = true;
       transformers.env.customCache = cache;
       
-      const { AutoProcessor, Qwen3_5ForConditionalGeneration, RawImage } = transformers;
+      const { AutoProcessor, Qwen3_5ForConditionalGeneration, AutoModelForCausalLM, RawImage } = transformers;
       
       updateProgress(20, "Loading processor...");
       const processor = await AutoProcessor.from_pretrained(VL.hfId);
@@ -448,12 +544,16 @@ async function doLoad(): Promise<void> {
       updateProgress(40, "Loading model...");
       let model;
       try {
+        // Use appropriate model class
+        const ModelClass = VL.hfId.includes("gemma-4") ? AutoModelForCausalLM : Qwen3_5ForConditionalGeneration;
+        
         // Try fp16 first (more efficient)
-        model = await Qwen3_5ForConditionalGeneration.from_pretrained(VL.hfId, {
+        model = await ModelClass.from_pretrained(VL.hfId, {
           dtype: {
             embed_tokens: "q4",
             vision_encoder: "fp16",
             decoder_model_merged: "q4",
+            audio_encoder: "fp16",
           },
           device: "webgpu",
         });
@@ -462,11 +562,13 @@ async function doLoad(): Promise<void> {
           console.warn("[VL] fp16 not supported, falling back to fp32");
           updateProgress(40, "Loading model (fp32 fallback)...");
           // Fallback to fp32 for compatibility
-          model = await Qwen3_5ForConditionalGeneration.from_pretrained(VL.hfId, {
+          const ModelClass = VL.hfId.includes("gemma-4") ? AutoModelForCausalLM : Qwen3_5ForConditionalGeneration;
+          model = await ModelClass.from_pretrained(VL.hfId, {
             dtype: {
               embed_tokens: "q4",
               vision_encoder: "fp32",
               decoder_model_merged: "q4",
+              audio_encoder: "fp32",
             },
             device: "webgpu",
           });
@@ -485,8 +587,13 @@ async function doLoad(): Promise<void> {
       eosTok = tok.eos_token_id ?? 2;
       
       // Store the model and processor for later use (ONLY when fully loaded)
-      (window as any).__qwenModel = model;
-      (window as any).__qwenProcessor = processor;
+      if (VL.hfId.includes("gemma-4")) {
+        (window as any).__gemmaModel = model;
+        (window as any).__gemmaProcessor = processor;
+      } else {
+        (window as any).__qwenModel = model;
+        (window as any).__qwenProcessor = processor;
+      }
       
       updateProgress(100, "Qwen3.5 ready!");
       return;
@@ -505,6 +612,7 @@ async function doLoad(): Promise<void> {
     
     etS = await makeSess(ort, SF.embedTokens, "Embedder");
     if (SF.embedImages) { try { eiS = await makeSess(ort, SF.embedImages, "Vision"); } catch {} }
+    if (SF.embedAudio) { try { eaS = await makeSess(ort, SF.embedAudio, "Audio"); } catch {} }
     decS = await makeSess(ort, SF.decoder, "Decoder");
 
     // Strict cache verification (only for raw ONNX models)
