@@ -536,7 +536,7 @@ async function doLoad(): Promise<void> {
       transformers.env.useCustomCache = true;
       transformers.env.customCache = cache;
       
-      const { AutoProcessor, Qwen3_5ForConditionalGeneration, AutoModelForCausalLM, RawImage } = transformers;
+      const { AutoProcessor, Qwen3_5ForConditionalGeneration, Gemma4ForConditionalGeneration, RawImage } = transformers;
       
       updateProgress(20, "Loading processor...");
       const processor = await AutoProcessor.from_pretrained(VL.hfId);
@@ -545,15 +545,15 @@ async function doLoad(): Promise<void> {
       let model;
       try {
         // Use appropriate model class
-        const ModelClass = VL.hfId.includes("gemma-4") ? AutoModelForCausalLM : Qwen3_5ForConditionalGeneration;
+        const ModelClass = VL.hfId.includes("gemma-4") ? Gemma4ForConditionalGeneration : Qwen3_5ForConditionalGeneration;
         
         // Try fp16 first (more efficient)
         model = await ModelClass.from_pretrained(VL.hfId, {
-          dtype: {
-            embed_tokens: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
+          dtype: VL.hfId.includes("gemma-4") ? "q4f16" : {
+            embed_tokens: "q4",
             vision_encoder: "fp16",
-            decoder_model_merged: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
-            audio_encoder: VL.hfId.includes("gemma-4") ? "q4f16" : "fp16",
+            decoder_model_merged: "q4",
+            audio_encoder: "fp16",
           },
           device: "webgpu",
         });
@@ -562,13 +562,13 @@ async function doLoad(): Promise<void> {
           console.warn("[VL] fp16 not supported, falling back to fp32");
           updateProgress(40, "Loading model (fp32 fallback)...");
           // Fallback to fp32 for compatibility
-          const ModelClass = VL.hfId.includes("gemma-4") ? AutoModelForCausalLM : Qwen3_5ForConditionalGeneration;
+          const ModelClass = VL.hfId.includes("gemma-4") ? Gemma4ForConditionalGeneration : Qwen3_5ForConditionalGeneration;
           model = await ModelClass.from_pretrained(VL.hfId, {
-            dtype: {
-              embed_tokens: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
+            dtype: VL.hfId.includes("gemma-4") ? "q4f16" : {
+              embed_tokens: "q4",
               vision_encoder: "fp32",
-              decoder_model_merged: VL.hfId.includes("gemma-4") ? "q4f16" : "q4",
-              audio_encoder: VL.hfId.includes("gemma-4") ? "q4f16" : "fp32",
+              decoder_model_merged: "q4",
+              audio_encoder: "fp32",
             },
             device: "webgpu",
           });

@@ -165,6 +165,7 @@ async function ensureFilesCached(def: ModelDef, files: string[]): Promise<void> 
 let AutoModelForCausalLM: any = null;
 let AutoTokenizer: any = null;
 let Gemma3nForConditionalGeneration: any = null;
+let Gemma4ForConditionalGeneration: any = null;
 
 import { getModelById, DEFAULT_MODEL_ID, type ModelDef } from "./modelConfig";
 import { getActiveModelId as getStoredActiveModelId, setActiveModelId as storeActiveModelId } from "./settings";
@@ -311,7 +312,8 @@ async function loadTransformers(modelDefForCache?: ModelDef) {
   AutoModelForCausalLM = transformers.AutoModelForCausalLM;
   AutoTokenizer = transformers.AutoTokenizer;
   Gemma3nForConditionalGeneration = transformers.Gemma3nForConditionalGeneration;
-  return { AutoModelForCausalLM, AutoTokenizer, Gemma3nForConditionalGeneration };
+  Gemma4ForConditionalGeneration = transformers.Gemma4ForConditionalGeneration;
+  return { AutoModelForCausalLM, AutoTokenizer, Gemma3nForConditionalGeneration, Gemma4ForConditionalGeneration };
 }
 
 export interface DownloadStats {
@@ -554,7 +556,7 @@ async function loadModel(): Promise<void> {
       console.info("[model] load start", { modelId, dtype, cache: cacheNameFor(def) });
       console.info("[model] revision", { revision });
 
-      const { AutoModelForCausalLM: ModelClass, AutoTokenizer: TokenizerClass, Gemma3nForConditionalGeneration: GemmaClass } =
+      const { AutoModelForCausalLM: ModelClass, AutoTokenizer: TokenizerClass, Gemma3nForConditionalGeneration: GemmaClass, Gemma4ForConditionalGeneration: Gemma4Class } =
         await loadTransformers(def);
 
       if (myGeneration !== loadGeneration) return;
@@ -574,7 +576,7 @@ async function loadModel(): Promise<void> {
       if (myGeneration !== loadGeneration) return;
 
       // Choose the correct model class based on the model definition
-      const ModelClassToUse = def.hfId.includes("gemma-4") ? GemmaClass : ModelClass;
+      const ModelClassToUse = def.hfId.includes("gemma-4") ? Gemma4Class : (def.hfId.includes("gemma-3n") ? GemmaClass : ModelClass);
 
       let needsDownload = true;
       try {
