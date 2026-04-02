@@ -27,15 +27,15 @@ function cacheNameForVL(): string {
   return `antiprism-model-${modelName}-${VL.revision}`;
 }
 
-export interface VLMessage { role: "user"|"assistant"|"system"; content: string; image?: string; }
+export interface VLMessage { role: "user"|"assistant"|"system"; content: string; image?: string; audio?: string; }
 
 export async function listVLModelFiles(): Promise<string[]> {
   const VL = getVLModelDef();
   const SF = VL.sessionFiles;
   if (!SF) return [];
   
-  // Handle all models with the same pattern (Qwen3.5 and LFM2.5 VL)
-  const stems = [SF.embedTokens, SF.embedImages, SF.decoder].filter(Boolean) as string[];
+  // Handle all models with the same pattern (Qwen3.5, LFM2.5 VL, and Gemma 4)
+  const stems = [SF.embedTokens, SF.embedImages, SF.embedAudio, SF.decoder].filter(Boolean) as string[];
   const files = [];
   for (const stem of stems) {
     files.push(`onnx/${stem}.onnx`);
@@ -49,7 +49,7 @@ export async function listVLModelFilesSafe(modelDef: ModelDef): Promise<string[]
   const SF = modelDef.sessionFiles;
   if (!SF) return [];
   
-  const stems = [SF.embedTokens, SF.embedImages, SF.decoder].filter(Boolean) as string[];
+  const stems = [SF.embedTokens, SF.embedImages, SF.embedAudio, SF.decoder].filter(Boolean) as string[];
   const files = [];
   for (const stem of stems) {
     files.push(`onnx/${stem}.onnx`);

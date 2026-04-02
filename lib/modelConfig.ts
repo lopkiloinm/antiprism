@@ -37,6 +37,7 @@ export interface ModelDef {
   sessionFiles?: {
     embedTokens: string;
     embedImages?: string;
+    embedAudio?: string;
     decoder: string;
   };
 }
@@ -129,6 +130,24 @@ export const AVAILABLE_MODELS: ModelDef[] = [
     sessionFiles: {
       embedTokens: "embed_tokens_q4f16",
       embedImages: "vision_encoder_q4f16",
+      decoder: "decoder_model_merged_q4f16",
+    },
+  },
+  {
+    id: "gemma-4-e2b-it",
+    label: "Gemma 4 E2B IT",
+    hfId: "onnx-community/gemma-4-E2B-it-ONNX",
+    dtype: "q4f16",
+    revision: "main",
+    maxNewTokens: 2048,
+    maxContextTokens: 128_000,
+    reservedTokens: 4096,
+    vision: true,
+    isDedicatedVLM: false,
+    sessionFiles: {
+      embedTokens: "embed_tokens_q4f16",
+      embedImages: "vision_encoder_q4f16",
+      embedAudio: "audio_encoder_q4f16",
       decoder: "decoder_model_merged_q4f16",
     },
   },

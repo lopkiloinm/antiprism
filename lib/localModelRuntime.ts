@@ -74,6 +74,22 @@ async function listModelFiles(dtype: string = MODEL_DTYPE()): Promise<string[]> 
     ];
   }
 
+  // Handle Gemma 4 unified model structure
+  if (activeModelDef.hfId.includes("gemma-4")) {
+    const isQ4F16 = dtype === "q4f16";
+    const stem = isQ4F16 ? "q4f16" : dtype;
+    return [
+      `onnx/decoder_model_merged_${stem}.onnx`,
+      `onnx/decoder_model_merged_${stem}.onnx_data`,
+      `onnx/embed_tokens_${stem}.onnx`, 
+      `onnx/embed_tokens_${stem}.onnx_data`,
+      `onnx/vision_encoder_${stem}.onnx`,
+      `onnx/vision_encoder_${stem}.onnx_data`,
+      `onnx/audio_encoder_${stem}.onnx`,
+      `onnx/audio_encoder_${stem}.onnx_data`
+    ];
+  }
+
   // Prefer dynamic discovery so we handle upstream changes (e.g. multiple onnx_data shards).
   // HuggingFace model API returns siblings list.
   const apiUrl = `${HF_CDN_BASE}/api/models/${MODEL_ID()}?revision=${encodeURIComponent(MODEL_REVISION())}`;
@@ -148,6 +164,7 @@ async function ensureFilesCached(def: ModelDef, files: string[]): Promise<void> 
 // Dynamic import to avoid SSR issues
 let AutoModelForCausalLM: any = null;
 let AutoTokenizer: any = null;
+let Gemma3nForConditionalGeneration: any = null;
 
 import { getModelById, DEFAULT_MODEL_ID, type ModelDef } from "./modelConfig";
 import { getActiveModelId as getStoredActiveModelId, setActiveModelId as storeActiveModelId } from "./settings";
@@ -293,7 +310,8 @@ async function loadTransformers(modelDefForCache?: ModelDef) {
   
   AutoModelForCausalLM = transformers.AutoModelForCausalLM;
   AutoTokenizer = transformers.AutoTokenizer;
-  return { AutoModelForCausalLM, AutoTokenizer };
+  Gemma3nForConditionalGeneration = transformers.Gemma3nForConditionalGeneration;
+  return { AutoModelForCausalLM, AutoTokenizer, Gemma3nForConditionalGeneration };
 }
 
 export interface DownloadStats {
@@ -536,7 +554,7 @@ async function loadModel(): Promise<void> {
       console.info("[model] load start", { modelId, dtype, cache: cacheNameFor(def) });
       console.info("[model] revision", { revision });
 
-      const { AutoModelForCausalLM: ModelClass, AutoTokenizer: TokenizerClass } =
+      const { AutoModelForCausalLM: ModelClass, AutoTokenizer: TokenizerClass, Gemma3nForConditionalGeneration: GemmaClass } =
         await loadTransformers(def);
 
       if (myGeneration !== loadGeneration) return;
@@ -554,6 +572,9 @@ async function loadModel(): Promise<void> {
       }
 
       if (myGeneration !== loadGeneration) return;
+
+      // Choose the correct model class based on the model definition
+      const ModelClassToUse = def.hfId.includes("gemma-4") ? GemmaClass : ModelClass;
 
       let needsDownload = true;
       try {
@@ -671,7 +692,7 @@ async function loadModel(): Promise<void> {
 
       if (myGeneration !== loadGeneration) return;
 
-      const modelPromise = ModelClass.from_pretrained(modelId, {
+      const modelPromise = ModelClassToUse.from_pretrained(modelId, {
         device: "webgpu",
         dtype,
         revision,
@@ -704,7 +725,7 @@ async function loadModel(): Promise<void> {
               const dtypeFiles = await listModelFiles(dtype);
               await ensureFilesCached(def, dtypeFiles);
 
-              model = await ModelClass.from_pretrained(modelId, {
+              model = await ModelClassToUse.from_pretrained(modelId, {
                 device: "webgpu",
                 dtype,
                 revision,
@@ -721,7 +742,7 @@ async function loadModel(): Promise<void> {
             // falling back to WASM (slower), using the same model files.
             try {
               console.warn("[model] webgpu load failed; falling back to wasm backend");
-              model = await ModelClass.from_pretrained(modelId, {
+              model = await ModelClassToUse.from_pretrained(modelId, {
                 device: "wasm",
                 dtype: "q4",
                 revision,
