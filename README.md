@@ -50,7 +50,7 @@ The README is intentionally more technical than the product tour on `/features`.
 
 #### AI Models Overview
 
-Antiprism currently defines six local model profiles in `lib/modelConfig.ts`. They are downloaded on demand, cached with the Cache API, and executed through ONNX Runtime Web + WebGPU:
+Antiprism currently defines seven local model profiles in `lib/modelConfig.ts`. They are downloaded on demand, cached with the Cache API, and executed through ONNX Runtime Web + WebGPU:
 
 **1. LFM2.5-1.2B Q4 (Instruct Model)**
 - **Purpose**: Text generation for chat, LaTeX assistance, and document creation
@@ -150,6 +150,44 @@ Antiprism currently defines six local model profiles in `lib/modelConfig.ts`. Th
   - Lightweight local reasoning when you want faster turnaround than larger models
   - Short-form drafting, quick Q&A, and code/math helpers
   - Experiments with NVIDIA’s thinking-style outputs inside the Antiprism UI
+
+**7. Gemma 4 E2B (Google DeepMind Multimodal Model)**
+- **Purpose**: Advanced multimodal understanding with text, image, and audio processing capabilities
+- **Architecture**: 2.3 billion effective parameters with unified multimodal foundation from Google DeepMind
+- **Runtime Profile**: Omnimodal `q4f16`, `maxContextTokens: 128,000`, `maxNewTokens: 2,048`
+- **Processing Pipeline**:
+  1. **Text Encoder**: Processes text tokens through transformer layers with efficient attention mechanisms
+  2. **Vision Encoder**: Processes images through patch extraction and multimodal fusion
+  3. **Audio Encoder**: Processes audio sequences for speech understanding and translation (framework ready)
+  4. **Multimodal Fusion**: Early fusion of text, vision, and audio tokens for comprehensive understanding
+  5. **Enhanced Reasoning**: Built-in thinking capabilities for complex problem solving across modalities
+- **Technical Details**:
+  - Supports 128,000 token context length with efficient memory usage
+  - Float16 precision for vision and audio encoders, 4-bit quantized for text components
+  - WebGPU-optimized with per-component dtype configuration
+  - Unified architecture enables seamless cross-modal reasoning
+- **Multimodal Capabilities**:
+  - Analyzing complex diagrams, charts, and mathematical figures with visual reasoning
+  - Understanding screenshots with detailed visual context and explanations
+  - Converting handwritten equations and diagrams to LaTeX with high accuracy
+  - Processing multiple images and audio inputs in conversation context
+  - Speech recognition and translation capabilities (infrastructure ready)
+- **Vision Support**:
+  - Image preprocessing with 448×448 resizing and normalization
+  - Multi-tile processing for high-resolution images and detailed analysis
+  - Visual token integration with text tokens for unified understanding
+  - Cross-generational parity with text-only performance
+- **Audio Support**:
+  - Audio encoder framework ready for speech processing
+  - Designed for speech-to-text and translation workflows
+  - Multilingual audio understanding capabilities
+  - Integration with multimodal reasoning pipeline
+- **Use Cases**:
+  - Advanced document analysis with image and audio context
+  - Mathematical figure explanation with visual reasoning
+  - Multilingual document processing and translation
+  - Research paper analysis with comprehensive multimodal understanding
+  - Educational content creation with visual and audio explanations
 
 #### Model Integration
 
