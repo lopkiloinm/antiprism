@@ -266,12 +266,31 @@ async function generateQwen3_5Response(msgs: VLMessage[], cb?: VLStreamCallbacks
 async function generateGemma4Response(msgs: VLMessage[], cb?: VLStreamCallbacks, maxTok?: number, mode: AgentMode = "ask", createFormat: CreateOutputFormat = "latex"): Promise<string | AgentResponse> {
   const model = (window as any).__gemmaModel;
   const processor = (window as any).__gemmaProcessor;
-  const { RawImage, TextStreamer } = await import("@huggingface/transformers");
+  const { TextStreamer, load_image: loadImage } = await import("@huggingface/transformers");
   
   const start = performance.now();
+
+  // Gemma 4 expects structured multimodal messages. Using the processor chat
+  // template keeps us aligned with the model's official Transformers.js flow.
+  const conversation = msgs.map((msg) => {
+    const content: Array<{ type: "image" } | { type: "text"; text: string }> = [];
+    if (msg.image) {
+      content.push({ type: "image" });
+    }
+    if (msg.content) {
+      content.push({ type: "text", text: msg.content });
+    }
+    if (content.length === 0) {
+      content.push({ type: "text", text: "" });
+    }
+    return {
+      role: msg.role,
+      content,
+    };
+  });
   
-  // Convert messages to chat template format
-  const text = processor.tokenizer.apply_chat_template(msgs, {
+  const prompt = processor.apply_chat_template(conversation, {
+    enable_thinking: false,
     add_generation_prompt: true,
   });
   
@@ -279,7 +298,7 @@ async function generateGemma4Response(msgs: VLMessage[], cb?: VLStreamCallbacks,
   let image = null;
   const msgWithImage = msgs.find(msg => msg.image);
   if (msgWithImage && msgWithImage.image) {
-    image = await (await RawImage.read(msgWithImage.image)).resize(448, 448);
+    image = await loadImage(msgWithImage.image);
   }
   
   // Handle audio if present
@@ -291,13 +310,23 @@ async function generateGemma4Response(msgs: VLMessage[], cb?: VLStreamCallbacks,
   }
   
   // Prepare inputs
-  const inputs = await processor(text, image, audio);
+  const inputs = await processor(prompt, image, audio, {
+    add_special_tokens: false,
+  });
+  const inputLength = inputs.input_ids?.dims?.at(-1) ?? 0;
+  if (!inputLength) {
+    console.error("[VL] Gemma 4 processor returned empty input_ids", {
+      conversation,
+      hasImage: !!image,
+      hasAudio: !!audio,
+    });
+    throw new Error("Gemma 4 processor returned empty input_ids");
+  }
   
   // Calculate remaining context budget if no cap set
   let effectiveMaxTok = maxTok;
   if (!effectiveMaxTok || effectiveMaxTok <= 0) {
     const VL = getVLModelDef();
-    const inputLength = inputs.input_ids.dims.at(-1);
     effectiveMaxTok = Math.max(1, VL.maxContextTokens - inputLength);
   }
   
