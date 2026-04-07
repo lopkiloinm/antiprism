@@ -21,6 +21,23 @@ class Logger {
   
   private maxLogsPerCategory = 500;
   private listeners: Set<(category: LogCategory, logs: LogEntry[]) => void> = new Set();
+  private pendingFlush: Set<LogCategory> = new Set();
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private scheduleFlush(category: LogCategory) {
+    this.pendingFlush.add(category);
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        const toFlush = this.pendingFlush;
+        this.pendingFlush = new Set();
+        toFlush.forEach(cat => {
+          const categoryLogs = this.logs.get(cat)!;
+          this.listeners.forEach(listener => listener(cat, categoryLogs));
+        });
+      }, 50);
+    }
+  }
 
   private addEntry(category: LogCategory, level: LogLevel, message: string, data?: any) {
     const entry: LogEntry = {
@@ -34,29 +51,18 @@ class Logger {
     const categoryLogs = this.logs.get(category)!;
     categoryLogs.push(entry);
     
-    // Keep only the last N logs per category
     if (categoryLogs.length > this.maxLogsPerCategory) {
       categoryLogs.splice(0, categoryLogs.length - this.maxLogsPerCategory);
     }
 
-    // Notify listeners (defer to avoid setState during render)
-    setTimeout(() => {
-      this.listeners.forEach(listener => listener(category, categoryLogs));
-    }, 0);
+    if (this.listeners.size > 0) {
+      this.scheduleFlush(category);
+    }
 
-    // Also log to console for debugging (but only in development)
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' && level !== 'info') {
       const prefix = `[${category.toUpperCase()}] ${level.toUpperCase()}:`;
-      switch (level) {
-        case 'error':
-          console.error(prefix, message, data);
-          break;
-        case 'warn':
-          console.warn(prefix, message, data);
-          break;
-        default:
-          console.log(prefix, message, data);
-      }
+      if (level === 'error') console.error(prefix, message, data);
+      else console.warn(prefix, message, data);
     }
   }
 
