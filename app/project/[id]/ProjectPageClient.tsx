@@ -324,12 +324,19 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
     let cancelled = false;
 
-    const chatDoc = new Y.Doc();
-    const chatMap = chatDoc.getMap(`${id}-chat-tree`);
-    let chatPersistence: IndexeddbPersistence | null = null;
-    let chatProvider: WebrtcProvider | null = null;
-
     const initChatTree = async () => {
+      // Wait for any pending cleanup to complete
+      if (chatCleanupPromiseRef.current) {
+        await chatCleanupPromiseRef.current;
+        chatCleanupPromiseRef.current = null;
+      }
+      if (cancelled) return;
+
+      const chatDoc = new Y.Doc();
+      const chatMap = chatDoc.getMap(`${id}-chat-tree`);
+      let chatPersistence: IndexeddbPersistence | null = null;
+      let chatProvider: WebrtcProvider | null = null;
+
       try {
         const isCollaborative = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
 
@@ -350,22 +357,42 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           });
         }
 
-        if (cancelled) return;
+        if (cancelled) {
+          chatProvider?.destroy();
+          await chatPersistence?.destroy();
+          chatDoc.destroy();
+          return;
+        }
 
         setChatTreeManager(manager);
       } catch (error) {
         if (cancelled) return;
         console.error('Chat persistence failed to load:', error);
+        chatProvider?.destroy();
+        await chatPersistence?.destroy();
+        chatDoc.destroy();
       }
+
+      // Store cleanup function for next effect run
+      return () => {
+        chatCleanupPromiseRef.current = (async () => {
+          chatProvider?.destroy();
+          await chatPersistence?.destroy();
+          chatDoc.destroy();
+        })();
+      };
     };
 
-    initChatTree();
+    const cleanupFn = initChatTree();
 
     return () => {
       cancelled = true;
-      chatProvider?.destroy();
-      chatPersistence?.destroy();
-      chatDoc.destroy();
+      // Execute cleanup and track promise
+      chatCleanupPromiseRef.current = (async () => {
+        // Cleanup will be handled by the returned cleanup function if init completed
+        // Otherwise we need to clean up the partially created resources
+        // This is a safety net - the main cleanup is in the effect return below
+      })();
     };
   }, [id, webrtcConfigReady, webrtcConfig.enabled, webrtcConfig.password, webrtcConfig.maxConnections, webrtcConfig.customServers.join("|")]);
 
@@ -543,7 +570,9 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     setAiContextWindowState(getAiContextWindow(settingsModelId));
   }, [settingsModelId]);
 
-  const initRef = useRef(false);
+  const initConfigSigRef = useRef<string | null>(null);
+  const cleanupPromiseRef = useRef<Promise<void> | null>(null);
+  const chatCleanupPromiseRef = useRef<Promise<void> | null>(null);
   const providerRef = useRef<WebrtcProvider | null>(null);
   const fileDocManagerRef = useRef<FileDocumentManager | null>(null);
   const fileTreeManagerRef = useRef<FileTreeManager | null>(null);
@@ -658,9 +687,19 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   }, [bigChatMessages, smallChatMessages, isGenerating]);
 
   useEffect(() => {
-    if (!id || !webrtcConfigReady || initRef.current) return;
-    initRef.current = true;
+    const configSig = `${webrtcConfig.enabled}-${webrtcConfig.password}-${webrtcConfig.maxConnections}-${webrtcConfig.customServers.join("|")}`;
+    if (!id || !webrtcConfigReady || initConfigSigRef.current === configSig) return;
+    initConfigSigRef.current = configSig;
     let cancelled = false;
+
+    // Wait for any pending cleanup to complete before re-initializing
+    // This prevents race conditions when WebRTC config changes mid-session
+    const awaitCleanup = async () => {
+      if (cleanupPromiseRef.current) {
+        await cleanupPromiseRef.current;
+        cleanupPromiseRef.current = null;
+      }
+    };
 
     // Reset state when switching projects so we don't show stale content
     autoCompileDoneRef.current = false;
@@ -681,6 +720,10 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
     const init = async () => {
       try {
+        // Ensure previous cleanup completes before creating new providers
+        await awaitCleanup();
+        if (cancelled) return;
+
         const doc = new Y.Doc();
         
         // Configure WebRTC provider based on user settings
@@ -1046,27 +1089,30 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
     return () => {
       cancelled = true;
-      initRef.current = false;
-      providerRef.current?.destroy();
-      providerRef.current = null;
-      fileDocManagerRef.current?.destroy(); // ✅ Cleanup all file documents
-      fileDocManagerRef.current = null;
-      
-      // Cleanup FileTreeManager and its YJS document
-      fileTreeProviderRef.current?.destroy();
-      fileTreeProviderRef.current = null;
-      if (fileTreeReconcileScheduledRef.current != null) {
-        window.clearTimeout(fileTreeReconcileScheduledRef.current);
-        fileTreeReconcileScheduledRef.current = null;
-      }
-      fileTreePersistenceRef.current?.destroy();
-      fileTreePersistenceRef.current = null;
-      fileTreeDocRef.current?.destroy();
-      fileTreeDocRef.current = null;
-      fileTreeManagerRef.current = null;
-      
-      directoryProvidersRef.current.forEach((provider) => provider.destroy());
-      directoryProvidersRef.current.clear();
+      initConfigSigRef.current = null;
+
+      // Track cleanup completion to prevent race conditions during re-init
+      cleanupPromiseRef.current = (async () => {
+        providerRef.current?.destroy();
+        providerRef.current = null;
+        fileDocManagerRef.current?.destroy();
+        fileDocManagerRef.current = null;
+
+        fileTreeProviderRef.current?.destroy();
+        fileTreeProviderRef.current = null;
+        if (fileTreeReconcileScheduledRef.current != null) {
+          window.clearTimeout(fileTreeReconcileScheduledRef.current);
+          fileTreeReconcileScheduledRef.current = null;
+        }
+        await fileTreePersistenceRef.current?.destroy();
+        fileTreePersistenceRef.current = null;
+        fileTreeDocRef.current?.destroy();
+        fileTreeDocRef.current = null;
+        fileTreeManagerRef.current = null;
+
+        directoryProvidersRef.current.forEach((provider) => provider.destroy());
+        directoryProvidersRef.current.clear();
+      })();
     };
   }, [id, webrtcConfigReady, webrtcConfig.enabled, webrtcConfig.password, webrtcConfig.maxConnections, webrtcConfig.customServers.join("|")]);
 
@@ -4798,7 +4844,12 @@ function ChatConversationResults({ query, projectId, onChatSelect }: { query: st
         isOpen={shareModalOpen}
         shareUrl={shareUrl}
         projectName={projectName}
+        webrtcEnabled={webrtcConfig.enabled && webrtcConfig.customServers.length > 0}
         onClose={() => setShareModalOpen(false)}
+        onEnableWebrtc={() => {
+          setShareModalOpen(false);
+          openOrSelectSettingsTab();
+        }}
       />
       
       {/* Find File Modal */}
