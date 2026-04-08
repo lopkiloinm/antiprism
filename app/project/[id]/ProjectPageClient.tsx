@@ -981,6 +981,38 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         }
 
         if (cancelled) return;
+
+        // Pre-load all text file contents into their Y.Docs so they are
+        // available for WebRTC sync.  Without this, files the sharer never
+        // opens have no Y.Doc, and when a recipient opens them the empty
+        // remote Y.Doc overwrites the sharer's local-only IDBFS content.
+        if (fileDocManagerRef.current) {
+          const allTreeItems = fileTreeManager.getTreeItems();
+          for (const item of allTreeItems) {
+            if (cancelled) break;
+            if (item.isFolder) continue;
+            const fullPath = `${basePath}/${item.path}`.replace(/\/+/g, "/");
+            if (isBinaryPath(fullPath)) continue;
+            try {
+              const fileDoc = fileDocManagerRef.current.getDocument(fullPath, true);
+              await fileDoc.whenLoaded;
+              if (fileDoc.text.length === 0) {
+                const data = await idbfs.readFile(fullPath).catch(() => null);
+                if (data) {
+                  const content = typeof data === "string" ? data : new TextDecoder().decode(data as ArrayBuffer);
+                  if (content.length > 0) {
+                    fileDoc.text.delete(0, fileDoc.text.length);
+                    fileDoc.text.insert(0, content);
+                  }
+                }
+              }
+            } catch {
+              // Skip files that can't be pre-loaded
+            }
+          }
+        }
+
+        if (cancelled) return;
         
         // Helper function to find first text file
         async function findFirstTextFile(dir: string): Promise<string | null> {
