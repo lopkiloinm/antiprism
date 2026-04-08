@@ -154,6 +154,34 @@ export class FileTreeManager {
   }
 
   /**
+   * Re-evaluate rootNodeId after a CRDT merge may have introduced
+   * the real authoritative root from a remote peer.
+   * Handles legacy projects where the sharer used a random root key.
+   */
+  refreshRoot(): boolean {
+    if (!this.isReady) return false;
+    try {
+      const rootChildren = this.yTree.getNodeChildrenFromKey("root");
+      if (rootChildren.length <= 1) return false;
+
+      const currentChildren = this.yTree.getNodeChildrenFromKey(this.rootNodeId);
+      if (currentChildren.length > 0) return false;
+
+      for (const childKey of rootChildren) {
+        if (childKey === this.rootNodeId) continue;
+        const children = this.yTree.getNodeChildrenFromKey(childKey);
+        if (children.length > 0) {
+          this.rootNodeId = childKey;
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Get the Y.Doc for a directory (for WebRTC provider setup)
    */
   getDirectoryDoc(directoryPath: string): Y.Doc | null {
@@ -175,7 +203,7 @@ export class FileTreeManager {
   }
 
   private createRootNode(): string {
-    const rootNodeKey = this.yTree.generateNodeKey();
+    const rootNodeKey = FileTreeManager.ROOT_NODE_KEY;
     this.yTree.createNode("root", rootNodeKey, {
       type: "project", 
       name: "root",
@@ -580,6 +608,8 @@ export class FileTreeManager {
    * Get all tree items with directory map references
    */
   getTreeItems(): TreeItem[] {
+    if (!this.isReady) return [];
+    this.refreshRoot();
     const items: TreeItem[] = [];
     
     const collectItems = (nodeKey: string, parentKey?: string): void => {
