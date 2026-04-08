@@ -339,15 +339,17 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
       try {
         const isCollaborative = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
+        const localProject = getAllProjects().find((p) => p.id === id);
+        const hasLocalProject = !!localProject || id === "new";
 
         // 1. Load local IDB state first
         chatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
         await chatPersistence.whenSynced;
         if (cancelled) return;
 
-        // 2. Construct ChatTreeManager — uses createSafeYTree() internally,
-        //    so CRDT merge "update" actions are caught and recomputed.
-        const manager = new ChatTreeManager(chatMap, id);
+        // 2. Construct ChatTreeManager with deferred root creation for collaborative
+        //    sessions to prevent blank recipient from creating conflicting root.
+        const manager = new ChatTreeManager(chatMap, id, isCollaborative);
 
         // 3. Create WebRTC provider AFTER YTree is installed
         if (isCollaborative) {
@@ -355,6 +357,27 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             signaling: webrtcConfig.customServers,
             maxConns: webrtcConfig.maxConnections || 35
           });
+        }
+
+        // For collaborative sessions, wait briefly for remote state before deciding
+        // whether to create local root. This prevents blank recipient overwriting sharer.
+        if (isCollaborative) {
+          const hasRemoteChatState = await new Promise<boolean>((resolve) => {
+            if (chatMap.size > 0) { resolve(true); return; }
+            const timeout = window.setTimeout(() => resolve(chatMap.size > 0), 5000);
+            const onUpdate = () => {
+              if (chatMap.size > 0) {
+                window.clearTimeout(timeout);
+                chatDoc.off("update", onUpdate);
+                resolve(true);
+              }
+            };
+            chatDoc.on("update", onUpdate);
+          });
+          // Only create local root if no remote state arrived and no local project
+          if (!hasRemoteChatState && !hasLocalProject) {
+            manager.ensureRoot();
+          }
         }
 
         if (cancelled) {
@@ -785,11 +808,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           // Continue even if persistence sync fails
         }
 
-        // 2. Construct FileTreeManager — creates YTree via createSafeYTree() which
-        //    registers the instance so the patched observeDeep wrapper can catch
-        //    "[ytree] The node should not be updated" errors during CRDT merge
-        //    and trigger recompute instead of throwing.
-        const fileTreeManager = new FileTreeManager(fileTreeMap);
+        // 2. Construct FileTreeManager with deferred root creation for collaborative
+        //    sessions. This prevents the recipient's blank state from creating a
+        //    local root that conflicts with the sharer's populated tree during sync.
+        //    We only create root after confirming no remote state arrived.
+        const fileTreeManager = new FileTreeManager(fileTreeMap, isCollaborativeSession);
         fileTreeManagerRef.current = fileTreeManager;
 
         // 3. Create WebRTC provider AFTER YTree is installed
@@ -849,6 +872,13 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           });
         } else {
           hasSharedTreeItemsAfterSettle = hasSharedTreeState();
+        }
+
+        // For collaborative sessions where no remote state arrived and no local project,
+        // we deferred root creation. Now create the minimal root to avoid empty state.
+        // This prevents the "blank recipient overwrites populated sharer" scenario.
+        if (isCollaborativeSession && !hasSharedTreeItemsAfterSettle && !hasLocalProject) {
+          fileTreeManager.ensureRoot();
         }
 
         const shouldBootstrapTreeFromFilesystem =
