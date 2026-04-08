@@ -160,9 +160,6 @@ export const GitHubDesktopSidebar: React.FC<GitHubDesktopSidebarProps> = ({
     
     setIsCommitting(true)
     try {
-      // In a real implementation, this would create an actual commit
-      console.log('Committing:', commitMessage)
-      
       // Simulate commit delay
       await new Promise(resolve => setTimeout(resolve, 1000))
       

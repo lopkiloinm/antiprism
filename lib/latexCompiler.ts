@@ -21,17 +21,8 @@ async function getRunner(): Promise<BusyTexRunner> {
       const base = process.env.NEXT_PUBLIC_BASE_PATH || "";
       const baseNorm = base && !base.startsWith("/") ? `/${base}` : base;
       
-      // Verify WASM files are accessible before initializing
-      const busytexWasmUrl = `${baseNorm}/core/busytex/busytex.wasm`;
-      const response = await fetch(busytexWasmUrl, { method: 'HEAD' });
-      if (!response.ok) {
-        throw new Error(`WASM file not accessible: ${busytexWasmUrl} (${response.status})`);
-      }
-
-      latexLogger.info("WASM files accessible, initializing BusyTex runner...");
       const r = new BusyTexRunner({
         busytexBasePath: `${baseNorm}/core/busytex`,
-        verbose: true,  // ✅ Enable verbose logging
       });
       await r.initialize(true);
       runner = r;
@@ -89,7 +80,7 @@ export async function compileLatexToPdf(
   const result = await eng.compile({
     input: source,
     bibtex: true,  // Enable to trigger multi-pass compilation for TOC/cross-references
-    verbose: "debug",  // ✅ Get full logs (correct type)
+    verbose: "silent",
     additionalFiles: files as { path: string; content: string }[],
   });
 

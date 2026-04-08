@@ -112,7 +112,6 @@ export function OrderedFileTree({
           if (onFileSelect) {
             onFileSelect(item.path);
             // TODO: Add actual download logic
-            console.log('Download:', item.path);
           }
         }
       },
@@ -177,12 +176,9 @@ export function OrderedFileTree({
       if (!parent || item.parentId === item.id) {
         // This is a root item (no valid parent in our current items)
         rootItems.push(item);
-        console.log('🔍 Root item:', item.name, item.path);
       }
     });
 
-    console.log('🔍 Root items found:', rootItems.length);
-    console.log('🔍 Root items details:', rootItems.map(item => ({ name: item.name, path: item.path, children: item.children })));
     return { rootItems, itemMap };
   };
 

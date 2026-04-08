@@ -2,7 +2,6 @@
  * Create mode: generate markdown from user requests, then convert to LaTeX/Beamer via pandoc or Typst via cmarker.
  */
 
-import { convert } from "pandoc-wasm";
 import type { ChatMessage } from "./types";
 import { stripThinking } from "./thinking";
 
@@ -135,33 +134,22 @@ export async function parseCreateResponse(rawOutput: string, outputFormat: Creat
     const preparedMarkdown = outputFormat === "beamer" ? buildBeamerMarkdown(md, title) : md;
     const sanitized = sanitizeMarkdownForPandoc(preparedMarkdown);
     try {
+      const { convert } = await import("pandoc-wasm");
       const result = await convert(
         { from: "markdown-raw_tex", to: outputFormat === "beamer" ? "beamer" : "latex", standalone: true },
         sanitized,
         {}
       );
       latex = (result.stdout || "").trim();
-    } catch (e) {
-      // Better error handling for pandoc-wasm failures
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      
-      // Check for common WASM-related issues
-      if (errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('wasm')) {
-        console.error("Pandoc WASM network/initialization failed:", errorMessage);
-        // Fallback to raw markdown if WASM fails
-        latex = `% Pandoc conversion failed - using raw markdown\n\n${md}`;
-      }
-      
-      console.error("Pandoc md->latex failed:", errorMessage);
+    } catch {
       latex = md;
     }
   } else if (outputFormat === 'typst') {
     // Generate Typst only
     try {
       typst = convertMarkdownToTypst(md);
-    } catch (e) {
-      console.error("Markdown to Typst conversion failed:", e);
-      typst = `// Typst conversion failed - using raw markdown\n\n${md.replace(/\n/g, '\\n')}`;
+    } catch {
+      typst = md;
     }
   }
 

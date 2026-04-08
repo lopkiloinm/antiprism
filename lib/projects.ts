@@ -89,10 +89,9 @@ export async function createProject(name: string): Promise<Project> {
       const { UserManager } = await import('./userManager');
       const userManager = UserManager.getInstance();
       await userManager.createProjectInUserTree(id, name);
-      console.log('📁 Added project to user tree:', name);
     }
-  } catch (error) {
-    console.warn('⚠️ Failed to add project to user tree:', error);
+  } catch {
+
   }
 
   return project;

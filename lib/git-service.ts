@@ -18,7 +18,6 @@ export class GitService {
    */
   async getStatus(repositoryPath: string = '.'): Promise<string> {
     // Placeholder - would use actual Git command or API
-    console.log(`Getting status for ${repositoryPath}`)
     
     // Example of what this would return:
     // ' M src/components/DiffView.tsx\n M src/lib/diff-parser.ts\n?? new-file.txt'
@@ -46,7 +45,6 @@ export class GitService {
   async getFileDiff(filePath: string, repositoryPath: string = '.'): Promise<IRawDiff | null> {
     try {
       // Placeholder - would use actual Git command or API
-      console.log(`Getting diff for ${filePath} in ${repositoryPath}`)
       
       // Example diff output:
       const diffText = await this.getDiffText(filePath, repositoryPath)
@@ -90,7 +88,6 @@ export class GitService {
     // 3. Use WebAssembly Git implementation
     // 4. Call a backend service that runs Git commands
     
-    console.log(`Would run: git diff ${filePath}`)
     
     // Return empty for now - in real implementation this would return actual diff
     return ''
@@ -101,7 +98,6 @@ export class GitService {
    */
   async getCommitHistory(repositoryPath: string = '.', limit: number = 10): Promise<GitCommit[]> {
     // Placeholder implementation
-    console.log(`Getting commit history for ${repositoryPath}`)
     
     return []
   }
@@ -111,7 +107,6 @@ export class GitService {
    */
   async getFileContentAtCommit(filePath: string, commitHash: string, repositoryPath: string = '.'): Promise<string> {
     // Placeholder implementation
-    console.log(`Getting content for ${filePath} at ${commitHash}`)
     
     return ''
   }
@@ -121,7 +116,6 @@ export class GitService {
    */
   async stageFile(filePath: string, repositoryPath: string = '.'): Promise<void> {
     // Placeholder implementation
-    console.log(`Staging ${filePath}`)
   }
 
   /**
@@ -129,7 +123,6 @@ export class GitService {
    */
   async unstageFile(filePath: string, repositoryPath: string = '.'): Promise<void> {
     // Placeholder implementation
-    console.log(`Unstaging ${filePath}`)
   }
 
   /**
@@ -137,7 +130,6 @@ export class GitService {
    */
   async commit(message: string, repositoryPath: string = '.'): Promise<string> {
     // Placeholder implementation
-    console.log(`Committing with message: ${message}`)
     
     return 'placeholder-commit-hash'
   }
@@ -147,7 +139,6 @@ export class GitService {
    */
   async createBranch(branchName: string, repositoryPath: string = '.'): Promise<void> {
     // Placeholder implementation
-    console.log(`Creating branch: ${branchName}`)
   }
 
   /**
@@ -155,7 +146,6 @@ export class GitService {
    */
   async checkoutBranch(branchName: string, repositoryPath: string = '.'): Promise<void> {
     // Placeholder implementation
-    console.log(`Checking out branch: ${branchName}`)
   }
 
   /**
@@ -163,7 +153,6 @@ export class GitService {
    */
   async getCurrentBranch(repositoryPath: string = '.'): Promise<string> {
     // Placeholder implementation
-    console.log(`Getting current branch for ${repositoryPath}`)
     
     return 'main'
   }
@@ -173,7 +162,6 @@ export class GitService {
    */
   async getBranches(repositoryPath: string = '.'): Promise<GitBranch[]> {
     // Placeholder implementation
-    console.log(`Getting branches for ${repositoryPath}`)
     
     return [
       { name: 'main', current: true },

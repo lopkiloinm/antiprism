@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 // @ts-ignore - yjs-orderedtree types are not properly resolved
 import { checkForYTree, YTree } from 'yjs-orderedtree';
-import './yjsOrderedTreePatch';
+import { createSafeYTree } from './yjsOrderedTreePatch';
 import type { ChatSession } from './chatStore';
 
 export interface ChatTreeItem extends ChatSession {
@@ -23,59 +23,60 @@ export type SortCriteria = 'title-asc' | 'title-desc' | 'created' | 'created-old
  */
 export class ChatTreeManager {
   private yTree: YTree;
-  private rootNodeId: string;
+  private rootNodeId: string = '';
   private yMap: Y.Map<any>;
   private projectId: string;
   private whenLoaded: Promise<void>;
 
-  constructor(yMap: Y.Map<any>, projectId: string) {
-    // Ensure yMap is properly set (matching FileTreeManager pattern exactly)
+  private isReady: boolean = false;
+
+  constructor(yMap: Y.Map<any>, projectId: string, deferRootCreation: boolean = false) {
     if (!yMap) {
       console.error('🚨 ChatTreeManager constructor: yMap is undefined!');
       throw new Error('ChatTreeManager requires a valid Y.Map');
     }
     
-    console.log('🌳 ChatTreeManager constructor received yMap:', yMap);
-    console.log('🌳 yMap type:', typeof yMap);
-    console.log('🌳 yMap constructor:', yMap.constructor.name);
-    console.log('🌳 yMap has set method:', typeof yMap.set);
-    console.log('🌳 yMap has get method:', typeof yMap.get);
-    
     this.yMap = yMap;
     this.projectId = projectId;
-    console.log('🌳 ChatTreeManager constructor: yMap set successfully');
     
-    // Initialize YTree - check if it exists first (matching FileTreeManager pattern exactly)
-    if (checkForYTree(yMap)) {
-      console.log('🌳 Loading existing chat tree');
-      this.yTree = new YTree(yMap);
-    } else {
-      console.log('🌳 Creating new chat tree');
-      this.yTree = new YTree(yMap);
-      this.initializeRoot();
+    // Always create YTree wrapper — installs event handlers on the Y.Map
+    this.yTree = createSafeYTree(yMap);
+
+    if (!deferRootCreation) {
+      this.ensureRoot();
     }
     
-    // Get root node (should always exist after initialization)
-    // 🎯 CRITICAL: Use the actual YTree root, not hardcoded "root"
-    const rootChildren = this.yTree.getNodeChildrenFromKey("root");
-    this.rootNodeId = rootChildren[0] || this.createRootNode();
-    
-    // Validate the root node actually exists
-    if (!this.rootNodeId || !this.yTree.getNodeValueFromKey(this.rootNodeId)) {
-      console.warn('🌳 Root node validation failed, creating new one');
-      this.rootNodeId = this.createRootNode();
-    }
-    
-    console.log('🌳 ChatTreeManager root node ID:', this.rootNodeId);
-    
-    // Create promise for when tree is ready (no separate persistence needed)
     this.whenLoaded = new Promise<void>((resolve) => {
-      // Tree is ready immediately since we're not waiting for persistence
-      console.log(`� Chat tree ready for project: ${projectId}`);
       resolve();
     });
-    
-    console.log('🌳 ChatTreeManager initialized with yjs-orderedtree (relying on WebRTC provider persistence)');
+  }
+
+  /**
+   * Ensure the root node exists. Call after remote state has settled
+   * for collaborative sessions where the map may have been empty at construction.
+   */
+  ensureRoot(): void {
+    if (this.isReady) return;
+
+    if (!checkForYTree(this.yMap)) {
+      this.initializeRoot();
+    }
+
+    let rootChildren: string[] = [];
+    try {
+      rootChildren = this.yTree.getNodeChildrenFromKey("root");
+    } catch {
+      this.initializeRoot();
+      rootChildren = this.yTree.getNodeChildrenFromKey("root");
+    }
+
+    this.rootNodeId = rootChildren[0] || this.createRootNode();
+
+    if (!this.rootNodeId || !this.yTree.getNodeValueFromKey(this.rootNodeId)) {
+      this.rootNodeId = this.createRootNode();
+    }
+
+    this.isReady = true;
   }
 
   private initializeRoot(): void {
@@ -86,7 +87,6 @@ export class ChatTreeManager {
       modelId: '',
       children: []
     });
-    console.log('🌳 Created chat root node:', rootNodeKey);
   }
 
   private createRootNode(): string {
@@ -97,8 +97,7 @@ export class ChatTreeManager {
         const existingRoot = existingRootChildren[0];
         const rootValue = this.yTree.getNodeValueFromKey(existingRoot);
         if (rootValue && rootValue.title === "Chat Root") {
-          console.log('🌳 Found existing chat root node:', existingRoot);
-          return existingRoot;
+            return existingRoot;
         }
       }
       
@@ -109,7 +108,6 @@ export class ChatTreeManager {
         modelId: '',
         children: []
       });
-      console.log('🌳 Created new chat root node:', rootNodeKey);
       return rootNodeKey;
     } catch (error) {
       console.error('🚨 Error creating chat root node:', error);
@@ -158,7 +156,6 @@ export class ChatTreeManager {
       children: [] // Flat structure - no children
     };
     
-    console.log('🌱 Creating chat node with key:', nodeId, 'data:', chatItem);
     
     // Create the chat node
     this.yTree.createNode(this.rootNodeId, nodeId, chatItem);
@@ -166,7 +163,6 @@ export class ChatTreeManager {
     // Position the new chat correctly based on existing order
     this.positionNewChat(nodeId);
     
-    console.log('💬 Created chat node:', chatData.title);
     return nodeId;
   }
 
@@ -182,7 +178,6 @@ export class ChatTreeManager {
     
     try {
       this.yTree.deleteNodeAndDescendants(chatId);
-      console.log('🗑️ Deleted chat:', chatId);
     } catch (error) {
       console.error('🚨 Failed to delete chat:', chatId, error);
       throw error;
@@ -207,7 +202,6 @@ export class ChatTreeManager {
       };
 
       this.yTree.setNodeValueFromKey(chatId, updatedChat);
-      console.log('✏️ Updated chat:', chatId);
     } catch (error) {
       console.error('🚨 Failed to update chat:', chatId, error);
       throw error;
@@ -256,14 +250,10 @@ export class ChatTreeManager {
    * Sort tree items using yjs-orderedtree API (matching FileTreeManager.sortTreeItems pattern exactly)
    */
   sortTreeItems(criteria: SortCriteria): void {
-    console.log('🔄 Sorting chats by:', criteria);
     
     const allChats = this.getTreeItems();
     
-    if (allChats.length === 0) {
-      console.log('📝 No chats to sort');
-      return;
-    }
+    if (allChats.length === 0) return;
     
     // Sort chats based on criteria
     const sortedChats = this.sortChatsByCriteria(allChats, criteria);
@@ -271,7 +261,6 @@ export class ChatTreeManager {
     // Apply ordering using yjs-orderedtree positioning functions
     this.applyOrdering(sortedChats);
     
-    console.log('✅ Sorted chats by', criteria);
   }
 
   /**
@@ -347,10 +336,8 @@ export class ChatTreeManager {
     // Apply the positioning using yjs-orderedtree API
     if (insertAfter) {
       this.yTree.setNodeAfter(nodeId, insertAfter);
-      console.log('📍 Positioned new chat after:', insertAfter, nodeId);
     } else {
       this.yTree.setNodeOrderToStart(nodeId);
-      console.log('📍 Positioned new chat at start:', nodeId);
     }
   }
   
@@ -401,6 +388,5 @@ export class ChatTreeManager {
     chats.forEach(chat => {
       this.yTree.deleteNodeAndDescendants(chat.id);
     });
-    console.log('🗑️ Cleared all chats');
   }
 }

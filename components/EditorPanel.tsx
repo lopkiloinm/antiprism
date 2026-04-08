@@ -17,7 +17,7 @@ import type { Theme } from "@/lib/settings";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { showMinimap } from "@replit/codemirror-minimap";
-import { yjsLogger } from "@/lib/logger";
+
 
 const DEFAULT_LATEX = `\\documentclass{article}
 \\usepackage{amsmath}
@@ -120,35 +120,6 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
 
     ytextRef.current = ytext;
     const undoManager = new Y.UndoManager(ytext);
-
-    const ytextObserver = (update: any, origin: any) => {
-      const originLabel =
-        typeof origin === "string"
-          ? origin
-          : origin?.constructor?.name || (origin == null ? "unknown" : typeof origin);
-      console.log(`⌨️ Editor update: ${currentPath}`, { 
-        origin, 
-        updateLength: update.changes.length,
-        contentLength: ytext.toString().length,
-        timestamp: new Date().toISOString()
-      });
-      yjsLogger.info("EditorPanel Y.Text mutation", {
-        path: currentPath,
-        docGuid: ydoc.guid,
-        origin: originLabel,
-        rawOriginType: typeof origin,
-        totalChars: ytext.length,
-        deltaOps: Array.isArray(update?.changes?.delta) ? update.changes.delta.length : undefined,
-        selectionMainHead: viewRef.current?.state?.selection?.main?.head,
-      });
-    };
-    ytext.observe(ytextObserver);
-    yjsLogger.info("EditorPanel attached Y.Text observer", {
-      path: currentPath,
-      docGuid: ydoc.guid,
-      totalChars: ytext.length,
-      hasProvider: !!provider,
-    });
 
     if (provider) {
       provider.awareness.setLocalStateField("user", {
@@ -371,11 +342,6 @@ export const EditorPanel = forwardRef<EditorPanelHandle, EditorPanelProps>(funct
     onYtextChange(ytext);
 
     return () => {
-      ytext.unobserve(ytextObserver);
-      yjsLogger.info("EditorPanel detached Y.Text observer", {
-        path: currentPath,
-        docGuid: ydoc.guid,
-      });
     };
   }, [ydoc, ytext, provider, onYtextChange, fontSize, tabSize, lineWrapping, currentPath, typstSupport, theme]);
 

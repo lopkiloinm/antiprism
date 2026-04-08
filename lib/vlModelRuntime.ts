@@ -536,7 +536,6 @@ async function makeSess(o: any, stem: string, label: string) {
   const url = fUrl(`${stem}.onnx`);
   const onnxBlobUrl = await getCachedBlobUrl(url, cache);
   
-  console.log(`[VL] ${label} loading from cache blobs:`, { url, dataFiles, externalData: ext });
   try {
     return await o.InferenceSession.create(onnxBlobUrl, { executionProviders: ["webgpu"], externalData: ext });
   } catch (e) {

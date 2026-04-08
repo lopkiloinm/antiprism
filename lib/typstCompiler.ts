@@ -18,14 +18,6 @@ function getTypst(): Promise<TypstSnippet> {
   initPromise = (async () => {
     try {
       typstLogger.info("Initializing Typst compiler...");
-      
-      // Verify WASM is accessible from CDN
-      const response = await fetch(COMPILER_WASM_URL, { method: 'HEAD' });
-      if (!response.ok) {
-        throw new Error(`Typst WASM not accessible: ${COMPILER_WASM_URL} (${response.status})`);
-      }
-
-      typstLogger.info("WASM accessible, loading Typst module...");
       const { $typst } = await import("@myriaddreamin/typst.ts/contrib/snippet");
       $typst.setCompilerInitOptions({
         getModule: () => COMPILER_WASM_URL,

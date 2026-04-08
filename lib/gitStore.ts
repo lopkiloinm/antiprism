@@ -71,20 +71,16 @@ class GitStore {
   }
 
   async createRepository(name: string, projectId?: string): Promise<void> {
-    console.log(`🔍 GitStore.createRepository called with name: "${name}", projectId: "${projectId}"`);
     gitLogger.info("createRepository called", { name, projectId });
     if (!this.db) await this.init();
     
     // Check if repository already exists
     const existingRepo = await this.getRepository(name);
-    console.log(`🔍 GitStore.createRepository - existing repo:`, existingRepo ? 'found' : 'not found');
     if (existingRepo) {
-      console.log(`Repository ${name} already exists, skipping creation`);
       gitLogger.info("createRepository skipped; already exists", { name });
       return;
     }
     
-    console.log(`🔍 GitStore.createRepository - creating new repository: ${name}`);
     return new Promise((resolve, reject) => {
       const now = new Date();
       const repository: GitRepository = {
@@ -124,14 +120,12 @@ class GitStore {
   }
 
   async migrateRepository(oldName: string, newName: string, projectId?: string): Promise<void> {
-    console.log(`🔍 GitStore.migrateRepository called: "${oldName}" -> "${newName}"`);
     gitLogger.info("migrateRepository called", { oldName, newName, projectId });
     if (!this.db) await this.init();
     
     // Get the old repository
     const oldRepo = await this.getRepository(oldName);
     if (!oldRepo) {
-      console.log(`Repository ${oldName} not found, cannot migrate`);
       gitLogger.warn("migrateRepository failed; old repo not found", { oldName });
       return;
     }
@@ -139,7 +133,6 @@ class GitStore {
     // Check if new repository already exists
     const newRepo = await this.getRepository(newName);
     if (newRepo) {
-      console.log(`Repository ${newName} already exists, cannot migrate`);
       gitLogger.warn("migrateRepository failed; new repo already exists", { newName });
       return;
     }
@@ -286,7 +279,6 @@ class GitStore {
     changes: GitChange[],
     author?: string
   ): Promise<string> {
-    console.log(`🔍 GitStore.createCommit called for repo: "${repoName}" with ${changes.length} changes`);
     gitLogger.info("createCommit start", {
       repoName,
       message,
@@ -297,8 +289,6 @@ class GitStore {
     const repo = await this.getRepository(repoName);
     if (!repo) throw new Error(`Repository ${repoName} not found`);
     
-    console.log(`🔍 GitStore.createCommit - repo found with ${repo.commits.length} existing commits`);
-
     // Create file snapshots for all files (preserve unchanged files)
     let allFileSnapshots: GitFileSnapshot[] = [];
     

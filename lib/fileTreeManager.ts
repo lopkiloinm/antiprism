@@ -1,6 +1,7 @@
 import * as Y from 'yjs';
 // @ts-ignore - yjs-orderedtree types are not properly resolved
 import { checkForYTree, YTree } from 'yjs-orderedtree';
+import { createSafeYTree } from './yjsOrderedTreePatch';
 
 export interface FileMetadata {
   path: string;
@@ -40,21 +41,33 @@ export class FileTreeManager {
   private directoryDocs: Map<string, Y.Doc> = new Map();
   private isReady: boolean = false; // ✅ Track ready state
 
-  constructor(yMap: Y.Map<any>) {
-    // Ensure yMap is properly set
+  constructor(yMap: Y.Map<any>, deferRootCreation: boolean = false) {
     if (!yMap) {
       throw new Error('FileTreeManager requires a valid Y.Map');
     }
     
     this.yMap = yMap;
     
-    if (checkForYTree(yMap)) {
-      this.yTree = new YTree(yMap);
-    } else {
-      this.yTree = new YTree(yMap);
+    // Always create YTree wrapper — this installs event handlers on the Y.Map
+    // so incoming Yjs updates (from WebRTC) are processed correctly.
+    this.yTree = createSafeYTree(yMap);
+
+    if (!deferRootCreation) {
+      this.ensureRoot();
+    }
+  }
+
+  /**
+   * Ensure the root node exists. Call this after remote state has settled
+   * (for collaborative sessions where the map may have been empty at construction).
+   */
+  ensureRoot(): void {
+    if (this.isReady) return;
+
+    if (!checkForYTree(this.yMap)) {
       this.initializeRoot();
     }
-    
+
     let rootChildren: string[] = [];
     try {
       rootChildren = this.yTree.getNodeChildrenFromKey("root");
@@ -69,7 +82,6 @@ export class FileTreeManager {
       this.rootNodeId = this.createRootNode();
     }
     
-    this.initializeDirectoryMaps();
     this.isReady = true;
   }
 
@@ -109,7 +121,7 @@ export class FileTreeManager {
     
     if (!checkForYTree(directoryMap)) {
       try {
-        const directoryYTree = new YTree(directoryMap);
+        const directoryYTree = createSafeYTree(directoryMap);
         const rootNodeKey = FileTreeManager.DIRECTORY_ROOT_KEY;
         directoryYTree.createNode("root", rootNodeKey, {
           type: "directory",
@@ -151,8 +163,8 @@ export class FileTreeManager {
   /**
    * Get the Y.Map for a directory's contents
    */
-  getDirectoryMap(directoryPath: string): Y.Map<any> | null {
-    return this.directoryMaps.get(directoryPath) || null;
+  getDirectoryMap(directoryPath: string): Y.Map<any> {
+    return this.getOrCreateDirectoryMap(directoryPath);
   }
 
   /**
@@ -404,7 +416,7 @@ export class FileTreeManager {
   sortTreeItems(criteria: SortCriteria): void {
     this.sortSingleTree(this.yTree, criteria, 'root');
     this.directoryMaps.forEach((directoryMap, directoryPath) => {
-      const directoryYTree = new YTree(directoryMap);
+      const directoryYTree = createSafeYTree(directoryMap);
       this.sortSingleTree(directoryYTree, criteria, directoryPath);
     });
   }
@@ -613,17 +625,13 @@ export class FileTreeManager {
    */
   getDirectoryContents(directoryPath: string): TreeItem[] {
     const directoryMap = this.getDirectoryMap(directoryPath);
-    if (!directoryMap) {
-      console.warn(`Directory map not found for: ${directoryPath}`);
-      return [];
-    }
 
     // Create a simple tree structure from the directory map
     const items: TreeItem[] = [];
     
     // Get the YTree from the directory map
     if (checkForYTree(directoryMap)) {
-      const directoryYTree = new YTree(directoryMap);
+      const directoryYTree = createSafeYTree(directoryMap);
       
       // Get root children
       const rootChildren = directoryYTree.getNodeChildrenFromKey("root");
@@ -655,12 +663,9 @@ export class FileTreeManager {
    */
   addFileToDirectory(directoryPath: string, metadata: FileMetadata): string {
     const directoryMap = this.getDirectoryMap(directoryPath);
-    if (!directoryMap) {
-      throw new Error(`Directory map not found for: ${directoryPath}`);
-    }
 
     // Create YTree for this directory
-    const directoryYTree = new YTree(directoryMap);
+    const directoryYTree = createSafeYTree(directoryMap);
     
     // Get root node
     const rootChildren = directoryYTree.getNodeChildrenFromKey("root");
@@ -692,12 +697,9 @@ export class FileTreeManager {
    */
   addSubdirectoryToDirectory(parentPath: string, name: string, path: string): string {
     const directoryMap = this.getDirectoryMap(parentPath);
-    if (!directoryMap) {
-      throw new Error(`Directory map not found for: ${parentPath}`);
-    }
 
     // Create YTree for this directory
-    const directoryYTree = new YTree(directoryMap);
+    const directoryYTree = createSafeYTree(directoryMap);
     
     // Get root node
     const rootChildren = directoryYTree.getNodeChildrenFromKey("root");

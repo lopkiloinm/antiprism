@@ -78,8 +78,6 @@ export class FileDocumentManager {
   private createDocument(filePath: string): FastFileDocument {
     const docName = `${this.projectId}-${filePath}`;
     
-    console.log(`🆕 Creating fast document for: ${filePath}`);
-    console.log(`📝 Document name: ${docName}`);
     yjsLogger.info("Creating fast file document", { filePath, docName });
     
     // Get document from fast manager
@@ -88,9 +86,7 @@ export class FileDocumentManager {
     // Create WebRTC provider for this specific file with inherited configuration
     const webrtcProvider = new WebrtcProvider(`${docName}-webrtc`, doc, this.providerOptions);
     
-    // Log WebRTC connection status
     webrtcProvider.on('status', (event: any) => {
-      console.log(`🌐 WebRTC status for ${filePath}:`, event.status);
       yjsLogger.info("File WebRTC status", {
         filePath,
         docName,
@@ -99,7 +95,6 @@ export class FileDocumentManager {
     });
     
     webrtcProvider.on('peers', (event: any) => {
-      console.log(`👥 WebRTC peers for ${filePath}:`, event.peers?.length ?? 0);
       yjsLogger.info("File WebRTC peers", {
         filePath,
         docName,
@@ -114,12 +109,6 @@ export class FileDocumentManager {
         typeof origin === 'string'
           ? origin
           : origin?.constructor?.name || (origin == null ? 'unknown' : typeof origin);
-      console.log(`💾 File updated: ${filePath}`, { 
-        origin, 
-        updateLength: update.length,
-        contentLength,
-        timestamp: new Date().toISOString()
-      });
       yjsLogger.info("Yjs document update", {
         filePath,
         docName,
@@ -130,9 +119,7 @@ export class FileDocumentManager {
         timestamp: new Date().toISOString(),
       });
       
-      // Log WebRTC sync
       if (origin === 'webrtc') {
-        console.log(`🌐 WebRTC sync received: ${filePath} (${contentLength} chars)`);
         yjsLogger.info("WebRTC sync received", {
           filePath,
           docName,
@@ -188,7 +175,6 @@ export class FileDocumentManager {
       doc.webrtcProvider?.destroy();
       doc.doc.destroy();
       this.documents.delete(filePath);
-      console.log(`🗑️ File document destroyed: ${filePath}`);
       yjsLogger.info("File document destroyed", {
         filePath,
         totalOpenDocumentsAfter: this.documents.size,

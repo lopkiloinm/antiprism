@@ -275,7 +275,6 @@ async function makeSess(o: any, stem: string, label: string) {
   }
   
   const url = fUrl(`onnx/${stem}.onnx`);
-  console.log(`[Audio] ${label} loading:`, { url, dataFiles, externalDataCount: ext.length });
   try {
     return await o.InferenceSession.create(url, { executionProviders: ["webgpu"], externalData: ext });
   } catch (e) {

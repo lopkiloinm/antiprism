@@ -44,8 +44,6 @@ export const GitUI: React.FC<GitUIProps> = ({ repositoryPath = '.' }) => {
         setCurrentFile(newDiffs[0].header)
       }
     } catch (err) {
-      // Fall back to demo data if Git operations fail
-      console.log('Git operations not available, using demo data')
       const demoDiffs = createDemoDiffs()
       setDiffs(demoDiffs)
       setGitStatus(' M src/components/DiffView.tsx\n M src/lib/diff-parser.ts\n?? demo-file.txt')

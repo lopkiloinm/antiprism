@@ -1,7 +1,7 @@
 import * as Y from 'yjs';
 // @ts-ignore - yjs-orderedtree types are not properly resolved
 import { checkForYTree, YTree } from 'yjs-orderedtree';
-import './yjsOrderedTreePatch';
+import { createSafeYTree } from './yjsOrderedTreePatch';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { FileTreeManager } from './fileTreeManager';
 import { ChatTreeManager } from './chatTreeManager';
@@ -50,18 +50,14 @@ export class UserTreeManager {
       throw new Error('UserTreeManager requires a valid Y.Map');
     }
     
-    console.log('👤 UserTreeManager constructor received yMap:', yMap);
     this.yMap = yMap;
     this.userId = userId;
-    console.log('👤 UserTreeManager constructor: yMap set successfully');
     
     // Initialize YTree using yjs-orderedtree API
     if (checkForYTree(yMap)) {
-      console.log('👤 Loading existing user tree');
-      this.yTree = new YTree(yMap);
+      this.yTree = createSafeYTree(yMap);
     } else {
-      console.log('👤 Creating new user tree');
-      this.yTree = new YTree(yMap);
+      this.yTree = createSafeYTree(yMap);
       this.initializeRoot();
     }
     
@@ -69,9 +65,6 @@ export class UserTreeManager {
     const rootChildren = this.yTree.getNodeChildrenFromKey("root");
     this.rootNodeId = rootChildren[0] || this.createRootNode();
     
-    console.log('👤 UserTreeManager root node ID:', this.rootNodeId);
-    
-    console.log('👤 UserTreeManager initialized with yjs-orderedtree');
   }
 
   private initializeRoot(): void {
@@ -82,7 +75,6 @@ export class UserTreeManager {
       type: "user-root",
       children: []
     });
-    console.log('👤 Created user root node:', rootNodeKey);
   }
 
   private createRootNode(): string {
@@ -93,7 +85,6 @@ export class UserTreeManager {
       type: "user-root",
       children: []
     });
-    console.log('👤 Created user root node:', rootNodeKey);
     return rootNodeKey;
   }
 
@@ -130,7 +121,6 @@ export class UserTreeManager {
       lastAccessed: Date.now()
     };
     
-    console.log('🌱 Adding project node with key:', projectNodeId, 'data:', projectNode);
     
     // Use YTree's createNode() from yjs-orderedtree
     this.yTree.createNode(this.rootNodeId, projectNodeId, projectNode);
@@ -138,7 +128,6 @@ export class UserTreeManager {
     // Use YTree's setNodeOrderToStart() from yjs-orderedtree
     this.yTree.setNodeOrderToStart(projectNodeId);
     
-    console.log('📁 Added project to user tree:', projectName);
     return projectNodeId;
   }
 
@@ -155,7 +144,6 @@ export class UserTreeManager {
         // Clean up project managers
         this.projectManagers.delete(projectId);
         
-        console.log('🗑️ Removed project from user tree:', projectId);
       } else {
         console.warn('⚠️ Project not found in user tree:', projectId);
       }
@@ -187,7 +175,6 @@ export class UserTreeManager {
 
       // Use YTree's setNodeValueFromKey() from yjs-orderedtree
       this.yTree.setNodeValueFromKey(projectNodeKey, updatedProject);
-      console.log('✏️ Updated project:', projectId);
     } catch (error) {
       console.error('🚨 Failed to update project:', projectId, error);
       throw error;
@@ -261,7 +248,6 @@ export class UserTreeManager {
     gitManager?: any;
   }): void {
     this.projectManagers.set(projectId, managers);
-    console.log('📋 Registered managers for project:', projectId);
   }
 
   /**
@@ -283,6 +269,5 @@ export class UserTreeManager {
     projects.forEach(project => {
       this.removeProject(project.id);
     });
-    console.log('🗑️ Cleared all projects from user tree');
   }
 }

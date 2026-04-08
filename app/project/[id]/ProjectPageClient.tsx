@@ -11,7 +11,6 @@ import { WebrtcProvider } from "y-webrtc";
 import { getAssetPath } from "@/lib/assetPath";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { mount } from "@wwog/idbfs";
-import ExifReader from 'exifreader';
 import { getWebRTCSignalingConfig, setWebRTCSignalingConfig, type WebRTCSignalingConfig, getShowHiddenYjsDocs, setShowHiddenYjsDocs, WEBRTC_SIGNALING_STORAGE_KEY, WEBRTC_SIGNALING_CHANGE_EVENT } from "@/lib/settings";
 import { FileTree } from "@/components/FileTree";
 import { OrderedFileTree } from "@/components/OrderedFileTree";
@@ -36,8 +35,6 @@ import { WebRTCStatus } from "@/components/WebRTCStatus";
 import { ToolsPanel } from "@/components/ToolsPanel";
 import { ShareModal } from "@/components/ShareModal";
 import { ResizableDivider } from "@/components/ResizableDivider";
-import { GitPanelReal, getAllProjectFiles } from "@/components/GitPanelReal";
-import { GitMergeView } from "@/components/GitMergeView";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { getFileIcon } from "@/components/FileTree";
 import { parseOutline, type OutlineEntry } from "@/lib/documentOutline";
@@ -85,6 +82,12 @@ import { EditorBufferManager } from "@/lib/editorBufferManager";
 import { useTheme } from "@/contexts/ThemeContext";
 
 const PdfPreview = dynamic(() => import("@/components/PdfPreview").then((m) => ({ default: m.PdfPreview })), {
+  ssr: false,
+});
+const GitPanelReal = dynamic(() => import("@/components/GitPanelReal").then((m) => ({ default: m.GitPanelReal })), {
+  ssr: false,
+});
+const GitMergeView = dynamic(() => import("@/components/GitMergeView").then((m) => ({ default: m.GitMergeView })), {
   ssr: false,
 });
 
@@ -146,9 +149,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const [currentPath, setCurrentPath] = useState<string>("");
   const [addTargetPath, setAddTargetPath] = useState<string>(basePath);
   const [imageUrlCache, setImageUrlCache] = useState<Map<string, string>>(new Map());
+  const imageUrlCacheRef = useRef<Map<string, string>>(new Map());
   const textContentCacheRef = useRef<Map<string, string>>(new Map());
   const bufferMgrRef = useRef<EditorBufferManager | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const pdfUrlRef = useRef<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [bigChatMessages, setBigChatMessages] = useState<
     { role: "user" | "assistant"; content: string; responseType?: "ask" | "agent" | "edit"; createdPath?: string; markdown?: string }[]
@@ -296,6 +301,16 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     };
   }, [id]);
 
+  useEffect(() => { imageUrlCacheRef.current = imageUrlCache; }, [imageUrlCache]);
+  useEffect(() => { pdfUrlRef.current = pdfUrl; }, [pdfUrl]);
+
+  useEffect(() => {
+    return () => {
+      imageUrlCacheRef.current.forEach((url) => URL.revokeObjectURL(url));
+      if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (fileTreeManagerRef.current && chatTreeManager) {
       const userManager = UserManager.getInstance();
@@ -309,27 +324,34 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
     let cancelled = false;
 
-    // Create Y.Doc and Y.Map for chat tree (matching FileTreeManager pattern exactly)
     const chatDoc = new Y.Doc();
-    const chatMap = chatDoc.getMap(`${id}-chat-tree`); // ✅ Use project-specific map name
-    
-    // Create WebRTC provider for chat tree using user's configuration (optional for collaboration)
-    let chatProvider = null;
-    if (webrtcConfig.enabled && webrtcConfig.customServers.length > 0) {
-      chatProvider = new WebrtcProvider(`${id}-chat-tree`, chatDoc, {
-        signaling: webrtcConfig.customServers,
-        maxConns: webrtcConfig.maxConnections || 35
-      });
-    }
-    
-    // Add IndexedDB persistence for chat tree
-    const chatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
+    const chatMap = chatDoc.getMap(`${id}-chat-tree`);
+    let chatPersistence: IndexeddbPersistence | null = null;
+    let chatProvider: WebrtcProvider | null = null;
 
     const initChatTree = async () => {
       try {
+        const isCollaborative = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
+
+        // 1. Load local IDB state first
+        chatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
         await chatPersistence.whenSynced;
         if (cancelled) return;
+
+        // 2. Construct ChatTreeManager — uses createSafeYTree() internally,
+        //    so CRDT merge "update" actions are caught and recomputed.
         const manager = new ChatTreeManager(chatMap, id);
+
+        // 3. Create WebRTC provider AFTER YTree is installed
+        if (isCollaborative) {
+          chatProvider = new WebrtcProvider(`${id}-chat-tree`, chatDoc, {
+            signaling: webrtcConfig.customServers,
+            maxConns: webrtcConfig.maxConnections || 35
+          });
+        }
+
+        if (cancelled) return;
+
         setChatTreeManager(manager);
       } catch (error) {
         if (cancelled) return;
@@ -338,14 +360,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
     };
 
     initChatTree();
-    
+
     return () => {
       cancelled = true;
-      // Cleanup chat document, provider, and persistence
-      chatPersistence.destroy();
-      if (chatProvider) {
-        chatProvider.destroy();
-      }
+      chatProvider?.destroy();
+      chatPersistence?.destroy();
       chatDoc.destroy();
     };
   }, [id, webrtcConfigReady, webrtcConfig.enabled, webrtcConfig.password, webrtcConfig.maxConnections, webrtcConfig.customServers.join("|")]);
@@ -530,6 +549,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const fileTreeManagerRef = useRef<FileTreeManager | null>(null);
   const fileTreeDocRef = useRef<Y.Doc | null>(null);
   const fileTreeProviderRef = useRef<WebrtcProvider | null>(null);
+  const fileTreePersistenceRef = useRef<IndexeddbPersistence | null>(null);
   const directoryProvidersRef = useRef<Map<string, WebrtcProvider>>(new Map());
   const fileTreeReconcileScheduledRef = useRef<number | null>(null);
   const isReconcilingFileTreeRef = useRef(false);
@@ -705,29 +725,36 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         const fileTreeDoc = new Y.Doc();
         const fileTreeMap = fileTreeDoc.getMap(`${id}-filetree`);
         const projectMetaMap = fileTreeDoc.getMap(`${id}-project-meta`);
-        
-        let fileTreeProvider = null;
-        if (webrtcConfig.enabled && webrtcConfig.customServers.length > 0) {
-          fileTreeProvider = new WebrtcProvider(`${id}-filetree`, fileTreeDoc, providerOptions);
-        }
-        
-        // Store in refs for cleanup
+
+        // Store doc ref early for cleanup
         fileTreeDocRef.current = fileTreeDoc;
-        fileTreeProviderRef.current = fileTreeProvider;
 
+        const isCollaborativeSession = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
+        const localProject = getAllProjects().find((project) => project.id === id);
+        const hasLocalProject = !!localProject || id === "new";
+
+        // 1. Load local IDB state so the Y.Map is populated with any previous data
         const fileTreePersistence = new IndexeddbPersistence(`antiprism-filetree-${id}`, fileTreeDoc);
-        const waitForFileTreePersistence = async () => {
-          try {
-            await fileTreePersistence.whenSynced;
-          } catch {
-            // Continue even if persistence sync fails
-          }
-        };
+        fileTreePersistenceRef.current = fileTreePersistence;
+        try {
+          await fileTreePersistence.whenSynced;
+        } catch {
+          // Continue even if persistence sync fails
+        }
 
-        await waitForFileTreePersistence();
-
+        // 2. Construct FileTreeManager — creates YTree via createSafeYTree() which
+        //    registers the instance so the patched observeDeep wrapper can catch
+        //    "[ytree] The node should not be updated" errors during CRDT merge
+        //    and trigger recompute instead of throwing.
         const fileTreeManager = new FileTreeManager(fileTreeMap);
         fileTreeManagerRef.current = fileTreeManager;
+
+        // 3. Create WebRTC provider AFTER YTree is installed
+        let fileTreeProvider: WebrtcProvider | null = null;
+        if (isCollaborativeSession) {
+          fileTreeProvider = new WebrtcProvider(`${id}-filetree`, fileTreeDoc, providerOptions);
+          fileTreeProviderRef.current = fileTreeProvider;
+        }
 
         const scheduleFileTreeReconciliation = () => {
           if (fileTreeReconcileScheduledRef.current != null) {
@@ -755,32 +782,19 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         
         if (cancelled) return;
 
-        const isCollaborativeSession = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
-
         const hasSharedTreeState = () => {
           return fileTreeManager.getTreeItems().length > 0 || projectMetaMap.get("defaultsSeeded") === true;
         };
 
-        const waitForAuthoritativeTreeState = async () => {
-          await Promise.race([
-            waitForFileTreePersistence(),
-            new Promise((resolve) => window.setTimeout(resolve, COLLABORATIVE_TREE_SETTLE_MS)),
-          ]);
-
-          if (!isCollaborativeSession) {
-            return hasSharedTreeState();
-          }
-
-          if (hasSharedTreeState()) {
-            return true;
-          }
-
-          return await new Promise<boolean>((resolve) => {
+        // For collaborative sessions, wait briefly for remote state to arrive
+        let hasSharedTreeItemsAfterSettle: boolean;
+        if (isCollaborativeSession) {
+          hasSharedTreeItemsAfterSettle = hasSharedTreeState() || await new Promise<boolean>((resolve) => {
+            if (hasSharedTreeState()) { resolve(true); return; }
             const timeout = window.setTimeout(() => {
               fileTreeDoc.off("update", handleUpdate);
               resolve(hasSharedTreeState());
             }, COLLABORATIVE_TREE_SETTLE_MS);
-
             const handleUpdate = () => {
               if (hasSharedTreeState()) {
                 window.clearTimeout(timeout);
@@ -788,14 +802,12 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
                 resolve(true);
               }
             };
-
             fileTreeDoc.on("update", handleUpdate);
           });
-        };
+        } else {
+          hasSharedTreeItemsAfterSettle = hasSharedTreeState();
+        }
 
-        const localProject = getAllProjects().find((project) => project.id === id);
-        const hasLocalProject = !!localProject || id === "new";
-        const hasSharedTreeItemsAfterSettle = await waitForAuthoritativeTreeState();
         const shouldBootstrapTreeFromFilesystem =
           !hasSharedTreeItemsAfterSettle && (!isCollaborativeSession || hasLocalProject);
 
@@ -1011,6 +1023,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         setIsInitialized(true);
         
         try {
+          const { getAllProjectFiles } = await import("@/components/GitPanelReal");
           const allFiles = await getAllProjectFiles(id);
           setAllProjectFiles(allFiles);
         } catch {
@@ -1046,6 +1059,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         window.clearTimeout(fileTreeReconcileScheduledRef.current);
         fileTreeReconcileScheduledRef.current = null;
       }
+      fileTreePersistenceRef.current?.destroy();
+      fileTreePersistenceRef.current = null;
       fileTreeDocRef.current?.destroy();
       fileTreeDocRef.current = null;
       fileTreeManagerRef.current = null;
@@ -1222,6 +1237,7 @@ const isPdf = actualFilePath?.endsWith('.pdf');
                 view[i] = content.charCodeAt(i);
               }
               
+              const ExifReader = (await import('exifreader')).default;
               const tags = ExifReader.load(buffer);
               
               // Resolution

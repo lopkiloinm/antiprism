@@ -157,15 +157,9 @@ export default function DashboardPage() {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        console.log("Starting zip import:", file.name, file.size);
         const project = await createProject(file.name.replace(/\.zip$/i, "") || "Imported Project");
-        console.log("Created project:", project.id);
-        
         const zip = await JSZip.loadAsync(file);
-        console.log("Loaded zip, file count:", Object.keys(zip.files).length);
-        
         const fs = await mount();
-        console.log("Mounted filesystem");
 
         const createDirectoryRecursive = async (dirPath: string) => {
           const parts = dirPath.split('/').filter(part => part.length > 0);
@@ -175,9 +169,7 @@ export default function DashboardPage() {
             currentPath = `${currentPath}/${part}`;
             try {
               await fs.mkdir(currentPath);
-              console.log("Created directory:", currentPath);
-            } catch (err) {
-              console.log("Directory exists or failed:", currentPath, err);
+            } catch {
             }
           }
         };
@@ -186,9 +178,7 @@ export default function DashboardPage() {
         for (const dir of ["/projects", basePath]) {
           try {
             await fs.mkdir(dir);
-            console.log("Created directory:", dir);
-          } catch (err) {
-            console.log("Directory exists or failed:", dir, err);
+          } catch {
           }
         }
 
@@ -209,7 +199,6 @@ export default function DashboardPage() {
               await fs.writeFile(`${basePath}/${cleanPath}`, content, {
                 mimeType: "application/octet-stream",
               });
-              console.log("Wrote file:", `${basePath}/${cleanPath}`);
             }
           }
         }
@@ -217,9 +206,7 @@ export default function DashboardPage() {
         try {
           const marker = new TextEncoder().encode("imported").buffer as ArrayBuffer;
           await fs.writeFile(`${basePath}/.antiprism_imported`, marker, { mimeType: "text/plain" });
-          console.log("Created import marker");
-        } catch (err) {
-          console.log("Failed to create import marker:", err);
+        } catch {
         }
         setRefresh((r) => r + 1);
         router.push(`/project/${project.id}`);

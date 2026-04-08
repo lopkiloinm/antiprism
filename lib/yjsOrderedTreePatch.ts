@@ -1,6 +1,7 @@
+import * as Y from 'yjs';
 import { Heap } from 'heap-js';
 // @ts-ignore - package exports don't surface typings properly
-import { YTree } from 'yjs-orderedtree';
+import { YTree, checkForYTree } from 'yjs-orderedtree';
 
 type ComputedNode = {
   id: string;
@@ -181,14 +182,76 @@ function recomputeParentsAndChildrenSafe(this: any): void {
   }
 }
 
+// ── observeDeep wrapper ──
+// The YTree constructor installs a deep observer that throws
+//   "[ytree] The node should not be updated"
+// whenever a top-level Y.Map key receives an "update" action.
+// During CRDT merge (WebRTC sync) this is legitimate — both peers may
+// independently create the same node key, and Yjs resolves the conflict
+// by overwriting one value, which surfaces as "update".
+// The throw also skips the subsequent recomputeParentsAndChildren() call,
+// leaving the computed map stale.
+//
+// Fix: wrap Y.Map.prototype.observeDeep so that every callback registered
+// through it catches this specific error and triggers recompute manually.
+
+const _ymapToYTree = new WeakMap<Y.Map<any>, any>();
+let observeDeepPatched = false;
+
+function patchObserveDeep(): void {
+  if (observeDeepPatched) return;
+  observeDeepPatched = true;
+
+  const originalObserveDeep = (Y.Map as any).prototype.observeDeep;
+
+  (Y.Map as any).prototype.observeDeep = function (this: Y.Map<any>, callback: Function) {
+    const ymap = this;
+    const wrapped = (...args: any[]) => {
+      try {
+        callback(...args);
+      } catch (e: any) {
+        if (
+          typeof e?.message === 'string' &&
+          e.message.includes('[ytree] The node should not be updated')
+        ) {
+          // Recover: trigger the recompute + callbacks that the throw skipped.
+          const ytree = _ymapToYTree.get(ymap);
+          if (ytree) {
+            try { ytree.recomputeParentsAndChildren(); } catch {}
+            const cbs: Function[] | undefined = ytree._callbacks;
+            if (Array.isArray(cbs)) {
+              for (const cb of cbs) { try { cb(); } catch {} }
+            }
+          }
+        } else {
+          throw e; // re-throw non-YTree errors
+        }
+      }
+    };
+    return originalObserveDeep.call(this, wrapped);
+  };
+}
+
+/**
+ * Create a YTree instance whose deep observer will NOT throw on CRDT
+ * merge "update" actions.  Use this everywhere instead of `new YTree(yMap)`.
+ */
+function createSafeYTree(yMap: Y.Map<any>): InstanceType<typeof YTree> {
+  const ytree = new YTree(yMap);
+  _ymapToYTree.set(yMap, ytree);
+  return ytree;
+}
+
 function ensureSafeYTreePatch(): void {
   if (patched) return;
   const proto = (YTree as any).prototype;
 
   proto.recomputeParentsAndChildren = recomputeParentsAndChildrenSafe;
   patched = true;
+
+  patchObserveDeep();
 }
 
 ensureSafeYTreePatch();
 
-export { ensureSafeYTreePatch };
+export { ensureSafeYTreePatch, createSafeYTree };

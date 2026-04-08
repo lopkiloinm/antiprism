@@ -8,14 +8,46 @@ const nextConfig: NextConfig = {
     position: "bottom-right",
   },
   // Use static export for GitHub Pages, but ensure WASM files are handled correctly
-  ...(process.env.NODE_ENV === "production" && { output: "export" as const }),
+  ...(process.env.NODE_ENV === "production" && {
+    output: "export" as const,
+    images: { unoptimized: true },
+  }),
   // GitHub Pages project sites deploy to /repo-name; basePath/assetPrefix ensure assets resolve
   ...(basePath && {
     basePath,
     assetPrefix: `${basePath}/`,
   }),
-  turbopack: {},
   webpack: (config, { isServer, dev }) => {
+    // Split heavy vendor libs into separate cacheable chunks (production only)
+    if (!isServer && !dev) {
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          ...(config.optimization?.splitChunks as object || {}),
+          cacheGroups: {
+            ...((config.optimization?.splitChunks as any)?.cacheGroups || {}),
+            yjs: {
+              test: /[\\/]node_modules[\\/](yjs|y-webrtc|y-indexeddb|y-codemirror\.next|yjs-orderedtree|lib0)[\\/]/,
+              name: "vendor-yjs",
+              chunks: "all" as const,
+              priority: 30,
+            },
+            codemirror: {
+              test: /[\\/]node_modules[\\/](@codemirror|codemirror|codemirror-lang-latex|codemirror-lang-typst|@replit)[\\/]/,
+              name: "vendor-codemirror",
+              chunks: "all" as const,
+              priority: 25,
+            },
+            ai: {
+              test: /[\\/]node_modules[\\/](@huggingface|streamdown|@streamdown)[\\/]/,
+              name: "vendor-ai",
+              chunks: "all" as const,
+              priority: 20,
+            },
+          },
+        },
+      };
+    }
     if (isServer) {
       config.externals = [...(config.externals || []), "@huggingface/transformers"];
     }

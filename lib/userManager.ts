@@ -58,7 +58,6 @@ export class UserManager {
       await this.initializeUserTreeManager();
       
       this.isInitialized = true;
-      console.log('👤 UserManager initialized for user:', this.currentUser.id);
       
       return this.currentUser;
     } catch (error) {
@@ -109,7 +108,6 @@ export class UserManager {
     };
 
     await this.saveUser();
-    console.log('👤 Updated user preferences:', updates);
   }
 
   /**
@@ -132,7 +130,6 @@ export class UserManager {
 
     await this.userTreeManager.whenReady();
     this.userTreeManager.addProject(projectId, projectName);
-    console.log('📁 Added project to user tree:', projectName);
   }
 
   /**
@@ -145,7 +142,6 @@ export class UserManager {
 
     await this.userTreeManager.whenReady();
     this.userTreeManager.removeProject(projectId);
-    console.log('🗑️ Removed project from user tree:', projectId);
   }
 
   /**
@@ -207,13 +203,11 @@ export class UserManager {
     const storedUser = this.getStoredUser();
     
     if (storedUser) {
-      console.log('👤 Found existing user:', storedUser.id);
       return { ...storedUser, lastLogin: Date.now() };
     }
 
     // Create new user
     const newUser = this.createNewUser();
-    console.log('👤 Created new user:', newUser.id);
     return newUser;
   }
 
@@ -243,7 +237,6 @@ export class UserManager {
       }, 5000);
 
       this.persistence!.on('synced', () => {
-        console.log('🔄 User document synced');
         if (!loaded) {
           loaded = true;
           clearTimeout(timeout);
@@ -252,7 +245,6 @@ export class UserManager {
       });
 
       this.persistence!.on('load', () => {
-        console.log('📥 User document loaded from IndexedDB');
         if (!loaded) {
           loaded = true;
           clearTimeout(timeout);
@@ -261,7 +253,6 @@ export class UserManager {
       });
     });
 
-    console.log('📄 User document initialized:', docName);
   }
 
   /**
@@ -281,7 +272,6 @@ export class UserManager {
     // Wait for tree manager to be ready
     await this.userTreeManager.whenReady();
     
-    console.log('🌳 User tree manager initialized');
   }
 
   /**
@@ -354,6 +344,5 @@ export class UserManager {
     this.userTreeManager = null;
     this.currentUser = null;
     this.isInitialized = false;
-    console.log('👤 UserManager cleaned up');
   }
 }
