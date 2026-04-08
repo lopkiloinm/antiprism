@@ -253,26 +253,23 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         if (serverParam) {
           const cleanServerParam = serverParam.replace(/\/$/, "");
           const hasServer = nextConfig.customServers.includes(cleanServerParam);
-
-          if (!hasServer || !nextConfig.enabled) {
+          if (!hasServer) {
             nextConfig = {
               ...nextConfig,
-              customServers: hasServer
-                ? nextConfig.customServers
-                : [...nextConfig.customServers, cleanServerParam],
-              enabled: true,
+              customServers: [...nextConfig.customServers, cleanServerParam],
             };
-            setWebRTCSignalingConfig(nextConfig);
           }
+          if (!nextConfig.enabled) {
+            nextConfig = { ...nextConfig, enabled: true };
+          }
+        }
 
         if (passwordParam && passwordParam !== nextConfig.password) {
-          nextConfig = {
-            ...nextConfig,
-            password: passwordParam,
-          };
-          setWebRTCSignalingConfig(nextConfig);
+          nextConfig = { ...nextConfig, password: passwordParam };
         }
-        }
+
+        // Persist to storage so new tabs + future loads match, and broadcast change in-tab.
+        setWebRTCSignalingConfig(nextConfig);
 
         setWebrtcConfig(nextConfig);
       } catch (error) {
@@ -339,17 +336,15 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
 
       try {
         const isCollaborative = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
-        const localProject = getAllProjects().find((p) => p.id === id);
-        const hasLocalProject = !!localProject || id === "new";
 
         // 1. Load local IDB state first
         chatPersistence = new IndexeddbPersistence(`antiprism-chats-${id}`, chatDoc);
         await chatPersistence.whenSynced;
         if (cancelled) return;
 
-        // 2. Construct ChatTreeManager with deferred root creation for collaborative
-        //    sessions to prevent blank recipient from creating conflicting root.
-        const manager = new ChatTreeManager(chatMap, id, isCollaborative);
+        // 2. Construct ChatTreeManager — uses createSafeYTree() internally,
+        //    so CRDT merge "update" actions are caught and recomputed.
+        const manager = new ChatTreeManager(chatMap, id);
 
         // 3. Create WebRTC provider AFTER YTree is installed
         if (isCollaborative) {
@@ -357,27 +352,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             signaling: webrtcConfig.customServers,
             maxConns: webrtcConfig.maxConnections || 35
           });
-        }
-
-        // For collaborative sessions, wait briefly for remote state before deciding
-        // whether to create local root. This prevents blank recipient overwriting sharer.
-        if (isCollaborative) {
-          const hasRemoteChatState = await new Promise<boolean>((resolve) => {
-            if (chatMap.size > 0) { resolve(true); return; }
-            const timeout = window.setTimeout(() => resolve(chatMap.size > 0), 5000);
-            const onUpdate = () => {
-              if (chatMap.size > 0) {
-                window.clearTimeout(timeout);
-                chatDoc.off("update", onUpdate);
-                resolve(true);
-              }
-            };
-            chatDoc.on("update", onUpdate);
-          });
-          // Only create local root if no remote state arrived and no local project
-          if (!hasRemoteChatState && !hasLocalProject) {
-            manager.ensureRoot();
-          }
         }
 
         if (cancelled) {
@@ -604,6 +578,8 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const fileTreePersistenceRef = useRef<IndexeddbPersistence | null>(null);
   const directoryProvidersRef = useRef<Map<string, WebrtcProvider>>(new Map());
   const fileTreeReconcileScheduledRef = useRef<number | null>(null);
+  const fileTreeReconcilePendingRef = useRef(false);
+  const fileTreeReconcileRafRef = useRef<number | null>(null);
   const isReconcilingFileTreeRef = useRef(false);
   const editorRef = useRef<EditorPanelHandle | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -616,8 +592,7 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
   const compilationCancelRef = useRef<(() => void) | null>(null);
   const yjsLastMutationLogRef = useRef(0);
   const yjsLastLengthRef = useRef(0);
-  const COLLABORATIVE_TEXT_SETTLE_MS = 1500;
-  const COLLABORATIVE_TREE_SETTLE_MS = 5000;
+  // Collaborative sessions should be event-driven (no arbitrary settle delays).
   
   const handleGitTabClose = useCallback((path: string) => {
     setGitOpenTabs((prev) => {
@@ -808,11 +783,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           // Continue even if persistence sync fails
         }
 
-        // 2. Construct FileTreeManager with deferred root creation for collaborative
-        //    sessions. This prevents the recipient's blank state from creating a
-        //    local root that conflicts with the sharer's populated tree during sync.
-        //    We only create root after confirming no remote state arrived.
-        const fileTreeManager = new FileTreeManager(fileTreeMap, isCollaborativeSession);
+        // 2. Construct FileTreeManager — creates YTree via createSafeYTree() which
+        //    registers the instance so the patched observeDeep wrapper can catch
+        //    "[ytree] The node should not be updated" errors during CRDT merge
+        //    and trigger recompute instead of throwing.
+        const fileTreeManager = new FileTreeManager(fileTreeMap);
         fileTreeManagerRef.current = fileTreeManager;
 
         // 3. Create WebRTC provider AFTER YTree is installed
@@ -823,23 +798,50 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
         }
 
         const scheduleFileTreeReconciliation = () => {
+          // If FS isn't mounted yet, don't drop the update — run once FS is ready.
+          if (!fsRef.current || !fileTreeManagerRef.current) {
+            fileTreeReconcilePendingRef.current = true;
+            return;
+          }
+
           if (fileTreeReconcileScheduledRef.current != null) {
             window.clearTimeout(fileTreeReconcileScheduledRef.current);
-          }
-          fileTreeReconcileScheduledRef.current = window.setTimeout(async () => {
             fileTreeReconcileScheduledRef.current = null;
-            if (!fsRef.current || !fileTreeManagerRef.current) return;
-            await reconcileFileTreeToFilesystem(fileTreeManagerRef.current, fsRef.current, basePath);
+          }
+          if (fileTreeReconcileRafRef.current != null) {
+            window.cancelAnimationFrame(fileTreeReconcileRafRef.current);
+            fileTreeReconcileRafRef.current = null;
+          }
+
+          // Coalesce multiple Yjs updates into a single reconciliation per frame.
+          fileTreeReconcileRafRef.current = window.requestAnimationFrame(async () => {
+            fileTreeReconcileRafRef.current = null;
+            if (!fsRef.current || !fileTreeManagerRef.current) {
+              fileTreeReconcilePendingRef.current = true;
+              return;
+            }
+            // Update UI immediately from Yjs state. Filesystem reconciliation can be slower and
+            // must never block rendering the tree (especially for recipients joining a share link).
             setRefreshTrigger((t) => t + 1);
-          }, 120);
+
+            // Reconcile filesystem in the background (best-effort).
+            void reconcileFileTreeToFilesystem(fileTreeManagerRef.current, fsRef.current, basePath);
+          });
         };
 
-        fileTreeDoc.on("update", () => {
-          scheduleFileTreeReconciliation();
-        });
+        const handleFileTreeDocUpdate = () => scheduleFileTreeReconciliation();
+        fileTreeDoc.on("update", handleFileTreeDocUpdate);
 
         const idbfs = await mount();
         fsRef.current = idbfs;
+
+        // If any Yjs update arrived before FS was ready, reconcile now.
+        if (fileTreeReconcilePendingRef.current) {
+          fileTreeReconcilePendingRef.current = false;
+          // Render tree immediately; reconcile asynchronously.
+          setRefreshTrigger((t) => t + 1);
+          void reconcileFileTreeToFilesystem(fileTreeManager, idbfs, basePath);
+        }
         
         for (const dir of ["/projects", basePath]) {
           if (cancelled) return;
@@ -852,37 +854,18 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           return fileTreeManager.getTreeItems().length > 0 || projectMetaMap.get("defaultsSeeded") === true;
         };
 
-        // For collaborative sessions, wait briefly for remote state to arrive
-        let hasSharedTreeItemsAfterSettle: boolean;
-        if (isCollaborativeSession) {
-          hasSharedTreeItemsAfterSettle = hasSharedTreeState() || await new Promise<boolean>((resolve) => {
-            if (hasSharedTreeState()) { resolve(true); return; }
-            const timeout = window.setTimeout(() => {
-              fileTreeDoc.off("update", handleUpdate);
-              resolve(hasSharedTreeState());
-            }, COLLABORATIVE_TREE_SETTLE_MS);
-            const handleUpdate = () => {
-              if (hasSharedTreeState()) {
-                window.clearTimeout(timeout);
-                fileTreeDoc.off("update", handleUpdate);
-                resolve(true);
-              }
-            };
-            fileTreeDoc.on("update", handleUpdate);
-          });
-        } else {
-          hasSharedTreeItemsAfterSettle = hasSharedTreeState();
-        }
+        const hasSharedTreeItemsAfterSettle = hasSharedTreeState();
 
-        // For collaborative sessions where no remote state arrived and no local project,
-        // we deferred root creation. Now create the minimal root to avoid empty state.
-        // This prevents the "blank recipient overwrites populated sharer" scenario.
-        if (isCollaborativeSession && !hasSharedTreeItemsAfterSettle && !hasLocalProject) {
-          fileTreeManager.ensureRoot();
-        }
+        // IMPORTANT: In collaborative sessions, never let an empty recipient filesystem
+        // bootstrap an empty tree into the shared Yjs state (which would wipe the sharer).
+        const { dirs: preDirs, files: preFiles } = await idbfs
+          .readdir(basePath)
+          .catch(() => ({ dirs: [] as { name: string }[], files: [] as { name: string }[] }));
+        const filesystemHasContent = preDirs.length > 0 || preFiles.length > 0;
 
         const shouldBootstrapTreeFromFilesystem =
-          !hasSharedTreeItemsAfterSettle && (!isCollaborativeSession || hasLocalProject);
+          !hasSharedTreeItemsAfterSettle &&
+          (!isCollaborativeSession || (hasLocalProject && filesystemHasContent));
 
         if (shouldBootstrapTreeFromFilesystem) {
           await syncFilesystemToFileTree(fileTreeManager, idbfs, basePath);
@@ -1041,9 +1024,6 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
             await fileDoc.whenLoaded;
             
             let existingContent = text.toString();
-            if (existingContent.length === 0 && isCollaborativeSession) {
-              existingContent = await waitForCollaborativeTextSettle(initialPath);
-            }
             
             if (existingContent.length === 0) {
               const data = await idbfs.readFile(initialPath);
@@ -1134,6 +1114,11 @@ export default function ProjectPageClient({ idOverride }: { idOverride?: string 
           window.clearTimeout(fileTreeReconcileScheduledRef.current);
           fileTreeReconcileScheduledRef.current = null;
         }
+        if (fileTreeReconcileRafRef.current != null) {
+          window.cancelAnimationFrame(fileTreeReconcileRafRef.current);
+          fileTreeReconcileRafRef.current = null;
+        }
+        fileTreeReconcilePendingRef.current = false;
         await fileTreePersistenceRef.current?.destroy();
         fileTreePersistenceRef.current = null;
         fileTreeDocRef.current?.destroy();
@@ -1845,19 +1830,6 @@ Buffer manager exists: ${!!getBufferMgr()}`;
     }
   }, [getBufferMgr]);
 
-  const waitForCollaborativeTextSettle = useCallback(async (path: string) => {
-    const manager = fileDocManagerRef.current;
-    if (!manager) return "";
-
-    const provider = manager.getWebrtcProvider(path);
-    if (!provider) {
-      return manager.getDocument(path, true).text.toString();
-    }
-
-    await new Promise((resolve) => window.setTimeout(resolve, COLLABORATIVE_TEXT_SETTLE_MS));
-    return manager.getDocument(path, true).text.toString();
-  }, [COLLABORATIVE_TEXT_SETTLE_MS]);
-
   const loadTextIntoEditor = useCallback(
     async (path: string, content: string) => {
       if (!fileDocManagerRef.current) return;
@@ -1873,9 +1845,8 @@ Buffer manager exists: ${!!getBufferMgr()}`;
       let existingContent = ytext.toString();
 
       const isCollab = webrtcConfig.enabled && webrtcConfig.customServers.length > 0;
-      if (existingContent.length === 0 && isCollab) {
-        existingContent = await waitForCollaborativeTextSettle(path);
-      }
+      // In collaborative sessions, remote text can arrive after initial load.
+      // Don't block UX on arbitrary waits — the editor is bound to Y.Text and will update when it arrives.
       
       if (existingContent.length === 0 && content.length > 0) {
         ytext.delete(0, ytext.length);
@@ -1890,7 +1861,7 @@ Buffer manager exists: ${!!getBufferMgr()}`;
         }
       }
     },
-    [activeTabPath, fs, waitForCollaborativeTextSettle, webrtcConfig.enabled, webrtcConfig.customServers]
+    [activeTabPath, fs, webrtcConfig.enabled, webrtcConfig.customServers]
   );
 
   /** Resolve the text content for a file from cache or filesystem. */
@@ -3255,10 +3226,28 @@ ${documentContext}
       const urlParams = new URLSearchParams();
 
       const signalingConfig = getWebRTCSignalingConfig();
-      const activeServer = signalingConfig.enabled
-        ? signalingConfig.customServers.find((server) => typeof server === "string" && server.trim())
-        : null;
+      // Sharing should not depend on whether WebRTC is already enabled in this tab.
+      // If a server is configured, we can generate a collaborative link and enable it immediately.
+      const activeServer =
+        signalingConfig.customServers.find((server) => typeof server === "string" && server.trim()) ?? null;
       const password = signalingConfig.password?.trim();
+
+      // If we're generating a collaborative link, ensure the sharer's current session
+      // is actually running with that collaboration config (no reload required).
+      if (activeServer) {
+        const cleanServer = activeServer.replace(/\/$/, "");
+        const current = getWebRTCSignalingConfig();
+        const nextConfig: WebRTCSignalingConfig = {
+          ...current,
+          enabled: true,
+          customServers: current.customServers.includes(cleanServer)
+            ? current.customServers
+            : [...current.customServers, cleanServer],
+          password: password ?? current.password ?? "",
+        };
+        setWebRTCSignalingConfig(nextConfig);
+        setWebrtcConfig(nextConfig);
+      }
 
       if (activeServer) {
         urlParams.set('server', activeServer.replace(/\/$/, ''));
